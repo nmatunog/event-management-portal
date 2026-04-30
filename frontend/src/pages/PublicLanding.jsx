@@ -12,6 +12,8 @@ import { PAMACON_TITLE } from "../pamacon/defaultConfig";
 export default function PublicLanding() {
   const [heroEvent, setHeroEvent] = useState(null);
   const [loadError, setLoadError] = useState("");
+  const [copiedField, setCopiedField] = useState("");
+  const [copyToast, setCopyToast] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -37,11 +39,28 @@ export default function PublicLanding() {
   const start = heroEvent?.start_date || "2026-05-13";
   const end = heroEvent?.end_date || "2026-05-15";
   const dateLabel = formatDateRange(start, end);
+  const copyValue = async (label, value) => {
+    try {
+      await navigator.clipboard.writeText(String(value));
+      setCopiedField(label);
+      setCopyToast(label === "bpi" ? "BPI account number copied" : "GCash number copied");
+      window.setTimeout(() => setCopiedField(""), 1500);
+      window.setTimeout(() => setCopyToast(""), 1700);
+    } catch {
+      setCopyToast("Unable to copy on this browser");
+      window.setTimeout(() => setCopyToast(""), 1700);
+    }
+  };
 
   return (
     <div className="public-landing relative min-h-[100dvh] text-zinc-900 overflow-x-hidden bg-zinc-100">
       <div className="landing-sunburst -z-10" aria-hidden />
       <div className="absolute inset-0 -z-20 bg-[linear-gradient(180deg,#fafafa_0%,#f4f4f5_45%,#ececee_100%)]" aria-hidden />
+      <div
+        className="pointer-events-none absolute inset-0 -z-10 bg-center bg-cover opacity-[0.08]"
+        style={{ backgroundImage: "url('/landing/photowall-light.png')" }}
+        aria-hidden
+      />
 
       {/* Top bar — poster header: white strip, logos, efficient nav */}
       <header className="sticky top-0 z-30 border-b border-zinc-200/90 bg-white/95 backdrop-blur-md shadow-sm">
@@ -139,8 +158,8 @@ export default function PublicLanding() {
             <figure className="relative w-full max-w-[380px]">
               <div className="absolute -inset-3 rounded-[2rem] bg-gradient-to-br from-[#1d4ed8]/15 via-[#e11d74]/10 to-amber-400/25 blur-2xl" aria-hidden />
               <img
-                src="/landing/poster-sulog-cebu.png"
-                alt="PAMACON 2026 in Cebu — Sulog: Rise with the Current event poster"
+                src="/landing/photowall-light.png"
+                alt="PAMACON photowall art reference"
                 className="relative w-full rounded-3xl border border-white shadow-2xl shadow-zinc-900/15 ring-1 ring-black/5 object-cover"
                 loading="eager"
                 decoding="async"
@@ -213,12 +232,30 @@ export default function PublicLanding() {
               <div>
                 <p className="font-bold uppercase tracking-wide text-zinc-900">BPI</p>
                 <p className="font-semibold">Philam Life Agency Managers Association</p>
-                <p className="font-mono font-bold text-zinc-900">1681001545</p>
+                <div className="mt-1 flex items-center gap-2">
+                  <p className="font-mono font-bold text-zinc-900">1681001545</p>
+                  <button
+                    type="button"
+                    onClick={() => copyValue("bpi", "1681001545")}
+                    className="rounded-lg border border-zinc-200 px-2 py-1 text-[11px] font-bold text-zinc-700 hover:bg-zinc-50"
+                  >
+                    {copiedField === "bpi" ? "Copied" : "Copy"}
+                  </button>
+                </div>
               </div>
               <div>
                 <p className="font-bold uppercase tracking-wide text-zinc-900">GCash</p>
                 <p className="font-semibold">RE*E ED****O J** D.</p>
-                <p className="font-mono font-bold text-zinc-900">0915 423 5799</p>
+                <div className="mt-1 flex items-center gap-2">
+                  <p className="font-mono font-bold text-zinc-900">0915 423 5799</p>
+                  <button
+                    type="button"
+                    onClick={() => copyValue("gcash", "09154235799")}
+                    className="rounded-lg border border-zinc-200 px-2 py-1 text-[11px] font-bold text-zinc-700 hover:bg-zinc-50"
+                  >
+                    {copiedField === "gcash" ? "Copied" : "Copy"}
+                  </button>
+                </div>
               </div>
             </div>
             <p className="mt-4 text-xs text-zinc-500">Verify account details with the finance team before sending payment.</p>
@@ -261,6 +298,11 @@ export default function PublicLanding() {
         <span className="text-amber-600">■</span> red CTA <span className="text-[#dc2626]">■</span> · Montserrat + DM Serif Display · Posters in{" "}
         <code className="text-[11px] text-zinc-600">/public/landing/</code>
       </footer>
+      {copyToast ? (
+        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full bg-zinc-900/95 px-4 py-2 text-xs font-semibold text-white shadow-xl">
+          {copyToast}
+        </div>
+      ) : null}
     </div>
   );
 }

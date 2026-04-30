@@ -35,7 +35,7 @@ export const DEFAULT_ATTENDEE_PORTAL = {
   /** Number of poster cards shown in attendee portal hub. */
   posterDisplayCount: 3,
   /** Up to six image URLs for marketing posters; empty strings show placeholders. */
-  posterImageUrls: ["", "", "", "", "", ""],
+  posterImageUrls: ["/landing/poster-sulog-cebu.png", "/landing/poster-pamacon-white.png", "", "", "", ""],
   /** Organizer inbox for quote requests (mailto). Falls back to VITE_QUOTE_REQUEST_EMAIL. */
   quoteRequestEmail: "",
 };
