@@ -29,6 +29,7 @@ import {
   ChevronDown,
   Filter,
   Plus,
+  LogOut,
   UserRound,
 } from "lucide-react";
 import ParticipantPortal from "./ParticipantPortal";
@@ -854,6 +855,14 @@ export default function PamaconApp({ canEdit, authEmail, authRole, profile, onSa
             >
               <Settings size={18} />
               Setup
+            </button>
+            <button
+              type="button"
+              onClick={onLogout}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold text-white bg-red-600 hover:bg-red-700 shadow-sm transition-colors"
+            >
+              <LogOut size={17} />
+              Logout
             </button>
           </div>
         </header>

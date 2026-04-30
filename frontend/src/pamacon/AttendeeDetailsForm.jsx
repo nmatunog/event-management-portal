@@ -35,6 +35,8 @@ const ACTIVITY_KEYS = [
 ];
 
 function draftFromProfile(p) {
+  const arrivalDefault = p?.arrivalCebu || "2026-05-13";
+  const departureDefault = p?.departureCebu || "2026-05-15";
   return {
     lastName: p?.lastName || "",
     firstName: p?.firstName || "",
@@ -47,8 +49,8 @@ function draftFromProfile(p) {
     gender: p?.gender || "",
     shirtSize: p?.shirtSize || "",
     shirtSizeOther: p?.shirtSizeOther || "",
-    arrivalCebu: p?.arrivalCebu || "",
-    departureCebu: p?.departureCebu || "",
+    arrivalCebu: arrivalDefault,
+    departureCebu: departureDefault,
     extraIslandHopping: Boolean(p?.extraIslandHopping),
     extraCityTour: Boolean(p?.extraCityTour),
     extraMountainTour: Boolean(p?.extraMountainTour),
