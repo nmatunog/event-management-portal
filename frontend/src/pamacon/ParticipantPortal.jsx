@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { Calendar, ChevronDown, ClipboardCheck, Film, ImageIcon, LogOut, MapPin, Sparkles } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DEFAULT_PAMACON_CONFIG, DEFAULT_ATTENDEE_PORTAL, PAMACON_TITLE } from "./defaultConfig";
 import AttendeeDetailsForm from "./AttendeeDetailsForm";
 
@@ -36,11 +36,21 @@ export default function ParticipantPortal({ config = DEFAULT_PAMACON_CONFIG, eve
   const firstName = typeof profile?.firstName === "string" ? profile.firstName.trim() : "";
   const dateRangeLabel = formatDateRange(start, end);
   const [showVenueModal, setShowVenueModal] = useState(false);
+  const [zoomPoster, setZoomPoster] = useState(null);
   const mapsQuery = useMemo(() => encodeURIComponent(`${venue}, Cebu`), [venue]);
   const mapsEmbedSrc = `https://www.google.com/maps?q=${mapsQuery}&output=embed`;
   const mapsOpenUrl = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`;
   const mapsDirectionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${mapsQuery}`;
   const photosSearchUrl = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${venue} photos`)}`;
+
+  useEffect(() => {
+    if (!zoomPoster) return undefined;
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") setZoomPoster(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [zoomPoster]);
 
   return (
     <div
@@ -209,38 +219,38 @@ export default function ParticipantPortal({ config = DEFAULT_PAMACON_CONFIG, eve
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {posterSlots.map((src, i) => (
-              <details
-                key={i}
-                className="group rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden open:ring-1 open:ring-red-100 transition hover:shadow-md"
-              >
-                <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
-                  <div className="relative w-full overflow-hidden bg-slate-100 aspect-[4/5]">
-                    {src ? (
-                      <img src={src} alt={`Event poster ${i + 1}`} className="absolute inset-0 h-full w-full object-cover transition duration-300 group-open:scale-[1.02]" loading="lazy" />
-                    ) : (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-6 text-center border-2 border-dashed border-slate-300/80 rounded-xl m-2">
-                        <ImageIcon className="text-slate-300" size={40} strokeWidth={1.25} aria-hidden />
-                        <p className="text-sm font-medium text-slate-500">Poster placeholder</p>
-                      </div>
-                    )}
-                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-900/65 via-slate-900/25 to-transparent p-3">
-                      <span className="inline-flex items-center gap-2 rounded-lg bg-white/95 px-2.5 py-1 text-xs font-semibold text-slate-800">
-                        <ImageIcon size={14} aria-hidden />
-                        Poster {i + 1}
-                      </span>
+              <div key={i} className="group rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden transition hover:shadow-md">
+                <div className="relative w-full overflow-hidden bg-slate-100 aspect-[4/5]">
+                  {src ? (
+                    <button
+                      type="button"
+                      onClick={() => setZoomPoster({ src, label: `Poster ${i + 1}` })}
+                      className="absolute inset-0"
+                      aria-label={`Open poster ${i + 1} fullscreen`}
+                    >
+                      <img src={src} alt={`Event poster ${i + 1}`} className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]" loading="lazy" />
+                    </button>
+                  ) : (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-6 text-center border-2 border-dashed border-slate-300/80 rounded-xl m-2">
+                      <ImageIcon className="text-slate-300" size={40} strokeWidth={1.25} aria-hidden />
+                      <p className="text-sm font-medium text-slate-500">Poster placeholder</p>
                     </div>
+                  )}
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-900/65 via-slate-900/25 to-transparent p-3">
+                    <span className="inline-flex items-center gap-2 rounded-lg bg-white/95 px-2.5 py-1 text-xs font-semibold text-slate-800">
+                      <ImageIcon size={14} aria-hidden />
+                      Poster {i + 1}
+                    </span>
                   </div>
-                  <div className="flex items-center justify-between gap-3 px-3.5 py-3 border-t border-slate-100">
-                    <span className="text-sm font-semibold text-slate-800">{src ? "Tap to view details" : "Waiting for artwork"}</span>
-                    <ChevronDown className="h-5 w-5 shrink-0 text-slate-400 transition group-open:rotate-180" aria-hidden />
-                  </div>
-                </summary>
+                </div>
+                <div className="flex items-center justify-between gap-3 px-3.5 py-3 border-t border-slate-100">
+                  <span className="text-sm font-semibold text-slate-800">{src ? "Tap to zoom fullscreen" : "Waiting for artwork"}</span>
+                  {src ? <ChevronDown className="h-5 w-5 shrink-0 text-slate-400 -rotate-90" aria-hidden /> : null}
+                </div>
                 <div className="border-t border-slate-100 px-3.5 pb-3.5 pt-3">
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-600 leading-relaxed">
                     {src ? (
-                      <>
-                        High-resolution source loaded for this poster. Use this card as your quick preview before filling out your attendee details.
-                      </>
+                      <>Tap the poster image to open a full-screen, size-optimized preview.</>
                     ) : (
                       <>
                         Set <code className="rounded bg-slate-200/80 px-1 py-0.5 text-[10px]">attendeePortal.posterImageUrls[{i}]</code> in event configuration to publish this slot.
@@ -248,7 +258,7 @@ export default function ParticipantPortal({ config = DEFAULT_PAMACON_CONFIG, eve
                     )}
                   </div>
                 </div>
-              </details>
+              </div>
             ))}
           </div>
         </section>
@@ -351,6 +361,33 @@ export default function ParticipantPortal({ config = DEFAULT_PAMACON_CONFIG, eve
               >
                 Get directions
               </a>
+            </div>
+          </div>
+        </div>
+      )}
+      {zoomPoster && (
+        <div
+          className="fixed inset-0 z-[130] bg-black/90 p-3 sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${zoomPoster.label} fullscreen preview`}
+          onClick={() => setZoomPoster(null)}
+        >
+          <div className="relative h-full w-full">
+            <button
+              type="button"
+              onClick={() => setZoomPoster(null)}
+              className="absolute right-0 top-0 z-10 rounded-xl border border-white/40 bg-black/50 px-3 py-2 text-sm font-semibold text-white hover:bg-black/70"
+            >
+              Close
+            </button>
+            <div className="flex h-full w-full items-center justify-center">
+              <img
+                src={zoomPoster.src}
+                alt={zoomPoster.label}
+                className="max-h-[90vh] max-w-[95vw] object-contain rounded-xl shadow-2xl"
+                onClick={(event) => event.stopPropagation()}
+              />
             </div>
           </div>
         </div>
