@@ -217,7 +217,7 @@ export default function PublicLanding() {
               </div>
               <div>
                 <p className="font-bold uppercase tracking-wide text-zinc-900">GCash</p>
-                <p className="font-semibold">Re'ed "O J"</p>
+                <p className="font-semibold">RE*E ED****O J** D.</p>
                 <p className="font-mono font-bold text-zinc-900">0915 423 5799</p>
               </div>
             </div>
