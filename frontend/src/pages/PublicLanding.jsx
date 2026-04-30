@@ -57,7 +57,7 @@ export default function PublicLanding() {
       <div className="landing-sunburst -z-10" aria-hidden />
       <div className="absolute inset-0 -z-20 bg-[linear-gradient(180deg,#fafafa_0%,#f4f4f5_45%,#ececee_100%)]" aria-hidden />
       <div
-        className="pointer-events-none absolute inset-0 -z-10 bg-center bg-cover opacity-[0.08]"
+        className="pointer-events-none absolute inset-0 -z-10 bg-center bg-cover opacity-[0.12]"
         style={{ backgroundImage: "url('/landing/photowall-light.png')" }}
         aria-hidden
       />
