@@ -70,18 +70,19 @@ export default function App() {
         return false;
       }
     });
+    const candidateRows = seededRows.length ? seededRows : rows;
     const normalizedTarget = seededDelegateName.toLowerCase();
     const match =
-      seededRows.find((r) => String(r.id || "") === seededRegistrationId) ||
-      seededRows.find((r) => String(r.full_name || "").trim().toLowerCase() === normalizedTarget) ||
-      seededRows.find((r) => {
+      candidateRows.find((r) => String(r.id || "") === seededRegistrationId) ||
+      candidateRows.find((r) => String(r.full_name || "").trim().toLowerCase() === normalizedTarget) ||
+      candidateRows.find((r) => {
         const full = String(r.full_name || "").trim().toLowerCase();
         if (!full || !nickname || !lastName) return false;
         const hasNick = full.startsWith(`${nickname} `) || full.includes(` ${nickname} `);
         const hasLast = full.endsWith(` ${lastName}`) || full.includes(` ${lastName} `);
         return hasNick && hasLast;
       }) ||
-      seededRows.find((r) => {
+      candidateRows.find((r) => {
         const full = String(r.full_name || "").trim().toLowerCase();
         if (!full || !firstName || !lastName) return false;
         const hasFirst = full.startsWith(`${firstName} `) || full.includes(` ${firstName} `);
@@ -90,7 +91,7 @@ export default function App() {
       }) ||
       (() => {
         if (!lastName) return null;
-        const lastNameMatches = seededRows.filter((r) => {
+        const lastNameMatches = candidateRows.filter((r) => {
           try {
             const meta = r.metadata_json ? JSON.parse(r.metadata_json) : {};
             const metaLast = String(meta.lastName || "").trim().toLowerCase();
@@ -111,6 +112,7 @@ export default function App() {
     await claimSeededRegistration(match.id, {
       email,
       mobileNumber: String(profileOverride?.mobileNumber ?? user?.user_metadata?.mobileNumber ?? "").trim(),
+      seededDelegateName: seededDelegateName || String(match.full_name || "").trim(),
       attendeeProfile: profileOverride || user?.user_metadata || {},
     });
   };
@@ -277,6 +279,7 @@ export default function App() {
         await claimSeededRegistration(delegate.id, {
           email: safeEmail,
           mobileNumber: String(mobileNumber || "").trim(),
+          seededDelegateName: fullName,
         });
       }
     } catch {

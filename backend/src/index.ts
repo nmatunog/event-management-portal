@@ -239,7 +239,7 @@ app.post("/api/registrations/:id/claim-seeded", async (c) => {
   const mobileNumber = String(body?.mobileNumber ?? "").trim();
   if (!email) throw new HTTPException(400, { message: "Email is required." });
 
-  const existing = await c.env.DB.prepare("SELECT id, metadata_json FROM registrations WHERE id = ?").bind(id).first<Record<string, unknown>>();
+  const existing = await c.env.DB.prepare("SELECT id, full_name, metadata_json FROM registrations WHERE id = ?").bind(id).first<Record<string, unknown>>();
   if (!existing) throw new HTTPException(404, { message: "Registration not found." });
 
   let meta: Record<string, unknown> = {};
@@ -249,7 +249,11 @@ app.post("/api/registrations/:id/claim-seeded", async (c) => {
     meta = {};
   }
 
-  if (String(meta.seedSource || "") !== "pamacon-seed") {
+  const providedSeededName = String(body?.seededDelegateName ?? "").trim().toLowerCase();
+  const rowName = String(existing.full_name || "").trim().toLowerCase();
+  const isSeedFlagged = String(meta.seedSource || "") === "pamacon-seed";
+  const isNameMatchedSeed = Boolean(providedSeededName && rowName && providedSeededName === rowName);
+  if (!isSeedFlagged && !isNameMatchedSeed) {
     throw new HTTPException(400, { message: "Only seeded delegates can be claimed through this flow." });
   }
 
