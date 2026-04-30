@@ -161,12 +161,12 @@ export default function PublicLanding() {
         <section className="mt-8 rounded-3xl border border-amber-200 bg-amber-50/70 p-6 sm:p-8 shadow-md shadow-amber-900/5">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.2em] text-amber-800">Already in the seeded delegate list?</p>
-              <h3 className="mt-1 text-xl font-bold text-zinc-900">Claim your seeded account in 3 easy steps</h3>
+              <p className="text-[11px] font-black uppercase tracking-[0.2em] text-amber-800">Paid for your slot already?</p>
+              <h3 className="mt-1 text-xl font-bold text-zinc-900">Confirm your booking and enter your details</h3>
               <ol className="mt-3 text-sm text-zinc-700 space-y-1">
-                <li>1) Sign in using your preferred email.</li>
-                <li>2) Fill out your attendee details (name, travel dates, shirt size).</li>
-                <li>3) Committee staff confirms and tags your seeded profile.</li>
+                <li>1) Type your family name and select your first name or nickname from the list.</li>
+                <li>2) Fill out your attendee details.</li>
+                <li>3) Enter your preferred email, mobile number, and create your password for next logins.</li>
               </ol>
             </div>
             <Link

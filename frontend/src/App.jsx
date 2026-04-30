@@ -143,6 +143,49 @@ export default function App() {
     setAuthLoading(false);
   };
 
+  const handleClaimBooking = async ({ email, password, mobileNumber, delegate }) => {
+    if (!supabase) {
+      setAuthError("Supabase env vars are missing. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+      return false;
+    }
+    const safeEmail = String(email || "").trim();
+    const safePassword = String(password || "");
+    if (!safeEmail || !safePassword) {
+      setAuthError("Email and password are required to claim your booking.");
+      return false;
+    }
+    const fullName = String(delegate?.name || "").trim();
+    const nameParts = fullName.split(/\s+/).filter(Boolean);
+    const lastName = String(delegate?.lastName || (nameParts.length ? nameParts[nameParts.length - 1] : "")).trim();
+    const firstName = String(delegate?.firstName || (nameParts.length ? nameParts[0] : "")).trim();
+
+    setAuthLoading(true);
+    setAuthError("");
+    setAuthInfo("");
+    const { error } = await supabase.auth.signUp({
+      email: safeEmail,
+      password: safePassword,
+      options: {
+        data: {
+          lastName,
+          firstName,
+          mobileNumber: String(mobileNumber || "").trim(),
+          seededDelegateName: fullName,
+        },
+      },
+    });
+    if (error) {
+      setAuthError(error.message);
+      setAuthLoading(false);
+      return false;
+    }
+    setAuthInfo("Booking claim started. Check your email if confirmation is required, then sign in.");
+    setLoginEmail(safeEmail);
+    setLoginPassword("");
+    setAuthLoading(false);
+    return true;
+  };
+
   const handleLogout = async () => {
     if (!supabase) return;
     await supabase.auth.signOut();
@@ -268,6 +311,7 @@ export default function App() {
             onLogin={handleLogin}
             onResetPassword={handleResetPassword}
             onSignUp={handleSignUp}
+            onClaimBooking={handleClaimBooking}
           />
         }
       />
