@@ -164,9 +164,6 @@ export default function PublicLanding() {
                 loading="eager"
                 decoding="async"
               />
-              <figcaption className="mt-3 text-center text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
-                Official look · Sinulog-inspired palette
-              </figcaption>
             </figure>
           </div>
         </section>
@@ -305,11 +302,6 @@ export default function PublicLanding() {
         </section>
       </main>
 
-      <footer className="max-w-6xl mx-auto px-4 sm:px-8 py-10 text-center text-zinc-500 text-xs font-medium leading-relaxed border-t border-zinc-200/80 bg-white/80">
-        Theme peg: royal blue <span className="text-[#1d4ed8]">■</span> magenta <span className="text-[#e11d74]">■</span> gold{" "}
-        <span className="text-amber-600">■</span> red CTA <span className="text-[#dc2626]">■</span> · Montserrat + DM Serif Display · Posters in{" "}
-        <code className="text-[11px] text-zinc-600">/public/landing/</code>
-      </footer>
       {copyToast ? (
         <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full bg-zinc-900/95 px-4 py-2 text-xs font-semibold text-white shadow-xl">
           {copyToast}
