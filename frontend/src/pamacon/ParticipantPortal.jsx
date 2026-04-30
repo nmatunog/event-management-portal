@@ -26,7 +26,9 @@ export default function ParticipantPortal({ config = DEFAULT_PAMACON_CONFIG, eve
   const start = eventRow?.start_date || "2026-05-13";
   const end = eventRow?.end_date || "2026-05-15";
   const portal = { ...DEFAULT_ATTENDEE_PORTAL, ...(config?.attendeePortal || {}) };
-  const posterSlots = [...(portal.posterImageUrls || []), "", "", "", "", ""].slice(0, 5);
+  const requestedPosterCount = Number(portal.posterDisplayCount);
+  const posterCount = Number.isFinite(requestedPosterCount) ? Math.max(1, Math.min(6, Math.trunc(requestedPosterCount))) : 3;
+  const posterSlots = [...(portal.posterImageUrls || []), "", "", "", "", "", ""].slice(0, posterCount);
   const youtubeUrl =
     String(portal.youtubeUrl || "").trim() || String(import.meta.env.VITE_ATTENDEE_YOUTUBE_URL || "").trim();
   const embedSrc = youtubeEmbedSrc(youtubeUrl);

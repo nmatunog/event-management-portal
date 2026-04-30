@@ -32,8 +32,10 @@ export const DEFAULT_EXPENSE_BUDGET_MODULES = [
 export const DEFAULT_ATTENDEE_PORTAL = {
   /** Full YouTube watch or youtu.be URL — shown in the portal when set. */
   youtubeUrl: "",
-  /** Up to five image URLs for marketing posters; empty strings show placeholders. */
-  posterImageUrls: ["", "", "", "", ""],
+  /** Number of poster cards shown in attendee portal hub. */
+  posterDisplayCount: 3,
+  /** Up to six image URLs for marketing posters; empty strings show placeholders. */
+  posterImageUrls: ["", "", "", "", "", ""],
   /** Organizer inbox for quote requests (mailto). Falls back to VITE_QUOTE_REQUEST_EMAIL. */
   quoteRequestEmail: "",
 };
@@ -60,11 +62,15 @@ export function mergeConfigFromEvent(eventRow) {
   try {
     const parsed = JSON.parse(eventRow.config_json);
     const posterUrls = Array.isArray(parsed.attendeePortal?.posterImageUrls)
-      ? parsed.attendeePortal.posterImageUrls.slice(0, 5)
+      ? parsed.attendeePortal.posterImageUrls.slice(0, 6)
       : null;
     const mergedPosters = posterUrls
-      ? [...posterUrls, "", "", "", "", ""].slice(0, 5)
+      ? [...posterUrls, "", "", "", "", "", ""].slice(0, 6)
       : DEFAULT_ATTENDEE_PORTAL.posterImageUrls;
+    const parsedDisplayCount = Number(parsed.attendeePortal?.posterDisplayCount);
+    const posterDisplayCount = Number.isFinite(parsedDisplayCount)
+      ? Math.max(1, Math.min(6, Math.trunc(parsedDisplayCount)))
+      : DEFAULT_ATTENDEE_PORTAL.posterDisplayCount;
     return {
       ...DEFAULT_PAMACON_CONFIG,
       ...parsed,
@@ -79,6 +85,7 @@ export function mergeConfigFromEvent(eventRow) {
       attendeePortal: {
         ...DEFAULT_ATTENDEE_PORTAL,
         ...(parsed.attendeePortal || {}),
+        posterDisplayCount,
         posterImageUrls: mergedPosters,
       },
     };

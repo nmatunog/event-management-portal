@@ -2662,6 +2662,7 @@ function SetupView({ config, setConfig, eventId, canEdit, isAdmin, onSaved, onEr
   const [rolesLoading, setRolesLoading] = useState(false);
   const [roleForm, setRoleForm] = useState({ email: "", role: "attendee" });
   const [setupTab, setSetupTab] = useState("general");
+  const [selectedPosterSlot, setSelectedPosterSlot] = useState(0);
 
   useEffect(() => {
     setLocal(config);
@@ -2766,6 +2767,41 @@ function SetupView({ config, setConfig, eventId, canEdit, isAdmin, onSaved, onEr
     }
   };
 
+  const portalConfig = {
+    youtubeUrl: "",
+    quoteRequestEmail: "",
+    posterDisplayCount: 3,
+    posterImageUrls: ["", "", "", "", "", ""],
+    ...(local.attendeePortal || {}),
+  };
+  const posterUrls = [...(portalConfig.posterImageUrls || []), "", "", "", "", "", ""].slice(0, 6);
+  const updatePortalConfig = (patch) => {
+    setLocal({
+      ...local,
+      attendeePortal: {
+        ...portalConfig,
+        ...patch,
+      },
+    });
+  };
+  const updatePosterSlot = (slotIdx, value) => {
+    const next = [...posterUrls];
+    next[slotIdx] = String(value || "").trim();
+    updatePortalConfig({ posterImageUrls: next });
+  };
+  const handlePosterFileUpload = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        updatePosterSlot(selectedPosterSlot, reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
+    event.target.value = "";
+  };
+
   return (
     <div className="bg-white rounded-[50px] border p-12 pb-24 shadow-sm relative">
       <div className="flex justify-between items-center mb-12 relative z-10">
@@ -2834,6 +2870,73 @@ function SetupView({ config, setConfig, eventId, canEdit, isAdmin, onSaved, onEr
               value={local.projections.speakerHonorarium}
               onChange={(e) => setLocal({ ...local, projections: { ...local.projections, speakerHonorarium: Number(e.target.value) } })}
             />
+            <div className="space-y-4 rounded-2xl border border-slate-200 p-4 bg-slate-50/50">
+              <h5 className="text-[10px] font-black uppercase text-slate-600 tracking-[0.2em] leading-none">Attendee Portal Posters</h5>
+              <label className="block space-y-1">
+                <span className="text-xs font-semibold text-slate-600">No. of posters to display (1-6)</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={6}
+                  disabled={!canEdit}
+                  value={Number(portalConfig.posterDisplayCount) || 3}
+                  onChange={(e) =>
+                    updatePortalConfig({
+                      posterDisplayCount: Math.max(1, Math.min(6, Number(e.target.value) || 3)),
+                    })
+                  }
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 disabled:opacity-50"
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs font-semibold text-slate-600">Select slot to update</span>
+                <select
+                  disabled={!canEdit}
+                  value={selectedPosterSlot}
+                  onChange={(e) => setSelectedPosterSlot(Number(e.target.value) || 0)}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 disabled:opacity-50"
+                >
+                  {posterUrls.map((_, idx) => (
+                    <option key={idx} value={idx}>
+                      Slot {idx + 1}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs font-semibold text-slate-600">Poster URL for selected slot</span>
+                <input
+                  disabled={!canEdit}
+                  value={posterUrls[selectedPosterSlot] || ""}
+                  onChange={(e) => updatePosterSlot(selectedPosterSlot, e.target.value)}
+                  placeholder="https://..."
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 disabled:opacity-50"
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs font-semibold text-slate-600">Upload placeholder/image to selected slot</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  disabled={!canEdit}
+                  onChange={handlePosterFileUpload}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-semibold disabled:opacity-50"
+                />
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {posterUrls.map((src, idx) => (
+                  <button
+                    type="button"
+                    key={idx}
+                    onClick={() => setSelectedPosterSlot(idx)}
+                    className={`rounded-xl border p-2 text-left ${selectedPosterSlot === idx ? "border-red-300 bg-red-50" : "border-slate-200 bg-white"}`}
+                  >
+                    <p className="text-[11px] font-semibold text-slate-600">Slot {idx + 1}</p>
+                    <p className="text-[10px] text-slate-500 truncate">{src ? "Configured" : "Empty"}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}
