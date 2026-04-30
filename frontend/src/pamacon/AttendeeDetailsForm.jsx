@@ -286,30 +286,37 @@ export default function AttendeeDetailsForm({ profile, authEmail, onSaveProfile,
         </Field>
       </div>
 
-      <fieldset className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4 sm:p-5 space-y-3">
-        <legend className="text-sm font-semibold text-slate-900 px-1">Extra day after the conference (tick all that apply)</legend>
-        <div className="grid grid-cols-1 gap-3">
+      <fieldset className="rounded-2xl border border-slate-200 bg-gradient-to-b from-red-50/40 to-white p-4 sm:p-6 space-y-4">
+        <legend className="text-base sm:text-lg font-semibold text-slate-900 px-1">
+          Would you like to extend your stay and enjoy fun Cebu activities after PAMACON?
+        </legend>
+        <p className="text-sm text-slate-600 leading-relaxed">
+          Select all activities you are interested in. This helps the team prepare options and rates for your extension day.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {ACTIVITY_KEYS.map(({ key, label }) => (
             <label
               key={key}
-              className="flex items-start gap-3 min-h-[44px] cursor-pointer rounded-xl border border-transparent px-2 py-2 hover:bg-white/80 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-red-200"
+              className={`flex items-center gap-3 min-h-[52px] cursor-pointer rounded-xl border px-3 py-3 transition has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-red-200 ${
+                draft[key] ? "border-red-300 bg-red-50/70" : "border-slate-200 bg-white hover:border-red-200 hover:bg-red-50/40"
+              }`}
             >
               <input
                 type="checkbox"
                 checked={Boolean(draft[key])}
                 onChange={(e) => setDraft((s) => ({ ...s, [key]: e.target.checked }))}
-                className="mt-1.5 h-5 w-5 rounded border-slate-300 text-red-600 focus:ring-red-500"
+                className="h-5 w-5 rounded border-slate-300 text-red-600 focus:ring-red-500"
               />
-              <span className="text-sm sm:text-base text-slate-800 pt-0.5">{label}</span>
+              <span className="text-sm sm:text-base text-slate-800 font-medium">{label}</span>
             </label>
           ))}
         </div>
         <label className="block space-y-1.5 pt-1">
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Other request</span>
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Any other activity request?</span>
           <textarea
             rows={2}
             className={`${inputClass} min-h-[5rem] resize-y`}
-            placeholder="Describe any other activity or special request"
+            placeholder="Example: whale shark tour, specific date preference, family-friendly option"
             value={draft.extraOtherRequest}
             onChange={(e) => setDraft((s) => ({ ...s, extraOtherRequest: e.target.value }))}
           />
