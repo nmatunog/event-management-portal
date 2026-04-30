@@ -48,9 +48,11 @@ export default function App() {
   const syncSeededRegistrationProfile = async (user, profileOverride = null) => {
     const email = String(user?.email || "").trim().toLowerCase();
     const seededDelegateName = String(user?.user_metadata?.seededDelegateName || "").trim();
+    const seededRegistrationId = String(user?.user_metadata?.seededRegistrationId || "").trim();
     const firstName = String(profileOverride?.firstName ?? user?.user_metadata?.firstName ?? "").trim().toLowerCase();
     const lastName = String(profileOverride?.lastName ?? user?.user_metadata?.lastName ?? "").trim().toLowerCase();
-    if (!email || (!seededDelegateName && !(firstName && lastName))) return;
+    const nickname = String(profileOverride?.nickname ?? user?.user_metadata?.nickname ?? "").trim().toLowerCase();
+    if (!email || (!seededRegistrationId && !seededDelegateName && !lastName && !nickname)) return;
 
     const pinned = import.meta.env.VITE_PAMACON_EVENT_ID;
     const { items } = await getEvents();
@@ -59,16 +61,51 @@ export default function App() {
     if (!ev?.id) return;
 
     const regRes = await getRegistrations(ev.id);
+    const rows = regRes.items || [];
+    const seededRows = rows.filter((r) => {
+      try {
+        const meta = r.metadata_json ? JSON.parse(r.metadata_json) : {};
+        return String(meta.seedSource || "").trim() === "pamacon-seed";
+      } catch {
+        return false;
+      }
+    });
     const normalizedTarget = seededDelegateName.toLowerCase();
     const match =
-      (regRes.items || []).find((r) => String(r.full_name || "").trim().toLowerCase() === normalizedTarget) ||
-      (regRes.items || []).find((r) => {
+      seededRows.find((r) => String(r.id || "") === seededRegistrationId) ||
+      seededRows.find((r) => String(r.full_name || "").trim().toLowerCase() === normalizedTarget) ||
+      seededRows.find((r) => {
+        const full = String(r.full_name || "").trim().toLowerCase();
+        if (!full || !nickname || !lastName) return false;
+        const hasNick = full.startsWith(`${nickname} `) || full.includes(` ${nickname} `);
+        const hasLast = full.endsWith(` ${lastName}`) || full.includes(` ${lastName} `);
+        return hasNick && hasLast;
+      }) ||
+      seededRows.find((r) => {
         const full = String(r.full_name || "").trim().toLowerCase();
         if (!full || !firstName || !lastName) return false;
         const hasFirst = full.startsWith(`${firstName} `) || full.includes(` ${firstName} `);
         const hasLast = full.endsWith(` ${lastName}`) || full.includes(` ${lastName} `);
         return hasFirst && hasLast;
-      });
+      }) ||
+      (() => {
+        if (!lastName) return null;
+        const lastNameMatches = seededRows.filter((r) => {
+          try {
+            const meta = r.metadata_json ? JSON.parse(r.metadata_json) : {};
+            const metaLast = String(meta.lastName || "").trim().toLowerCase();
+            const full = String(r.full_name || "").trim().toLowerCase();
+            return (
+              metaLast === lastName ||
+              full.endsWith(` ${lastName}`) ||
+              full.includes(` ${lastName} `)
+            );
+          } catch {
+            return false;
+          }
+        });
+        return lastNameMatches.length === 1 ? lastNameMatches[0] : null;
+      })();
     if (!match?.id) return;
 
     await claimSeededRegistration(match.id, {
@@ -317,15 +354,16 @@ export default function App() {
       const { data, error } = await supabase.auth.updateUser({ data: nextMeta });
       if (error) throw error;
       if (data?.user) setSession((s) => (s ? { ...s, user: data.user } : s));
+      let syncWarning = "";
       try {
         const currentUser = data?.user || session?.user;
         if (currentUser) {
           await syncSeededRegistrationProfile(currentUser, nextMeta);
         }
       } catch {
-        // Do not block profile save success when registration sync fails.
+        syncWarning = "Profile saved, but admin sync is pending. Try Save to my account again in a few seconds.";
       }
-      setApiBanner({ type: "ok", message: "Profile updated." });
+      setApiBanner(syncWarning ? { type: "warn", message: syncWarning } : { type: "ok", message: "Profile updated." });
     } catch (error) {
       showApiError(error, "Failed to update profile.");
     } finally {
