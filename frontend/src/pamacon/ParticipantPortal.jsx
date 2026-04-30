@@ -40,6 +40,7 @@ export default function ParticipantPortal({ config = DEFAULT_PAMACON_CONFIG, eve
   const mapsEmbedSrc = `https://www.google.com/maps?q=${mapsQuery}&output=embed`;
   const mapsOpenUrl = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`;
   const mapsDirectionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${mapsQuery}`;
+  const photosSearchUrl = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${venue} photos`)}`;
 
   return (
     <div
@@ -313,6 +314,22 @@ export default function ParticipantPortal({ config = DEFAULT_PAMACON_CONFIG, eve
               >
                 Close
               </button>
+            </div>
+            <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/70">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Property photos</p>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+                <p className="text-sm text-slate-700 leading-relaxed">
+                  View the latest hotel photos first (facade, lobby, rooms, and amenities) before opening maps.
+                </p>
+                <a
+                  href={photosSearchUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-3 inline-flex items-center justify-center min-h-[44px] rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+                >
+                  View property photos
+                </a>
+              </div>
             </div>
             <div className="aspect-video w-full bg-slate-100 border-b border-slate-100">
               <iframe title="Venue map preview" src={mapsEmbedSrc} className="h-full w-full" loading="lazy" />
