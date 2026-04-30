@@ -249,15 +249,16 @@ app.post("/api/registrations/:id/claim-seeded", async (c) => {
     meta = {};
   }
 
+  const claimedBy = String(meta.attendeeClaimEmail || "").trim().toLowerCase();
   const providedSeededName = String(body?.seededDelegateName ?? "").trim().toLowerCase();
   const rowName = String(existing.full_name || "").trim().toLowerCase();
   const isSeedFlagged = String(meta.seedSource || "") === "pamacon-seed";
   const isNameMatchedSeed = Boolean(providedSeededName && rowName && providedSeededName === rowName);
-  if (!isSeedFlagged && !isNameMatchedSeed) {
+  const isAlreadyClaimedBySameAttendee = Boolean(claimedBy && claimedBy === email);
+  if (!isSeedFlagged && !isNameMatchedSeed && !isAlreadyClaimedBySameAttendee) {
     throw new HTTPException(400, { message: "Only seeded delegates can be claimed through this flow." });
   }
 
-  const claimedBy = String(meta.attendeeClaimEmail || "").trim().toLowerCase();
   if (claimedBy && claimedBy !== email) {
     throw new HTTPException(409, { message: "This seeded delegate has already been claimed." });
   }
