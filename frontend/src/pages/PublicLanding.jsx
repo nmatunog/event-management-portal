@@ -266,19 +266,31 @@ export default function PublicLanding() {
         <section className="mt-14 sm:mt-16 rounded-3xl bg-white border border-zinc-200 overflow-hidden shadow-xl shadow-zinc-900/8">
           <div className="grid md:grid-cols-2 gap-0">
             <div className="p-6 sm:p-10 flex flex-col justify-center space-y-4 bg-gradient-to-br from-white to-zinc-50">
-              <p className="text-[#1d4ed8] font-extrabold text-xs uppercase tracking-[0.2em]">Alternate layout peg</p>
-              <h2 className="text-2xl sm:text-3xl font-black text-zinc-900 leading-tight">White field, gold type, magenta hero</h2>
+              <p className="text-[#1d4ed8] font-extrabold text-xs uppercase tracking-[0.2em]">Your 2026 momentum starts here</p>
+              <h2 className="text-2xl sm:text-3xl font-black text-zinc-900 leading-tight">Step into Cebu with your PAMA community and rise together</h2>
               <p className="text-zinc-600 leading-relaxed text-sm sm:text-base font-medium">
-                The second reference poster uses a bright white base, metallic gold for the year and dates, and condensed magenta for the wordmark — mirrored here in the hero
-                typography above.
+                Be in the room where insights, leadership conversations, and meaningful connections happen. Confirm your slot, complete your profile, and get event-ready in minutes.
               </p>
-              <Link
-                to="/sign-in"
-                className="inline-flex w-fit items-center gap-2 rounded-full bg-[#e11d74] text-white font-black uppercase text-xs tracking-wide px-6 py-3 hover:bg-[#be185d] transition-colors"
-              >
-                Enter portal
-                <ArrowRight size={16} aria-hidden />
-              </Link>
+              <div className="space-y-1.5 text-xs sm:text-sm font-semibold text-zinc-700">
+                <p>Fast 3-step booking confirmation</p>
+                <p>Delegate profile and travel details in one place</p>
+                <p>Access your attendee portal right after sign-in</p>
+              </div>
+              <div className="flex flex-wrap gap-3 pt-1">
+                <Link
+                  to="/sign-in#claim-seeded"
+                  className="inline-flex w-fit items-center gap-2 rounded-full bg-[#e11d74] text-white font-black uppercase text-xs tracking-wide px-6 py-3 hover:bg-[#be185d] transition-colors"
+                >
+                  Confirm booking
+                  <ArrowRight size={16} aria-hidden />
+                </Link>
+                <Link
+                  to="/sign-in"
+                  className="inline-flex w-fit items-center rounded-full border-2 border-[#e11d74]/70 bg-white px-6 py-3 text-xs font-black uppercase tracking-wide text-[#be185d] hover:bg-rose-50 transition-colors"
+                >
+                  Sign in
+                </Link>
+              </div>
             </div>
             <div className="relative min-h-[220px] md:min-h-[320px] bg-zinc-100">
               <img
