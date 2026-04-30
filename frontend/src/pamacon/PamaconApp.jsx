@@ -102,6 +102,16 @@ function delegateFromApi(row) {
     String(meta.middleName || "")
       .trim() ||
     (nameParts.length > 2 ? nameParts.slice(1, -1).join(" ") : "");
+  const normalizedGenderRaw = String(meta.gender || "").trim().toLowerCase();
+  const normalizedGender =
+    normalizedGenderRaw === "male"
+      ? "Male"
+      : normalizedGenderRaw === "female"
+      ? "Female"
+      : normalizedGenderRaw === "other" || normalizedGenderRaw === "unspecified"
+      ? "Unspecified"
+      : "Unspecified";
+  const roleSource = String(meta.positionCode || row.attendee_type || "").trim();
   const mode = row.payment_plan === "installment" ? "Installment" : row.payment_plan === "partial" ? "Partial" : "Full";
   return {
     id: row.id,
@@ -109,8 +119,8 @@ function delegateFromApi(row) {
     firstName: inferredFirst,
     middleName: inferredMiddle,
     lastName: inferredLast,
-    role: formatPositionShort(row.attendee_type),
-    gender: meta.gender || "Unspecified",
+    role: formatPositionShort(roleSource),
+    gender: normalizedGender,
     totalFee: Number(row.total_fee || 0),
     paid: Number(row.paid_amount || 0),
     mode,

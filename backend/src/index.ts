@@ -268,6 +268,8 @@ app.post("/api/registrations/:id/claim-seeded", async (c) => {
     attendeeClaimedAt: new Date().toISOString(),
     attendeeClaimMobile: mobileNumber || String(meta.attendeeClaimMobile || ""),
   };
+  let nextAttendeeType: string | null = null;
+  let nextFullName: string | null = null;
   const profile = body?.attendeeProfile;
   if (profile && typeof profile === "object") {
     const p = profile as Record<string, unknown>;
@@ -298,9 +300,18 @@ app.post("/api/registrations/:id/claim-seeded", async (c) => {
       nextMeta.mobileNumber = mobile;
       nextMeta.attendeeClaimMobile = mobile || String(nextMeta.attendeeClaimMobile || "");
     }
+    const positionCode = String(p.positionCode ?? "").trim().toUpperCase();
+    if (positionCode) nextAttendeeType = positionCode;
+    const firstName = String(p.firstName ?? "").trim();
+    const middleName = String(p.middleName ?? "").trim();
+    const lastName = String(p.lastName ?? "").trim();
+    const joined = [firstName, middleName, lastName].filter(Boolean).join(" ").trim();
+    if (joined) nextFullName = joined;
   }
 
-  await c.env.DB.prepare("UPDATE registrations SET metadata_json = ? WHERE id = ?").bind(JSON.stringify(nextMeta), id).run();
+  await c.env.DB.prepare("UPDATE registrations SET metadata_json = ?, attendee_type = COALESCE(?, attendee_type), full_name = COALESCE(?, full_name) WHERE id = ?")
+    .bind(JSON.stringify(nextMeta), nextAttendeeType, nextFullName, id)
+    .run();
   const item = await c.env.DB.prepare("SELECT * FROM registrations WHERE id = ?").bind(id).first();
   return c.json({ item });
 });
