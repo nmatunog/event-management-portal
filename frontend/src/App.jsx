@@ -138,7 +138,7 @@ export default function App() {
     e.preventDefault();
     if (!supabase) {
       setAuthError("Supabase env vars are missing. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
-      return;
+      return false;
     }
     setAuthLoading(true);
     setAuthError("");
@@ -149,6 +149,7 @@ export default function App() {
     });
     if (error) setAuthError(error.message);
     setAuthLoading(false);
+    return !error;
   };
 
   const handleResetPassword = async () => {
@@ -263,6 +264,8 @@ export default function App() {
   const profile = {
     lastName: userMetadata.lastName || "",
     firstName: userMetadata.firstName || "",
+    nickname: userMetadata.nickname || "",
+    aiaAgentCode: userMetadata.aiaAgentCode || "",
     middleName: userMetadata.middleName || "",
     middleInitial:
       userMetadata.middleInitial ||
@@ -272,7 +275,7 @@ export default function App() {
     positionOther: userMetadata.positionOther || "",
     age: userMetadata.age ?? "",
     gender: userMetadata.gender || "",
-    shirtSize: userMetadata.shirtSize || "M",
+    shirtSize: userMetadata.shirtSize || "",
     shirtSizeOther: userMetadata.shirtSizeOther || "",
     arrivalCebu: userMetadata.arrivalCebu || "",
     departureCebu: userMetadata.departureCebu || "",
@@ -292,6 +295,8 @@ export default function App() {
         ...userMetadata,
         lastName: String(nextProfile?.lastName || "").trim(),
         firstName: String(nextProfile?.firstName || "").trim(),
+        nickname: String(nextProfile?.nickname || "").trim(),
+        aiaAgentCode: String(nextProfile?.aiaAgentCode || "").trim(),
         middleName: String(nextProfile?.middleName || mi).trim().slice(0, 120),
         middleInitial: mi.slice(0, 4),
         mobileNumber: String(nextProfile?.mobileNumber || "").trim(),
@@ -299,7 +304,7 @@ export default function App() {
         positionOther: String(nextProfile?.positionOther || "").trim(),
         age: nextProfile?.age === "" || nextProfile?.age == null ? "" : String(nextProfile.age).trim(),
         gender: String(nextProfile?.gender || "").trim(),
-        shirtSize: String(nextProfile?.shirtSize || "M"),
+        shirtSize: String(nextProfile?.shirtSize || "").trim(),
         shirtSizeOther: String(nextProfile?.shirtSizeOther || "").trim(),
         arrivalCebu: String(nextProfile?.arrivalCebu || "").trim(),
         departureCebu: String(nextProfile?.departureCebu || "").trim(),

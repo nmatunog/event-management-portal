@@ -38,12 +38,14 @@ function draftFromProfile(p) {
   return {
     lastName: p?.lastName || "",
     firstName: p?.firstName || "",
+    nickname: p?.nickname || "",
+    aiaAgentCode: p?.aiaAgentCode || "",
     middleName: p?.middleName || "",
     age: p?.age != null && p?.age !== "" ? String(p.age) : "",
     positionCode: p?.positionCode || "UM",
     positionOther: p?.positionOther || "",
     gender: p?.gender || "",
-    shirtSize: p?.shirtSize || "M",
+    shirtSize: p?.shirtSize || "",
     shirtSizeOther: p?.shirtSizeOther || "",
     arrivalCebu: p?.arrivalCebu || "",
     departureCebu: p?.departureCebu || "",
@@ -76,6 +78,8 @@ function buildQuoteBody(draft, quoteKind) {
     "",
     `Last name: ${draft.lastName}`,
     `First name: ${draft.firstName}`,
+    `Nickname: ${draft.nickname || "—"}`,
+    `AIA Agent Code: ${draft.aiaAgentCode || "—"}`,
     `Middle name: ${draft.middleName}`,
     `Age: ${draft.age}`,
     `Position: ${pos}`,
@@ -93,6 +97,7 @@ function buildQuoteBody(draft, quoteKind) {
 export default function AttendeeDetailsForm({ profile, authEmail, onSaveProfile, profileSaving, quoteEmail }) {
   const [draft, setDraft] = useState(() => draftFromProfile(profile));
   const [savedFlash, setSavedFlash] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   useEffect(() => {
     setDraft(() => {
@@ -139,6 +144,15 @@ export default function AttendeeDetailsForm({ profile, authEmail, onSaveProfile,
   );
 
   const handleSave = async () => {
+    if (!String(draft.shirtSize || "").trim()) {
+      setSaveError("T-shirt size is required before saving.");
+      return;
+    }
+    if (draft.shirtSize === "others" && !String(draft.shirtSizeOther || "").trim()) {
+      setSaveError("Please specify your T-shirt size.");
+      return;
+    }
+    setSaveError("");
     const middleName = String(draft.middleName || "").trim();
     await onSaveProfile?.({
       ...draft,
@@ -179,6 +193,24 @@ export default function AttendeeDetailsForm({ profile, authEmail, onSaveProfile,
             value={draft.firstName}
             onChange={(e) => setDraft((s) => ({ ...s, firstName: e.target.value }))}
             autoComplete="given-name"
+          />
+        </Field>
+        <Field label="Nickname" htmlFor="ad-nickname">
+          <input
+            id="ad-nickname"
+            className={inputClass}
+            value={draft.nickname}
+            onChange={(e) => setDraft((s) => ({ ...s, nickname: e.target.value }))}
+            placeholder="Optional"
+          />
+        </Field>
+        <Field label="AIA Agent Code" htmlFor="ad-agent-code">
+          <input
+            id="ad-agent-code"
+            className={inputClass}
+            value={draft.aiaAgentCode}
+            onChange={(e) => setDraft((s) => ({ ...s, aiaAgentCode: e.target.value }))}
+            placeholder="Enter your code"
           />
         </Field>
         <Field label="Middle name" htmlFor="ad-middle-name">
@@ -242,14 +274,16 @@ export default function AttendeeDetailsForm({ profile, authEmail, onSaveProfile,
             ))}
           </select>
         </Field>
-        <div className="space-y-1.5">
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Shirt size</span>
+        <div className="space-y-2 rounded-2xl border border-red-200 bg-red-50/60 p-3 sm:p-4">
+          <span className="text-xs font-bold uppercase tracking-wide text-red-700">T-shirt size (required)</span>
           <select
             id="ad-shirt"
-            className={inputClass}
+            className={`${inputClass} bg-white`}
             value={draft.shirtSize}
             onChange={(e) => setDraft((s) => ({ ...s, shirtSize: e.target.value }))}
+            required
           >
+            <option value="">Select your size…</option>
             {SHIRT_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
@@ -333,6 +367,7 @@ export default function AttendeeDetailsForm({ profile, authEmail, onSaveProfile,
           <Save size={18} aria-hidden />
           {profileSaving ? "Saving…" : "Save to my account"}
         </button>
+        {saveError && <p className="text-sm font-medium text-rose-700">{saveError}</p>}
         {savedFlash && <p className="text-sm font-medium text-emerald-700">Saved.</p>}
       </div>
 

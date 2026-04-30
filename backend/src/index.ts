@@ -272,6 +272,8 @@ app.post("/api/registrations/:id/claim-seeded", async (c) => {
       nextMeta[key] = String(p[key]).trim();
     };
     applyText("firstName");
+    applyText("nickname");
+    applyText("aiaAgentCode");
     applyText("lastName");
     applyText("middleName");
     applyText("positionCode");
