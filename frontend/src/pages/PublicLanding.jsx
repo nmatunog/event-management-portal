@@ -74,6 +74,27 @@ export default function PublicLanding() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 sm:px-8 pb-20">
+        <section className="mt-6 sm:mt-8 rounded-3xl border border-amber-200 bg-amber-50/70 p-6 sm:p-8 shadow-md shadow-amber-900/5">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-[0.2em] text-amber-800">Paid for your slot already?</p>
+              <h3 className="mt-1 text-xl font-bold text-zinc-900">Confirm your booking and enter your details</h3>
+              <ol className="mt-3 text-sm text-zinc-700 space-y-1">
+                <li>1) Type your family name and select your first name or nickname from the list.</li>
+                <li>2) Fill out your attendee details.</li>
+                <li>3) Enter your preferred email, mobile number, and create your password for next logins.</li>
+              </ol>
+            </div>
+            <Link
+              to="/sign-in#claim-seeded"
+              className="inline-flex items-center justify-center gap-2 min-h-[46px] rounded-full px-6 py-2.5 text-xs font-black uppercase tracking-wide text-white bg-[#b91c1c] hover:bg-[#991b1b] transition-colors shadow-sm"
+            >
+              Start claim process
+              <ArrowRight size={15} aria-hidden />
+            </Link>
+          </div>
+        </section>
+
         {/* Hero — white-poster peg: magenta title, gold year, gold subline, CTA; Sulog poster as visual */}
         <section className="pt-10 sm:pt-14 lg:pt-16 grid lg:grid-cols-[1fr_min(42%,380px)] gap-10 lg:gap-12 items-center">
           <div className="order-2 lg:order-1 space-y-6">
@@ -156,27 +177,6 @@ export default function PublicLanding() {
             <h2 className="font-extrabold text-zinc-900 text-sm uppercase tracking-wide">Portal</h2>
             <p className="mt-2 text-zinc-600 text-sm font-medium leading-relaxed">Delegates and working team — tailored screens after you sign in.</p>
           </article>
-        </section>
-
-        <section className="mt-8 rounded-3xl border border-amber-200 bg-amber-50/70 p-6 sm:p-8 shadow-md shadow-amber-900/5">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.2em] text-amber-800">Paid for your slot already?</p>
-              <h3 className="mt-1 text-xl font-bold text-zinc-900">Confirm your booking and enter your details</h3>
-              <ol className="mt-3 text-sm text-zinc-700 space-y-1">
-                <li>1) Type your family name and select your first name or nickname from the list.</li>
-                <li>2) Fill out your attendee details.</li>
-                <li>3) Enter your preferred email, mobile number, and create your password for next logins.</li>
-              </ol>
-            </div>
-            <Link
-              to="/sign-in#claim-seeded"
-              className="inline-flex items-center justify-center gap-2 min-h-[46px] rounded-full px-6 py-2.5 text-xs font-black uppercase tracking-wide text-white bg-[#b91c1c] hover:bg-[#991b1b] transition-colors shadow-sm"
-            >
-              Start claim process
-              <ArrowRight size={15} aria-hidden />
-            </Link>
-          </div>
         </section>
 
         {/* Two-column peg — early bird vs regular (placeholders; replace with live copy from committee) */}

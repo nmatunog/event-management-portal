@@ -27,6 +27,7 @@ export default function SignInPage({
   const [mobileNumber, setMobileNumber] = useState("");
   const [claimPassword, setClaimPassword] = useState("");
   const [confirmClaimPassword, setConfirmClaimPassword] = useState("");
+  const [claimCompleted, setClaimCompleted] = useState(false);
 
   useEffect(() => {
     if (session) navigate("/portal", { replace: true });
@@ -114,12 +115,17 @@ export default function SignInPage({
     });
     setClaimLoading(false);
     if (ok) {
+      setClaimCompleted(true);
       setFamilyName("");
       setSelectedDelegateId("");
       setPreferredEmail("");
       setMobileNumber("");
       setClaimPassword("");
       setConfirmClaimPassword("");
+      window.requestAnimationFrame(() => {
+        const el = document.getElementById("sign-in-card");
+        el?.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
     }
   };
 
@@ -132,91 +138,100 @@ export default function SignInPage({
         <ArrowLeft size={16} aria-hidden />
         Back to home
       </Link>
-      <section id="claim-seeded" className="w-full max-w-lg mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-        <p className="text-[11px] font-black uppercase tracking-wide text-amber-800">Have you paid for your slot?</p>
-        <p className="mt-1 text-sm text-amber-900">Click here to confirm your booking and enter your details.</p>
-        <ol className="mt-2 text-xs text-amber-900 space-y-0.5">
-          <li>1) Enter your family name and pick your first name or nickname from the list.</li>
-          <li>2) Fill out your attendee details.</li>
-          <li>3) Enter your preferred email/mobile and create password for next logins.</li>
-        </ol>
-      </section>
-      <form onSubmit={handleClaimSubmit} className="w-full max-w-lg mb-4 rounded-3xl border border-amber-200 bg-white p-6 space-y-3">
-        <h2 className="text-base font-bold text-slate-900">Confirm booking (seeded delegate)</h2>
-        <label className="block">
-          <span className="text-xs font-bold uppercase tracking-wide text-slate-500">Family name</span>
-          <input
-            value={familyName}
-            onChange={(e) => {
-              setFamilyName(e.target.value);
-              setSelectedDelegateId("");
-            }}
-            placeholder="Type your last name"
-            className="mt-1 w-full min-h-[44px] rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-amber-400"
-          />
-        </label>
-        <label className="block">
-          <span className="text-xs font-bold uppercase tracking-wide text-slate-500">Choose your name (first name / nickname)</span>
-          <select
-            value={selectedDelegateId}
-            onChange={(e) => setSelectedDelegateId(e.target.value)}
-            className="mt-1 w-full min-h-[44px] rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-amber-400"
-          >
-            <option value="">Select from matching records…</option>
-            {familyOptions.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <label className="block">
-            <span className="text-xs font-bold uppercase tracking-wide text-slate-500">Preferred email</span>
-            <input
-              type="email"
-              value={preferredEmail}
-              onChange={(e) => setPreferredEmail(e.target.value)}
-              className="mt-1 w-full min-h-[44px] rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-amber-400"
-            />
-          </label>
-          <label className="block">
-            <span className="text-xs font-bold uppercase tracking-wide text-slate-500">Mobile number</span>
-            <input
-              value={mobileNumber}
-              onChange={(e) => setMobileNumber(e.target.value)}
-              className="mt-1 w-full min-h-[44px] rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-amber-400"
-            />
-          </label>
-          <label className="block">
-            <span className="text-xs font-bold uppercase tracking-wide text-slate-500">Create password</span>
-            <input
-              type="password"
-              value={claimPassword}
-              onChange={(e) => setClaimPassword(e.target.value)}
-              className="mt-1 w-full min-h-[44px] rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-amber-400"
-            />
-          </label>
-          <label className="block">
-            <span className="text-xs font-bold uppercase tracking-wide text-slate-500">Confirm password</span>
-            <input
-              type="password"
-              value={confirmClaimPassword}
-              onChange={(e) => setConfirmClaimPassword(e.target.value)}
-              className="mt-1 w-full min-h-[44px] rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-amber-400"
-            />
-          </label>
-        </div>
-        {claimError && <p className="text-sm text-rose-600 font-semibold">{claimError}</p>}
-        <button
-          type="submit"
-          disabled={claimLoading || authLoading}
-          className="w-full bg-amber-600 hover:bg-amber-700 text-white rounded-xl py-3 text-sm font-black uppercase tracking-wide disabled:opacity-50 min-h-[48px]"
-        >
-          {claimLoading || authLoading ? "Please wait..." : "Confirm booking and create account"}
-        </button>
-      </form>
-      <form onSubmit={onLogin} className="w-full max-w-lg bg-white rounded-3xl shadow-2xl p-8 space-y-4 border border-slate-200">
+      {!claimCompleted && (
+        <>
+          <section id="claim-seeded" className="w-full max-w-lg mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+            <p className="text-[11px] font-black uppercase tracking-wide text-amber-800">Have you paid for your slot?</p>
+            <p className="mt-1 text-sm text-amber-900">Click here to confirm your booking and enter your details.</p>
+            <ol className="mt-2 text-xs text-amber-900 space-y-0.5">
+              <li>1) Enter your family name and pick your first name or nickname from the list.</li>
+              <li>2) Fill out your attendee details.</li>
+              <li>3) Enter your preferred email/mobile and create password for next logins.</li>
+            </ol>
+          </section>
+          <form onSubmit={handleClaimSubmit} className="w-full max-w-lg mb-4 rounded-3xl border border-amber-200 bg-white p-6 space-y-3">
+            <h2 className="text-base font-bold text-slate-900">Confirm booking (seeded delegate)</h2>
+            <label className="block">
+              <span className="text-xs font-bold uppercase tracking-wide text-slate-500">Family name</span>
+              <input
+                value={familyName}
+                onChange={(e) => {
+                  setFamilyName(e.target.value);
+                  setSelectedDelegateId("");
+                }}
+                placeholder="Type your last name"
+                className="mt-1 w-full min-h-[44px] rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-amber-400"
+              />
+            </label>
+            <label className="block">
+              <span className="text-xs font-bold uppercase tracking-wide text-slate-500">Choose your name (first name / nickname)</span>
+              <select
+                value={selectedDelegateId}
+                onChange={(e) => setSelectedDelegateId(e.target.value)}
+                className="mt-1 w-full min-h-[44px] rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-amber-400"
+              >
+                <option value="">Select from matching records…</option>
+                {familyOptions.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="block">
+                <span className="text-xs font-bold uppercase tracking-wide text-slate-500">Preferred email</span>
+                <input
+                  type="email"
+                  value={preferredEmail}
+                  onChange={(e) => setPreferredEmail(e.target.value)}
+                  className="mt-1 w-full min-h-[44px] rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-amber-400"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-bold uppercase tracking-wide text-slate-500">Mobile number</span>
+                <input
+                  value={mobileNumber}
+                  onChange={(e) => setMobileNumber(e.target.value)}
+                  className="mt-1 w-full min-h-[44px] rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-amber-400"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-bold uppercase tracking-wide text-slate-500">Create password</span>
+                <input
+                  type="password"
+                  value={claimPassword}
+                  onChange={(e) => setClaimPassword(e.target.value)}
+                  className="mt-1 w-full min-h-[44px] rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-amber-400"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-bold uppercase tracking-wide text-slate-500">Confirm password</span>
+                <input
+                  type="password"
+                  value={confirmClaimPassword}
+                  onChange={(e) => setConfirmClaimPassword(e.target.value)}
+                  className="mt-1 w-full min-h-[44px] rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-amber-400"
+                />
+              </label>
+            </div>
+            {claimError && <p className="text-sm text-rose-600 font-semibold">{claimError}</p>}
+            <button
+              type="submit"
+              disabled={claimLoading || authLoading}
+              className="w-full bg-amber-600 hover:bg-amber-700 text-white rounded-xl py-3 text-sm font-black uppercase tracking-wide disabled:opacity-50 min-h-[48px]"
+            >
+              {claimLoading || authLoading ? "Please wait..." : "Confirm booking and create account"}
+            </button>
+          </form>
+        </>
+      )}
+      {claimCompleted && (
+        <p className="w-full max-w-lg mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 text-center">
+          Booking confirmed. Please sign in below using your new email and password.
+        </p>
+      )}
+      <form id="sign-in-card" onSubmit={onLogin} className="w-full max-w-lg bg-white rounded-3xl shadow-2xl p-8 space-y-4 border border-slate-200">
         <div className="flex items-center gap-3 mb-2">
           <div className="w-12 h-12 bg-red-600 rounded-xl flex items-center justify-center font-black text-lg text-white">PA</div>
           <div>
