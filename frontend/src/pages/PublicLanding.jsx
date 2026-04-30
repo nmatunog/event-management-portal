@@ -57,7 +57,7 @@ export default function PublicLanding() {
       <div className="landing-sunburst -z-10" aria-hidden />
       <div className="absolute inset-0 -z-20 bg-[linear-gradient(180deg,#fafafa_0%,#f4f4f5_45%,#ececee_100%)]" aria-hidden />
       <div
-        className="pointer-events-none absolute inset-0 -z-10 bg-center bg-cover opacity-[0.12]"
+        className="pointer-events-none absolute inset-0 -z-10 bg-center bg-cover opacity-[0.20]"
         style={{ backgroundImage: "url('/landing/photowall-light.png')" }}
         aria-hidden
       />
@@ -115,7 +115,7 @@ export default function PublicLanding() {
         </section>
 
         {/* Hero — white-poster peg: magenta title, gold year, gold subline, CTA; Sulog poster as visual */}
-        <section className="pt-10 sm:pt-14 lg:pt-16 grid lg:grid-cols-[1fr_min(42%,380px)] gap-10 lg:gap-12 items-center">
+        <section className="pt-10 sm:pt-14 lg:pt-16 grid lg:grid-cols-[1fr_min(48%,460px)] gap-10 lg:gap-12 items-center">
           <div className="order-2 lg:order-1 space-y-6">
             <p className="text-[#1d4ed8] font-extrabold text-xs sm:text-sm uppercase tracking-[0.2em]">
               Sulog · Rise with the current
@@ -155,7 +155,7 @@ export default function PublicLanding() {
           </div>
 
           <div className="order-1 lg:order-2 flex justify-center lg:justify-end">
-            <figure className="relative w-full max-w-[380px]">
+            <figure className="relative w-full max-w-[460px]">
               <div className="absolute -inset-3 rounded-[2rem] bg-gradient-to-br from-[#1d4ed8]/15 via-[#e11d74]/10 to-amber-400/25 blur-2xl" aria-hidden />
               <img
                 src="/landing/photowall-light.png"
