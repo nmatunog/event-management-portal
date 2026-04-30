@@ -1,0 +1,15 @@
+name = "event-management-api"
+main = "src/index.ts"
+compatibility_date = "2026-04-16"
+
+[vars]
+APP_NAME = "Event Management API"
+AUTH_DEV_FALLBACK = "false"
+SUPABASE_JWKS_URL = "https://lfslcsirqlcylcyizaud.supabase.co/auth/v1/.well-known/jwks.json"
+SUPABASE_ISSUER = "https://lfslcsirqlcylcyizaud.supabase.co/auth/v1"
+SUPERUSER_EMAILS = "nmatunog@gmail.com"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "event_management"
+database_id = "3fa8b049-8cfd-4038-906a-8025970b72df"
