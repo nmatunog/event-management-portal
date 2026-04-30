@@ -38,7 +38,7 @@ function draftFromProfile(p) {
   return {
     lastName: p?.lastName || "",
     firstName: p?.firstName || "",
-    middleInitial: p?.middleInitial ?? (p?.middleName ? String(p.middleName).slice(0, 1) : ""),
+    middleName: p?.middleName || "",
     age: p?.age != null && p?.age !== "" ? String(p.age) : "",
     positionCode: p?.positionCode || "UM",
     positionOther: p?.positionOther || "",
@@ -76,7 +76,7 @@ function buildQuoteBody(draft, quoteKind) {
     "",
     `Last name: ${draft.lastName}`,
     `First name: ${draft.firstName}`,
-    `Middle initial: ${draft.middleInitial}`,
+    `Middle name: ${draft.middleName}`,
     `Age: ${draft.age}`,
     `Position: ${pos}`,
     `Gender: ${GENDER_OPTIONS.find((g) => g.value === draft.gender)?.label || draft.gender || "—"}`,
@@ -139,11 +139,11 @@ export default function AttendeeDetailsForm({ profile, authEmail, onSaveProfile,
   );
 
   const handleSave = async () => {
-    const mi = String(draft.middleInitial || "").trim();
+    const middleName = String(draft.middleName || "").trim();
     await onSaveProfile?.({
       ...draft,
-      middleName: mi.slice(0, 3),
-      middleInitial: mi.slice(0, 1),
+      middleName: middleName.slice(0, 120),
+      middleInitial: middleName.slice(0, 1),
     });
     setSavedFlash(true);
     setTimeout(() => setSavedFlash(false), 2500);
@@ -181,13 +181,13 @@ export default function AttendeeDetailsForm({ profile, authEmail, onSaveProfile,
             autoComplete="given-name"
           />
         </Field>
-        <Field label="Middle initial" htmlFor="ad-mi" className="sm:max-w-[8rem]">
+        <Field label="Middle name" htmlFor="ad-middle-name">
           <input
-            id="ad-mi"
+            id="ad-middle-name"
             className={inputClass}
-            maxLength={4}
-            value={draft.middleInitial}
-            onChange={(e) => setDraft((s) => ({ ...s, middleInitial: e.target.value.toUpperCase() }))}
+            maxLength={120}
+            value={draft.middleName}
+            onChange={(e) => setDraft((s) => ({ ...s, middleName: e.target.value }))}
             autoComplete="additional-name"
           />
         </Field>
