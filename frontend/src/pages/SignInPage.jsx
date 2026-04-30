@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { getEvents, getRegistrations } from "../lib/api";
 
@@ -18,6 +18,7 @@ export default function SignInPage({
   onClaimBooking,
 }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [claimLoading, setClaimLoading] = useState(false);
   const [claimError, setClaimError] = useState("");
   const [delegates, setDelegates] = useState([]);
@@ -31,10 +32,31 @@ export default function SignInPage({
   const [showConfirmClaimPassword, setShowConfirmClaimPassword] = useState(false);
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [claimCompleted, setClaimCompleted] = useState(false);
+  const [showClaimCard, setShowClaimCard] = useState(false);
+  const [showClaimQuestion, setShowClaimQuestion] = useState(false);
+  const [signInTried, setSignInTried] = useState(false);
+  useEffect(() => {
+    if (!signInTried) return;
+    const wrongPw = /invalid login credentials|invalid email or password|invalid credentials/i.test(String(authError || ""));
+    setShowClaimQuestion(wrongPw);
+  }, [authError, signInTried]);
+
 
   useEffect(() => {
     if (session) navigate("/portal", { replace: true });
   }, [session, navigate]);
+
+  useEffect(() => {
+    if (location.hash === "#claim-seeded") {
+      setShowClaimCard(true);
+      window.requestAnimationFrame(() => {
+        const el = document.getElementById("claim-seeded");
+        el?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    } else {
+      setShowClaimCard(false);
+    }
+  }, [location.hash]);
 
   useEffect(() => {
     let cancelled = false;
@@ -132,6 +154,15 @@ export default function SignInPage({
     }
   };
 
+  const handleSignInSubmit = async (e) => {
+    setSignInTried(true);
+    const ok = await onLogin?.(e);
+    if (ok) {
+      setShowClaimQuestion(false);
+      setSignInTried(false);
+    }
+  };
+
   return (
     <div className="min-h-[100dvh] bg-slate-100 flex flex-col items-center justify-center p-6">
       <Link
@@ -141,7 +172,7 @@ export default function SignInPage({
         <ArrowLeft size={16} aria-hidden />
         Back to home
       </Link>
-      {!claimCompleted && (
+      {!claimCompleted && showClaimCard && (
         <>
           <section id="claim-seeded" className="w-full max-w-lg mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
             <p className="text-[11px] font-black uppercase tracking-wide text-amber-800">Have you paid for your slot?</p>
@@ -252,7 +283,7 @@ export default function SignInPage({
           Booking confirmed. Please sign in below using your new email and password.
         </p>
       )}
-      <form id="sign-in-card" onSubmit={onLogin} className="w-full max-w-lg bg-white rounded-3xl shadow-2xl p-8 space-y-4 border border-slate-200">
+      <form id="sign-in-card" onSubmit={handleSignInSubmit} className="w-full max-w-lg bg-white rounded-3xl shadow-2xl p-8 space-y-4 border border-slate-200">
         <div className="flex items-center gap-3 mb-2">
           <div className="w-12 h-12 bg-red-600 rounded-xl flex items-center justify-center font-black text-lg text-white">PA</div>
           <div>
@@ -293,6 +324,49 @@ export default function SignInPage({
         </label>
         {authError && <p className="text-sm text-rose-600 font-semibold">{authError}</p>}
         {authInfo && <p className="text-sm text-emerald-700 font-semibold">{authInfo}</p>}
+        {showClaimQuestion && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900 space-y-2">
+            <p className="font-semibold">Have you signed up already and set up your password?</p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                onClick={() => setShowClaimQuestion(false)}
+              >
+                Yes
+              </button>
+              <button
+                type="button"
+                className="rounded-lg border border-amber-300 bg-amber-100 px-3 py-1.5 text-xs font-bold text-amber-900 hover:bg-amber-200"
+                onClick={() => {
+                  setShowClaimCard(true);
+                  setShowClaimQuestion(false);
+                  window.requestAnimationFrame(() => {
+                    const el = document.getElementById("claim-seeded");
+                    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  });
+                }}
+              >
+                No, show claim form
+              </button>
+            </div>
+          </div>
+        )}
+        {!showClaimCard && !claimCompleted && (
+          <button
+            type="button"
+            className="w-full rounded-xl border border-amber-200 bg-amber-50 py-2.5 text-xs font-bold uppercase tracking-wide text-amber-900 hover:bg-amber-100"
+            onClick={() => {
+              setShowClaimCard(true);
+              window.requestAnimationFrame(() => {
+                const el = document.getElementById("claim-seeded");
+                el?.scrollIntoView({ behavior: "smooth", block: "start" });
+              });
+            }}
+          >
+            Have you paid for your slot? Confirm booking here
+          </button>
+        )}
         <button
           type="button"
           disabled={authLoading}

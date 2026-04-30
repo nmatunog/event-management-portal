@@ -92,11 +92,23 @@ function isSeededDelegateRow(r) {
 
 function delegateFromApi(row) {
   const meta = parseMeta(row);
+  const nameParts = String(row.full_name || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  const inferredLast = String(meta.lastName || (nameParts.length ? nameParts[nameParts.length - 1] : "")).trim();
+  const inferredFirst = String(meta.firstName || (nameParts.length ? nameParts[0] : "")).trim();
+  const inferredMiddle =
+    String(meta.middleName || "")
+      .trim() ||
+    (nameParts.length > 2 ? nameParts.slice(1, -1).join(" ") : "");
   const mode = row.payment_plan === "installment" ? "Installment" : row.payment_plan === "partial" ? "Partial" : "Full";
   return {
     id: row.id,
     name: row.full_name,
-    lastName: meta.lastName || "",
+    firstName: inferredFirst,
+    middleName: inferredMiddle,
+    lastName: inferredLast,
     role: formatPositionShort(row.attendee_type),
     gender: meta.gender || "Unspecified",
     totalFee: Number(row.total_fee || 0),
@@ -112,6 +124,10 @@ function delegateFromApi(row) {
     staffClaimAt: meta.staffClaimAt || "",
     attendeeClaimEmail: meta.attendeeClaimEmail || "",
     attendeeClaimedAt: meta.attendeeClaimedAt || "",
+    nickname: meta.nickname || "",
+    shirtSize: meta.shirtSize || "",
+    tshirtClaimed: Boolean(meta.tshirtClaimed),
+    conferenceKitClaimed: Boolean(meta.conferenceKitClaimed),
   };
 }
 
@@ -447,7 +463,13 @@ export default function PamaconApp({ canEdit, authEmail, authRole, profile, onSa
     const prev = u.metaBase && typeof u.metaBase === "object" ? { ...u.metaBase } : {};
     const meta = {
       ...prev,
+      firstName: u.firstName ?? "",
+      middleName: u.middleName ?? "",
       lastName: u.lastName ?? "",
+      nickname: u.nickname ?? prev.nickname ?? "",
+      shirtSize: u.shirtSize ?? prev.shirtSize ?? "",
+      tshirtClaimed: Boolean(u.tshirtClaimed ?? prev.tshirtClaimed),
+      conferenceKitClaimed: Boolean(u.conferenceKitClaimed ?? prev.conferenceKitClaimed),
       gender: u.gender ?? "Unspecified",
       solo: u.solo,
       manualPairId: u.manualPairId,
@@ -475,7 +497,13 @@ export default function PamaconApp({ canEdit, authEmail, authRole, profile, onSa
       paidAmount: u.paid,
       paymentPlan: modeToPaymentPlan(u.mode),
       metadata: {
+        firstName: u.firstName ?? "",
+        middleName: u.middleName ?? "",
         lastName: u.lastName ?? "",
+        nickname: u.nickname ?? "",
+        shirtSize: u.shirtSize ?? "",
+        tshirtClaimed: Boolean(u.tshirtClaimed),
+        conferenceKitClaimed: Boolean(u.conferenceKitClaimed),
         gender: u.gender ?? "Unspecified",
         solo: Boolean(u.solo),
         manualPairId: null,
@@ -917,6 +945,8 @@ function emptyDelegateDraft() {
     isNew: true,
     id: null,
     name: "",
+    firstName: "",
+    middleName: "",
     lastName: "",
     role: "UM",
     gender: "Unspecified",
@@ -1050,6 +1080,75 @@ function RegistrantsLedger({
     setFRemarks("");
   };
 
+  const toggleClaimField = async (row, field) => {
+    try {
+      await onUpdate({
+        ...row,
+        [field]: !Boolean(row[field]),
+      });
+      onInfo?.(`${field === "tshirtClaimed" ? "T-shirt" : "Conference kit"} claim updated.`);
+    } catch (e) {
+      onApiError?.(e, "Could not update claim status.");
+    }
+  };
+
+  const shirtSummary = useMemo(() => {
+    const counts = {};
+    let total = 0;
+    for (const r of registrants) {
+      const size = String(r.shirtSize || "").trim().toUpperCase();
+      if (!size) continue;
+      counts[size] = (counts[size] || 0) + 1;
+      total += 1;
+    }
+    const ordered = Object.entries(counts).sort((a, b) => a[0].localeCompare(b[0]));
+    return { ordered, total };
+  }, [registrants]);
+
+  const claimTrackerRows = useMemo(
+    () => registrants.filter((r) => r.tshirtClaimed || r.conferenceKitClaimed || r.shirtSize),
+    [registrants]
+  );
+
+  const downloadMasterlist = () => {
+    const headers = [
+      "Full Name",
+      "Nickname",
+      "Position",
+      "Gender",
+      "Shirt Size",
+      "Tshirt Claimed",
+      "Conference Kit Claimed",
+      "Payment Mode",
+      "Paid Amount",
+      "Status",
+    ];
+    const esc = (v) => `"${String(v ?? "").replaceAll("\"", "\"\"")}"`;
+    const rows = sorted.map((r) =>
+      [
+        r.name,
+        r.nickname || "",
+        formatPositionShort(r.role),
+        r.gender || "",
+        r.shirtSize || "",
+        r.tshirtClaimed ? "Yes" : "No",
+        r.conferenceKitClaimed ? "Yes" : "No",
+        r.mode || "",
+        Number(r.paid || 0),
+        r.status || "",
+      ].map(esc).join(",")
+    );
+    const csv = [headers.map(esc).join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `pamacon-masterlist-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+  };
+
   const claimSummary = useMemo(() => {
     const seeded = registrants.filter((r) => isSeededDelegateRow(r));
     const claimed = seeded.filter((r) => String(r.staffClaimEmail || "").trim() || String(r.attendeeClaimEmail || "").trim());
@@ -1064,9 +1163,20 @@ function RegistrantsLedger({
   const handleCommit = async () => {
     if (!editing) return;
     const { isNew, ...row } = editing;
+    const firstName = String(row.firstName || "").trim();
+    const middleName = String(row.middleName || "").trim();
+    const lastName = String(row.lastName || "").trim();
+    const fullName = [firstName, middleName, lastName].filter(Boolean).join(" ").trim();
+    const normalized = {
+      ...row,
+      firstName,
+      middleName,
+      lastName,
+      name: fullName || String(row.name || "").trim(),
+    };
     try {
-      if (isNew) await onCreate(row);
-      else await onUpdate(row);
+      if (isNew) await onCreate(normalized);
+      else await onUpdate(normalized);
       setEditing(null);
       onInfo?.(isNew ? "Delegate added successfully." : "Delegate saved successfully.");
     } catch (e) {
@@ -1104,8 +1214,28 @@ function RegistrantsLedger({
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
           <div className="bg-white w-full max-w-lg rounded-[40px] shadow-2xl p-10 space-y-4 max-h-[90vh] overflow-y-auto">
             <h3 className="text-xl font-semibold text-slate-900">{editing.isNew ? "Add delegate" : "Edit delegate"}</h3>
-            <SetupInput label="Full name" value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
-            <SetupInput label="Last name" value={editing.lastName || ""} onChange={(e) => setEditing({ ...editing, lastName: e.target.value })} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <SetupInput
+                label="First name"
+                value={editing.firstName || ""}
+                onChange={(e) => setEditing({ ...editing, firstName: e.target.value })}
+              />
+              <SetupInput
+                label="Last name"
+                value={editing.lastName || ""}
+                onChange={(e) => setEditing({ ...editing, lastName: e.target.value })}
+              />
+            </div>
+            <SetupInput
+              label="Middle name"
+              value={editing.middleName || ""}
+              onChange={(e) => setEditing({ ...editing, middleName: e.target.value })}
+            />
+            <SetupInput
+              label="Full name (auto)"
+              value={[editing.firstName, editing.middleName, editing.lastName].filter(Boolean).join(" ").trim()}
+              readOnly
+            />
             <div className="space-y-2">
               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Position</label>
               <select
@@ -1259,6 +1389,13 @@ function RegistrantsLedger({
               )}
               <button
                 type="button"
+                onClick={downloadMasterlist}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Download masterlist
+              </button>
+              <button
+                type="button"
                 onClick={() => setShowAdvancedFilters((s) => !s)}
                 className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50"
               >
@@ -1291,6 +1428,7 @@ function RegistrantsLedger({
               <col className="w-[130px]" />
               <col className="w-[130px]" />
               <col className="w-[100px]" />
+              <col className="w-[140px]" />
               {showMoreColumns && (
                 <>
                   <col className="w-[120px]" />
@@ -1316,6 +1454,9 @@ function RegistrantsLedger({
                 </th>
                 <th className="px-4 py-3.5 align-bottom">
                   <SortBtn col="mode" label="Mode" />
+                </th>
+                <th className="px-4 py-3.5 align-bottom">
+                  T-shirt claim
                 </th>
                 {showMoreColumns && (
                   <>
@@ -1415,6 +1556,9 @@ function RegistrantsLedger({
                     <span className="text-slate-300">—</span>
                   )}
                 </th>
+                <th className="px-4 py-2.5 font-normal">
+                  <span className="text-slate-300">—</span>
+                </th>
                 {showMoreColumns && (
                   <>
                     <th className="px-4 py-2.5 font-normal">
@@ -1460,6 +1604,7 @@ function RegistrantsLedger({
                   <tr key={r.id} className="group hover:bg-slate-50/80">
                     <td className="px-4 py-4 text-slate-800">
                       <div className="font-semibold">{r.name}</div>
+                      {r.nickname && <div className="text-xs text-slate-500 mt-1">Nickname: {r.nickname}</div>}
                       {isSeededDelegateRow(r) && (
                         <div className="mt-2 flex flex-col gap-1.5">
                           {r.attendeeClaimEmail ? (
@@ -1499,6 +1644,18 @@ function RegistrantsLedger({
                     <td className="px-4 py-4 text-right font-semibold text-slate-800 tabular-nums">₱{(Number(r.paid) || 0).toLocaleString()}</td>
                     <td className="px-4 py-4">
                       <span className="text-xs font-medium text-slate-700">{r.mode}</span>
+                    </td>
+                    <td className="px-4 py-4">
+                      <button
+                        type="button"
+                        disabled={!canEdit}
+                        onClick={() => toggleClaimField(r, "tshirtClaimed")}
+                        className={`rounded-lg px-2.5 py-1 text-xs font-semibold border ${
+                          r.tshirtClaimed ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                        }`}
+                      >
+                        {r.tshirtClaimed ? "Claimed" : "Pending"}
+                      </button>
                     </td>
                     {showMoreColumns && (
                       <>
@@ -1554,6 +1711,76 @@ function RegistrantsLedger({
               </tr>
             </tfoot>
           </table>
+        </div>
+      </div>
+      <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-4">
+        <h4 className="text-base font-semibold text-slate-900">T-shirt and Conference Kit Claim</h4>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-sm">
+            <thead>
+              <tr className="border-b border-slate-100 text-[11px] uppercase tracking-wide text-slate-500">
+                <th className="py-2 text-left">Delegate</th>
+                <th className="py-2 text-left">Shirt size</th>
+                <th className="py-2 text-left">T-shirt</th>
+                <th className="py-2 text-left">Conference kit</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {claimTrackerRows.map((r) => (
+                <tr key={`claims-${r.id}`}>
+                  <td className="py-2.5 pr-3 text-slate-800">
+                    <span className="font-medium">{r.name}</span>
+                    {r.nickname ? <span className="ml-2 text-xs text-slate-500">({r.nickname})</span> : null}
+                  </td>
+                  <td className="py-2.5 pr-3 text-slate-600">{r.shirtSize || "—"}</td>
+                  <td className="py-2.5 pr-3">
+                    <button
+                      type="button"
+                      disabled={!canEdit}
+                      onClick={() => toggleClaimField(r, "tshirtClaimed")}
+                      className={`rounded-lg px-2.5 py-1 text-xs font-semibold border ${
+                        r.tshirtClaimed ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      {r.tshirtClaimed ? "Claimed" : "Mark claimed"}
+                    </button>
+                  </td>
+                  <td className="py-2.5 pr-3">
+                    <button
+                      type="button"
+                      disabled={!canEdit}
+                      onClick={() => toggleClaimField(r, "conferenceKitClaimed")}
+                      className={`rounded-lg px-2.5 py-1 text-xs font-semibold border ${
+                        r.conferenceKitClaimed ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      {r.conferenceKitClaimed ? "Claimed" : "Mark claimed"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {claimTrackerRows.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="py-3 text-slate-500">
+                    No claimable delegate data yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">T-shirt size summary (ordering)</p>
+          <div className="flex flex-wrap gap-2">
+            {shirtSummary.ordered.map(([size, count]) => (
+              <span key={size} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700">
+                {size}: {count}
+              </span>
+            ))}
+            <span className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-bold text-red-700">
+              Total shirts: {shirtSummary.total}
+            </span>
+          </div>
         </div>
       </div>
       {isAdmin && canEdit && registrants.length > 0 && (
