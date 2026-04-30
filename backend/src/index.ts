@@ -232,6 +232,44 @@ app.get("/api/events/:eventId/registrations", async (c) => {
   return c.json({ items: res.results });
 });
 
+app.post("/api/registrations/:id/claim-seeded", async (c) => {
+  const id = c.req.param("id");
+  const body = await c.req.json();
+  const email = String(body?.email ?? "").trim().toLowerCase();
+  const mobileNumber = String(body?.mobileNumber ?? "").trim();
+  if (!email) throw new HTTPException(400, { message: "Email is required." });
+
+  const existing = await c.env.DB.prepare("SELECT id, metadata_json FROM registrations WHERE id = ?").bind(id).first<Record<string, unknown>>();
+  if (!existing) throw new HTTPException(404, { message: "Registration not found." });
+
+  let meta: Record<string, unknown> = {};
+  try {
+    meta = existing.metadata_json ? (JSON.parse(String(existing.metadata_json)) as Record<string, unknown>) : {};
+  } catch {
+    meta = {};
+  }
+
+  if (String(meta.seedSource || "") !== "pamacon-seed") {
+    throw new HTTPException(400, { message: "Only seeded delegates can be claimed through this flow." });
+  }
+
+  const claimedBy = String(meta.attendeeClaimEmail || "").trim().toLowerCase();
+  if (claimedBy && claimedBy !== email) {
+    throw new HTTPException(409, { message: "This seeded delegate has already been claimed." });
+  }
+
+  const nextMeta = {
+    ...meta,
+    attendeeClaimEmail: email,
+    attendeeClaimedAt: new Date().toISOString(),
+    attendeeClaimMobile: mobileNumber || String(meta.attendeeClaimMobile || ""),
+  };
+
+  await c.env.DB.prepare("UPDATE registrations SET metadata_json = ? WHERE id = ?").bind(JSON.stringify(nextMeta), id).run();
+  const item = await c.env.DB.prepare("SELECT * FROM registrations WHERE id = ?").bind(id).first();
+  return c.json({ item });
+});
+
 app.post("/api/events/:eventId/registrations", requireRole(["admin", "staff"]), async (c) => {
   const eventId = c.req.param("eventId");
   const body = await c.req.json();

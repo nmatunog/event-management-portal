@@ -110,6 +110,8 @@ function delegateFromApi(row) {
     seedSource: meta.seedSource || "",
     staffClaimEmail: meta.staffClaimEmail || "",
     staffClaimAt: meta.staffClaimAt || "",
+    attendeeClaimEmail: meta.attendeeClaimEmail || "",
+    attendeeClaimedAt: meta.attendeeClaimedAt || "",
   };
 }
 
@@ -289,7 +291,7 @@ const NAV_GROUPS = [
   },
 ];
 
-export default function PamaconApp({ canEdit, authEmail, authRole, profile, onSaveProfile, profileSaving, onApiInfo, onApiError }) {
+export default function PamaconApp({ canEdit, authEmail, authRole, profile, onSaveProfile, profileSaving, onApiInfo, onApiError, onLogout }) {
   const [activeTab, setActiveTab] = useState("dashboard");
   /** When `attendee`, committee users preview the same portal delegates see. */
   const [committeePortalView, setCommitteePortalView] = useState("admin");
@@ -677,6 +679,7 @@ export default function PamaconApp({ canEdit, authEmail, authRole, profile, onSa
         profile={profile}
         onSaveProfile={onSaveProfile}
         profileSaving={profileSaving}
+        onLogout={onLogout}
       />
     );
   }
@@ -708,6 +711,7 @@ export default function PamaconApp({ canEdit, authEmail, authRole, profile, onSa
             profile={profile}
             onSaveProfile={onSaveProfile}
             profileSaving={profileSaving}
+            onLogout={onLogout}
           />
         </div>
       </div>
@@ -984,9 +988,11 @@ function RegistrantsLedger({
     return registrants.filter((r) => {
       const seeded = isSeededDelegateRow(r);
       const claimEmail = String(r.staffClaimEmail || "").trim().toLowerCase();
-      if (claimFilter === "seed-unclaimed" && (!seeded || claimEmail)) return false;
+      const attendeeClaimEmail = String(r.attendeeClaimEmail || "").trim().toLowerCase();
+      const hasAnyClaim = Boolean(claimEmail || attendeeClaimEmail);
+      if (claimFilter === "seed-unclaimed" && (!seeded || hasAnyClaim)) return false;
       if (claimFilter === "seed-claimed-by-me" && (!seeded || !claimEmail || claimEmail !== myEmail)) return false;
-      if (claimFilter === "seed-claimed-any" && (!seeded || !claimEmail)) return false;
+      if (claimFilter === "seed-claimed-any" && (!seeded || !hasAnyClaim)) return false;
       if (fName && !r.name.toLowerCase().includes(fName.toLowerCase())) return false;
       if (fRole && !r.role.toLowerCase().includes(fRole.toLowerCase())) return false;
       const fee = Number(r.totalFee) || 0;
@@ -1046,8 +1052,8 @@ function RegistrantsLedger({
 
   const claimSummary = useMemo(() => {
     const seeded = registrants.filter((r) => isSeededDelegateRow(r));
-    const claimed = seeded.filter((r) => String(r.staffClaimEmail || "").trim());
-    const mine = claimed.filter((r) => String(r.staffClaimEmail || "").trim().toLowerCase() === myEmail);
+    const claimed = seeded.filter((r) => String(r.staffClaimEmail || "").trim() || String(r.attendeeClaimEmail || "").trim());
+    const mine = seeded.filter((r) => String(r.staffClaimEmail || "").trim().toLowerCase() === myEmail);
     return {
       seeded: seeded.length,
       unclaimed: Math.max(0, seeded.length - claimed.length),
@@ -1456,7 +1462,11 @@ function RegistrantsLedger({
                       <div className="font-semibold">{r.name}</div>
                       {isSeededDelegateRow(r) && (
                         <div className="mt-2 flex flex-col gap-1.5">
-                          {r.staffClaimEmail ? (
+                          {r.attendeeClaimEmail ? (
+                            <span className="text-[10px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-2 py-1 inline-flex flex-wrap items-center gap-1 w-fit max-w-full">
+                              Claimed by attendee {r.attendeeClaimEmail}
+                            </span>
+                          ) : r.staffClaimEmail ? (
                             <span className="text-[10px] font-medium text-violet-700 bg-violet-50 border border-violet-100 rounded-lg px-2 py-1 inline-flex flex-wrap items-center gap-1 w-fit max-w-full">
                               Claimed by {r.staffClaimEmail}
                             </span>
@@ -1468,9 +1478,11 @@ function RegistrantsLedger({
                               type="button"
                               onClick={() => onToggleStaffClaim?.(r)}
                               className="text-left w-fit text-[11px] font-bold text-red-700 hover:underline disabled:opacity-40"
-                              disabled={Boolean(r.staffClaimEmail && String(r.staffClaimEmail).toLowerCase() !== String(authEmail || "").toLowerCase())}
+                              disabled={Boolean(r.attendeeClaimEmail || (r.staffClaimEmail && String(r.staffClaimEmail).toLowerCase() !== String(authEmail || "").toLowerCase()))}
                             >
-                              {r.staffClaimEmail && String(r.staffClaimEmail).toLowerCase() === String(authEmail || "").toLowerCase()
+                              {r.attendeeClaimEmail
+                                ? "Already claimed by attendee"
+                                : r.staffClaimEmail && String(r.staffClaimEmail).toLowerCase() === String(authEmail || "").toLowerCase()
                                 ? "Release my claim"
                                 : r.staffClaimEmail
                                 ? "Claimed by another"

@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Calendar, ChevronDown, ClipboardCheck, Film, ImageIcon, MapPin, Sparkles } from "lucide-react";
+import { Calendar, ChevronDown, ClipboardCheck, Film, ImageIcon, LogOut, MapPin, Sparkles } from "lucide-react";
 import { DEFAULT_PAMACON_CONFIG, DEFAULT_ATTENDEE_PORTAL, PAMACON_TITLE } from "./defaultConfig";
 import AttendeeDetailsForm from "./AttendeeDetailsForm";
 
@@ -19,7 +19,7 @@ function youtubeEmbedSrc(url) {
  * Participant-facing portal: marketing placeholders, promo video, and travel / shirt / tour form.
  * Layout is tuned for phones, tablets, and desktop (fluid max-width, touch-friendly controls).
  */
-export default function ParticipantPortal({ config = DEFAULT_PAMACON_CONFIG, eventRow, authEmail, profile, onSaveProfile, profileSaving }) {
+export default function ParticipantPortal({ config = DEFAULT_PAMACON_CONFIG, eventRow, authEmail, profile, onSaveProfile, profileSaving, onLogout }) {
   const title = eventRow?.title || PAMACON_TITLE;
   const theme = config?.theme || DEFAULT_PAMACON_CONFIG.theme;
   const venue = eventRow?.venue || "Waterfront Cebu Hotel and Casino";
@@ -31,6 +31,7 @@ export default function ParticipantPortal({ config = DEFAULT_PAMACON_CONFIG, eve
     String(portal.youtubeUrl || "").trim() || String(import.meta.env.VITE_ATTENDEE_YOUTUBE_URL || "").trim();
   const embedSrc = youtubeEmbedSrc(youtubeUrl);
   const firstName = typeof profile?.firstName === "string" ? profile.firstName.trim() : "";
+  const dateRangeLabel = formatDateRange(start, end);
 
   return (
     <div
@@ -61,6 +62,16 @@ export default function ParticipantPortal({ config = DEFAULT_PAMACON_CONFIG, eve
             >
               Enter your details
             </a>
+            {typeof onLogout === "function" && (
+              <button
+                type="button"
+                onClick={onLogout}
+                className="inline-flex items-center justify-center gap-1.5 min-h-[44px] rounded-xl border border-red-200 bg-red-50 px-3.5 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 shadow-sm"
+              >
+                <LogOut size={16} aria-hidden />
+                Logout
+              </button>
+            )}
             <p className="text-[11px] text-slate-500 truncate max-w-full sm:max-w-[14rem] text-left sm:text-right">{authEmail}</p>
           </div>
         </div>
@@ -155,9 +166,27 @@ export default function ParticipantPortal({ config = DEFAULT_PAMACON_CONFIG, eve
         </section>
 
         <section className="grid gap-4 sm:grid-cols-3">
-          <InfoCard icon={Sparkles} title="Theme" body={theme} accent="bg-red-50 text-red-600" />
-          <InfoCard icon={Calendar} title="Dates" body={`${start} → ${end}`} />
-          <InfoCard icon={MapPin} title="Venue" body={venue} />
+          <InfoCard
+            icon={Sparkles}
+            title="Theme"
+            body={theme}
+            accent="bg-gradient-to-br from-red-500 to-rose-500 text-white shadow-md shadow-red-500/25"
+            chip="Event vibe"
+          />
+          <InfoCard
+            icon={Calendar}
+            title="Dates"
+            body={dateRangeLabel}
+            accent="bg-gradient-to-br from-slate-600 to-slate-700 text-white shadow-md shadow-slate-400/30"
+            chip="Save the date"
+          />
+          <InfoCard
+            icon={MapPin}
+            title="Venue"
+            body={venue}
+            accent="bg-gradient-to-br from-sky-500 to-indigo-500 text-white shadow-md shadow-indigo-400/30"
+            chip="Location"
+          />
         </section>
 
         <section aria-labelledby="posters-heading" className="space-y-4">
@@ -263,14 +292,29 @@ export default function ParticipantPortal({ config = DEFAULT_PAMACON_CONFIG, eve
   );
 }
 
-function InfoCard({ icon, title, body, accent = "bg-slate-100 text-slate-600" }) {
+function formatDateRange(start, end) {
+  const safeStart = String(start || "").trim();
+  const safeEnd = String(end || "").trim();
+  if (!safeStart || !safeEnd) return `${start} → ${end}`;
+  const s = new Date(`${safeStart}T00:00:00`);
+  const e = new Date(`${safeEnd}T00:00:00`);
+  if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return `${start} → ${end}`;
+  const sameMonth = s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear();
+  if (sameMonth) {
+    return `${s.toLocaleDateString("en-US", { month: "short" })} ${s.getDate()}-${e.getDate()}, ${e.getFullYear()}`;
+  }
+  return `${s.toLocaleDateString("en-US", { month: "short", day: "numeric" })} - ${e.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
+}
+
+function InfoCard({ icon, title, body, chip, accent = "bg-slate-100 text-slate-600" }) {
   const Glyph = icon;
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 flex gap-3 sm:flex-col sm:gap-3 shadow-sm">
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 flex gap-3 sm:flex-col sm:gap-3 shadow-sm hover:shadow-md transition-shadow">
       <div className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${accent}`}>
         <Glyph size={20} aria-hidden />
       </div>
       <div className="min-w-0">
+        {chip && <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{chip}</p>}
         <h3 className="font-semibold text-slate-900 text-sm sm:text-base">{title}</h3>
         <p className="text-slate-600 mt-1 text-sm leading-relaxed">{body}</p>
       </div>

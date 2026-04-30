@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
-import { getAuthMe, setAccessToken } from "./lib/api";
+import { claimSeededRegistration, getAuthMe, getEvents, getRegistrations, setAccessToken } from "./lib/api";
 import { supabase } from "./lib/supabaseClient";
 import PamaconApp from "./pamacon/PamaconApp";
 import PublicLanding from "./pages/PublicLanding.jsx";
@@ -16,6 +16,7 @@ export default function App() {
   const [loginPassword, setLoginPassword] = useState("");
   const [apiBanner, setApiBanner] = useState(null);
   const [profileSaving, setProfileSaving] = useState(false);
+  const [seedClaimSyncDoneFor, setSeedClaimSyncDoneFor] = useState("");
 
   const superUserEmails = new Set(
     String(import.meta.env.VITE_SUPERUSER_EMAILS || "")
@@ -78,6 +79,38 @@ export default function App() {
     });
     return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    const syncSeedClaim = async () => {
+      const user = session?.user;
+      const email = String(user?.email || "").trim().toLowerCase();
+      const seededDelegateName = String(user?.user_metadata?.seededDelegateName || "").trim();
+      if (!email || !seededDelegateName) return;
+      const guardKey = `${email}|${seededDelegateName.toLowerCase()}`;
+      if (seedClaimSyncDoneFor === guardKey) return;
+      try {
+        const pinned = import.meta.env.VITE_PAMACON_EVENT_ID;
+        const { items } = await getEvents();
+        let ev = (items || []).find((x) => String(x.title || "").includes("PAMACON"));
+        if (pinned) ev = (items || []).find((x) => x.id === pinned) || ev;
+        if (!ev?.id) return;
+        const regRes = await getRegistrations(ev.id);
+        const match = (regRes.items || []).find(
+          (r) => String(r.full_name || "").trim().toLowerCase() === seededDelegateName.toLowerCase()
+        );
+        if (!match?.id) return;
+        await claimSeededRegistration(match.id, {
+          email,
+          mobileNumber: String(user?.user_metadata?.mobileNumber || "").trim(),
+        });
+      } catch {
+        // Silent fallback: attendee can still proceed even if sync fails.
+      } finally {
+        setSeedClaimSyncDoneFor(guardKey);
+      }
+    };
+    syncSeedClaim();
+  }, [session, seedClaimSyncDoneFor]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -178,6 +211,18 @@ export default function App() {
       setAuthError(error.message);
       setAuthLoading(false);
       return false;
+    }
+    try {
+      if (delegate?.id) {
+        await claimSeededRegistration(delegate.id, {
+          email: safeEmail,
+          mobileNumber: String(mobileNumber || "").trim(),
+        });
+      }
+    } catch {
+      setAuthInfo("Account created, but we could not mark your seeded booking as claimed yet. Please notify staff to link it.");
+      setAuthLoading(false);
+      return true;
     }
     setAuthInfo("Booking claim started. Check your email if confirmation is required, then sign in.");
     setLoginEmail(safeEmail);
@@ -281,15 +326,18 @@ export default function App() {
           profileSaving={profileSaving}
           onApiInfo={showApiInfo}
           onApiError={showApiError}
+          onLogout={handleLogout}
         />
       </div>
-      <button
-        type="button"
-        onClick={handleLogout}
-        className="fixed bottom-4 right-4 z-[200] rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold shadow-lg hover:bg-slate-50"
-      >
-        Logout
-      </button>
+      {canManage && (
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="fixed bottom-4 right-4 z-[200] rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold shadow-lg hover:bg-slate-50"
+        >
+          Logout
+        </button>
+      )}
     </div>
   ) : null;
 

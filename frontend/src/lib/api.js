@@ -83,6 +83,13 @@ export function patchRegistration(registrationId, payload) {
   });
 }
 
+export function claimSeededRegistration(registrationId, payload) {
+  return request(`/api/registrations/${registrationId}/claim-seeded`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function deleteRegistration(registrationId) {
   return request(`/api/registrations/${registrationId}`, { method: "DELETE" });
 }
