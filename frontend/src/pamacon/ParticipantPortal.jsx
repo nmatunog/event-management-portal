@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { Calendar, ChevronDown, ClipboardCheck, Film, ImageIcon, LogOut, MapPin, Sparkles } from "lucide-react";
+import { useMemo, useState } from "react";
 import { DEFAULT_PAMACON_CONFIG, DEFAULT_ATTENDEE_PORTAL, PAMACON_TITLE } from "./defaultConfig";
 import AttendeeDetailsForm from "./AttendeeDetailsForm";
 
@@ -34,6 +35,11 @@ export default function ParticipantPortal({ config = DEFAULT_PAMACON_CONFIG, eve
   const embedSrc = youtubeEmbedSrc(youtubeUrl);
   const firstName = typeof profile?.firstName === "string" ? profile.firstName.trim() : "";
   const dateRangeLabel = formatDateRange(start, end);
+  const [showVenueModal, setShowVenueModal] = useState(false);
+  const mapsQuery = useMemo(() => encodeURIComponent(`${venue}, Cebu`), [venue]);
+  const mapsEmbedSrc = `https://www.google.com/maps?q=${mapsQuery}&output=embed`;
+  const mapsOpenUrl = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`;
+  const mapsDirectionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${mapsQuery}`;
 
   return (
     <div
@@ -188,6 +194,8 @@ export default function ParticipantPortal({ config = DEFAULT_PAMACON_CONFIG, eve
             body={venue}
             accent="bg-gradient-to-br from-sky-500 to-indigo-500 text-white shadow-md shadow-indigo-400/30"
             chip="Location"
+            onClick={() => setShowVenueModal(true)}
+            actionLabel="View venue details"
           />
         </section>
 
@@ -290,6 +298,46 @@ export default function ParticipantPortal({ config = DEFAULT_PAMACON_CONFIG, eve
           quoteEmail={portal.quoteRequestEmail}
         />
       </main>
+      {showVenueModal && (
+        <div className="fixed inset-0 z-[120] bg-slate-900/60 backdrop-blur-sm p-4 sm:p-6" role="dialog" aria-modal="true" aria-label="Venue details">
+          <div className="mx-auto max-w-3xl rounded-3xl border border-slate-200 bg-white shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-slate-100">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Venue</p>
+                <h3 className="text-lg font-semibold text-slate-900">{venue}</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowVenueModal(false)}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Close
+              </button>
+            </div>
+            <div className="aspect-video w-full bg-slate-100 border-b border-slate-100">
+              <iframe title="Venue map preview" src={mapsEmbedSrc} className="h-full w-full" loading="lazy" />
+            </div>
+            <div className="px-5 py-4 flex flex-col sm:flex-row gap-2.5">
+              <a
+                href={mapsOpenUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-center min-h-[44px] rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Open in Google Maps
+              </a>
+              <a
+                href={mapsDirectionsUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-center min-h-[44px] rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+              >
+                Get directions
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -308,10 +356,21 @@ function formatDateRange(start, end) {
   return `${s.toLocaleDateString("en-US", { month: "short", day: "numeric" })} - ${e.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
 }
 
-function InfoCard({ icon, title, body, chip, accent = "bg-slate-100 text-slate-600" }) {
+function InfoCard({ icon, title, body, chip, onClick, actionLabel, accent = "bg-slate-100 text-slate-600" }) {
   const Glyph = icon;
+  const asButton = typeof onClick === "function";
+  const Wrapper = asButton ? "button" : "div";
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 flex gap-3 sm:flex-col sm:gap-3 shadow-sm hover:shadow-md transition-shadow">
+    <Wrapper
+      type={asButton ? "button" : undefined}
+      onClick={asButton ? onClick : undefined}
+      className={`rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 flex gap-3 sm:flex-col sm:gap-3 shadow-sm transition-shadow ${
+        asButton
+          ? "text-left hover:shadow-md hover:border-red-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
+          : "hover:shadow-md"
+      }`}
+      aria-label={actionLabel || title}
+    >
       <div className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${accent}`}>
         <Glyph size={20} aria-hidden />
       </div>
@@ -319,7 +378,8 @@ function InfoCard({ icon, title, body, chip, accent = "bg-slate-100 text-slate-6
         {chip && <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{chip}</p>}
         <h3 className="font-semibold text-slate-900 text-sm sm:text-base">{title}</h3>
         <p className="text-slate-600 mt-1 text-sm leading-relaxed">{body}</p>
+        {asButton && <p className="mt-1 text-xs font-semibold text-red-700">Tap to view map and directions</p>}
       </div>
-    </div>
+    </Wrapper>
   );
 }
