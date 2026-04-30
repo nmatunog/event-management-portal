@@ -264,6 +264,35 @@ app.post("/api/registrations/:id/claim-seeded", async (c) => {
     attendeeClaimedAt: new Date().toISOString(),
     attendeeClaimMobile: mobileNumber || String(meta.attendeeClaimMobile || ""),
   };
+  const profile = body?.attendeeProfile;
+  if (profile && typeof profile === "object") {
+    const p = profile as Record<string, unknown>;
+    const applyText = (key: string) => {
+      if (p[key] === undefined || p[key] === null) return;
+      nextMeta[key] = String(p[key]).trim();
+    };
+    applyText("firstName");
+    applyText("lastName");
+    applyText("middleName");
+    applyText("positionCode");
+    applyText("positionOther");
+    applyText("gender");
+    applyText("shirtSize");
+    applyText("shirtSizeOther");
+    applyText("arrivalCebu");
+    applyText("departureCebu");
+    applyText("extraOtherRequest");
+    if (p.age !== undefined && p.age !== null) nextMeta.age = String(p.age).trim();
+    if (p.extraIslandHopping !== undefined) nextMeta.extraIslandHopping = Boolean(p.extraIslandHopping);
+    if (p.extraCityTour !== undefined) nextMeta.extraCityTour = Boolean(p.extraCityTour);
+    if (p.extraMountainTour !== undefined) nextMeta.extraMountainTour = Boolean(p.extraMountainTour);
+    if (p.extraSafari !== undefined) nextMeta.extraSafari = Boolean(p.extraSafari);
+    if (p.mobileNumber !== undefined && p.mobileNumber !== null) {
+      const mobile = String(p.mobileNumber).trim();
+      nextMeta.mobileNumber = mobile;
+      nextMeta.attendeeClaimMobile = mobile || String(nextMeta.attendeeClaimMobile || "");
+    }
+  }
 
   await c.env.DB.prepare("UPDATE registrations SET metadata_json = ? WHERE id = ?").bind(JSON.stringify(nextMeta), id).run();
   const item = await c.env.DB.prepare("SELECT * FROM registrations WHERE id = ?").bind(id).first();

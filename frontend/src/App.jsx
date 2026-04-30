@@ -45,6 +45,39 @@ export default function App() {
     setApiBanner({ type, message });
   };
 
+  const syncSeededRegistrationProfile = async (user, profileOverride = null) => {
+    const email = String(user?.email || "").trim().toLowerCase();
+    const seededDelegateName = String(user?.user_metadata?.seededDelegateName || "").trim();
+    const firstName = String(profileOverride?.firstName ?? user?.user_metadata?.firstName ?? "").trim().toLowerCase();
+    const lastName = String(profileOverride?.lastName ?? user?.user_metadata?.lastName ?? "").trim().toLowerCase();
+    if (!email || (!seededDelegateName && !(firstName && lastName))) return;
+
+    const pinned = import.meta.env.VITE_PAMACON_EVENT_ID;
+    const { items } = await getEvents();
+    let ev = (items || []).find((x) => String(x.title || "").includes("PAMACON"));
+    if (pinned) ev = (items || []).find((x) => x.id === pinned) || ev;
+    if (!ev?.id) return;
+
+    const regRes = await getRegistrations(ev.id);
+    const normalizedTarget = seededDelegateName.toLowerCase();
+    const match =
+      (regRes.items || []).find((r) => String(r.full_name || "").trim().toLowerCase() === normalizedTarget) ||
+      (regRes.items || []).find((r) => {
+        const full = String(r.full_name || "").trim().toLowerCase();
+        if (!full || !firstName || !lastName) return false;
+        const hasFirst = full.startsWith(`${firstName} `) || full.includes(` ${firstName} `);
+        const hasLast = full.endsWith(` ${lastName}`) || full.includes(` ${lastName} `);
+        return hasFirst && hasLast;
+      });
+    if (!match?.id) return;
+
+    await claimSeededRegistration(match.id, {
+      email,
+      mobileNumber: String(profileOverride?.mobileNumber ?? user?.user_metadata?.mobileNumber ?? "").trim(),
+      attendeeProfile: profileOverride || user?.user_metadata || {},
+    });
+  };
+
   useEffect(() => {
     if (!supabase) return;
     supabase.auth.getSession().then(async ({ data }) => {
@@ -91,27 +124,7 @@ export default function App() {
       const guardKey = `${email}|${(seededDelegateName || `${firstName} ${lastName}`).toLowerCase()}`;
       if (seedClaimSyncDoneFor === guardKey) return;
       try {
-        const pinned = import.meta.env.VITE_PAMACON_EVENT_ID;
-        const { items } = await getEvents();
-        let ev = (items || []).find((x) => String(x.title || "").includes("PAMACON"));
-        if (pinned) ev = (items || []).find((x) => x.id === pinned) || ev;
-        if (!ev?.id) return;
-        const regRes = await getRegistrations(ev.id);
-        const normalizedTarget = seededDelegateName.toLowerCase();
-        const match =
-          (regRes.items || []).find((r) => String(r.full_name || "").trim().toLowerCase() === normalizedTarget) ||
-          (regRes.items || []).find((r) => {
-            const full = String(r.full_name || "").trim().toLowerCase();
-            if (!full || !firstName || !lastName) return false;
-            const hasFirst = full.startsWith(`${firstName} `) || full.includes(` ${firstName} `);
-            const hasLast = full.endsWith(` ${lastName}`) || full.includes(` ${lastName} `);
-            return hasFirst && hasLast;
-          });
-        if (!match?.id) return;
-        await claimSeededRegistration(match.id, {
-          email,
-          mobileNumber: String(user?.user_metadata?.mobileNumber || "").trim(),
-        });
+        await syncSeededRegistrationProfile(user);
       } catch {
         // Silent fallback: attendee can still proceed even if sync fails.
       } finally {
@@ -299,6 +312,14 @@ export default function App() {
       const { data, error } = await supabase.auth.updateUser({ data: nextMeta });
       if (error) throw error;
       if (data?.user) setSession((s) => (s ? { ...s, user: data.user } : s));
+      try {
+        const currentUser = data?.user || session?.user;
+        if (currentUser) {
+          await syncSeededRegistrationProfile(currentUser, nextMeta);
+        }
+      } catch {
+        // Do not block profile save success when registration sync fails.
+      }
       setApiBanner({ type: "ok", message: "Profile updated." });
     } catch (error) {
       showApiError(error, "Failed to update profile.");

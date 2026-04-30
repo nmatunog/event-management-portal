@@ -422,14 +422,6 @@ export default function PamaconApp({ canEdit, authEmail, authRole, profile, onSa
     reloadAll();
   }, [reloadAll]);
 
-  useEffect(() => {
-    if (!eventId || !canEdit) return;
-    const intervalId = window.setInterval(() => {
-      reloadAll();
-    }, 8000);
-    return () => window.clearInterval(intervalId);
-  }, [eventId, canEdit, reloadAll]);
-
   const sponsorRevenueTotal = useMemo(() => sponsors.reduce((s, x) => s + (Number(x.amount) || 0), 0), [sponsors]);
   const delegateRevenueActual = useMemo(() => registrants.reduce((s, x) => s + (Number(x.paid) || 0), 0), [registrants]);
   const totalRevenueProjection = useMemo(
