@@ -192,17 +192,36 @@ export default function PublicLanding() {
           </article>
         </section>
 
-        {/* Two-column peg — early bird vs regular (placeholders; replace with live copy from committee) */}
+        {/* Rates + payment details */}
         <section id="rates" className="mt-14 sm:mt-16 scroll-mt-28 grid md:grid-cols-2 gap-5">
           <div className="rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-lg shadow-zinc-900/5">
-            <h3 className="text-[#b91c1c] font-black text-xs uppercase tracking-[0.2em] mb-2">Early bird rate</h3>
-            <p className="text-zinc-800 font-bold text-lg leading-snug">Publish your confirmed tiers in event setup — this block mirrors the poster layout.</p>
-            <p className="mt-3 text-zinc-600 text-sm leading-relaxed">Use the admin portal to keep fees aligned with printed materials.</p>
+            <h3 className="text-[#b91c1c] font-black text-xs uppercase tracking-[0.2em] mb-2">Discounted conference rates</h3>
+            <p className="text-zinc-800 font-bold text-lg leading-snug">Current subsidized conference pricing</p>
+            <ul className="mt-3 space-y-1 text-sm text-zinc-700 font-semibold">
+              <li>PHP 8,500 - SUM / UM</li>
+              <li>PHP 10,500 - AD / DD</li>
+            </ul>
+            <h4 className="mt-5 text-[#1f2937] font-black text-xs uppercase tracking-[0.18em]">Extra subsidized offer</h4>
+            <ul className="mt-2 space-y-1 text-sm text-zinc-700 font-semibold">
+              <li>3 monthly installments: PHP 2,850/mo - SUM / UM</li>
+              <li>3 monthly installments: PHP 3,500/mo - AD / DD</li>
+            </ul>
           </div>
           <div className="rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-lg shadow-zinc-900/5">
-            <h3 className="text-zinc-900 font-black text-xs uppercase tracking-[0.2em] mb-2">Regular conference fee</h3>
-            <p className="text-zinc-800 font-bold text-lg leading-snug">Bank &amp; e-wallet lines stay on your official poster — link or PDF from the committee site if needed.</p>
-            <p className="mt-3 text-zinc-600 text-sm leading-relaxed">PAMA accounts (BPI / GCash) should match finance-approved wording.</p>
+            <h3 className="text-zinc-900 font-black text-xs uppercase tracking-[0.2em] mb-2">PAMA accounts</h3>
+            <div className="space-y-4 text-sm text-zinc-700">
+              <div>
+                <p className="font-bold uppercase tracking-wide text-zinc-900">BPI</p>
+                <p className="font-semibold">Philam Life Agency Managers Association</p>
+                <p className="font-mono font-bold text-zinc-900">1681001545</p>
+              </div>
+              <div>
+                <p className="font-bold uppercase tracking-wide text-zinc-900">GCash</p>
+                <p className="font-semibold">Re'ed "O J"</p>
+                <p className="font-mono font-bold text-zinc-900">0915 423 5799</p>
+              </div>
+            </div>
+            <p className="mt-4 text-xs text-zinc-500">Verify account details with the finance team before sending payment.</p>
           </div>
         </section>
 
