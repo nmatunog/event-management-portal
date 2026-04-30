@@ -941,8 +941,10 @@ function RegistrantsLedger({
   onInfo,
   onApiError,
 }) {
+  const myEmail = String(authEmail || "").trim().toLowerCase();
   const [editing, setEditing] = useState(null);
   const [sort, setSort] = useState({ key: "name", dir: "asc" });
+  const [claimFilter, setClaimFilter] = useState("all");
   const [fName, setFName] = useState("");
   const [fRole, setFRole] = useState("");
   const [fFeeMin, setFFeeMin] = useState("");
@@ -980,6 +982,11 @@ function RegistrantsLedger({
 
   const filtered = useMemo(() => {
     return registrants.filter((r) => {
+      const seeded = isSeededDelegateRow(r);
+      const claimEmail = String(r.staffClaimEmail || "").trim().toLowerCase();
+      if (claimFilter === "seed-unclaimed" && (!seeded || claimEmail)) return false;
+      if (claimFilter === "seed-claimed-by-me" && (!seeded || !claimEmail || claimEmail !== myEmail)) return false;
+      if (claimFilter === "seed-claimed-any" && (!seeded || !claimEmail)) return false;
       if (fName && !r.name.toLowerCase().includes(fName.toLowerCase())) return false;
       if (fRole && !r.role.toLowerCase().includes(fRole.toLowerCase())) return false;
       const fee = Number(r.totalFee) || 0;
@@ -993,7 +1000,7 @@ function RegistrantsLedger({
       if (fRemarks && !(r.remarks || "").toLowerCase().includes(fRemarks.toLowerCase())) return false;
       return true;
     });
-  }, [registrants, fName, fRole, fFeeMin, fFeeMax, fPaidMin, fPaidMax, fMode, fStatus, fRemarks]);
+  }, [registrants, claimFilter, myEmail, fName, fRole, fFeeMin, fFeeMax, fPaidMin, fPaidMax, fMode, fStatus, fRemarks]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
@@ -1025,6 +1032,7 @@ function RegistrantsLedger({
   const collectedTotalFiltered = useMemo(() => filtered.reduce((sum, r) => sum + (Number(r.paid) || 0), 0), [filtered]);
 
   const clearFilters = () => {
+    setClaimFilter("all");
     setFName("");
     setFRole("");
     setFFeeMin("");
@@ -1035,6 +1043,17 @@ function RegistrantsLedger({
     setFStatus("");
     setFRemarks("");
   };
+
+  const claimSummary = useMemo(() => {
+    const seeded = registrants.filter((r) => isSeededDelegateRow(r));
+    const claimed = seeded.filter((r) => String(r.staffClaimEmail || "").trim());
+    const mine = claimed.filter((r) => String(r.staffClaimEmail || "").trim().toLowerCase() === myEmail);
+    return {
+      seeded: seeded.length,
+      unclaimed: Math.max(0, seeded.length - claimed.length),
+      mine: mine.length,
+    };
+  }, [registrants, myEmail]);
 
   const handleCommit = async () => {
     if (!editing) return;
@@ -1181,6 +1200,36 @@ function RegistrantsLedger({
               <p className="text-sm text-slate-500 mt-1 max-w-xl">
                 <strong>Registration fees</strong> is the sum of each row’s listed fee. <strong>Collected</strong> is the sum of amounts actually paid—they differ when someone is on partial or installment plans.
               </p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Claim workflow</span>
+                <button
+                  type="button"
+                  onClick={() => setClaimFilter("seed-unclaimed")}
+                  className={`rounded-lg px-2.5 py-1 text-xs font-semibold border ${
+                    claimFilter === "seed-unclaimed" ? "border-red-300 bg-red-50 text-red-700" : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  Unclaimed seeds: {claimSummary.unclaimed}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setClaimFilter("seed-claimed-by-me")}
+                  className={`rounded-lg px-2.5 py-1 text-xs font-semibold border ${
+                    claimFilter === "seed-claimed-by-me" ? "border-violet-300 bg-violet-50 text-violet-700" : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  Claimed by me: {claimSummary.mine}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setClaimFilter("all")}
+                  className={`rounded-lg px-2.5 py-1 text-xs font-semibold border ${
+                    claimFilter === "all" ? "border-slate-300 bg-slate-100 text-slate-800" : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  Show all delegates
+                </button>
+              </div>
             </div>
             <div className="flex flex-wrap items-stretch gap-3">
               <div className="rounded-xl bg-white border border-slate-200 px-4 py-2.5 min-w-[140px]">

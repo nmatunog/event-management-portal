@@ -30,6 +30,12 @@ export default function SignInPage({
         <ArrowLeft size={16} aria-hidden />
         Back to home
       </Link>
+      <section id="claim-seeded" className="w-full max-w-lg mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+        <p className="text-[11px] font-black uppercase tracking-wide text-amber-800">Seeded delegate account</p>
+        <p className="mt-1 text-sm text-amber-900">
+          If your name is in the preloaded delegate list, sign in first, complete your profile details, then the committee can quickly claim and verify your seeded record.
+        </p>
+      </section>
       <form onSubmit={onLogin} className="w-full max-w-lg bg-white rounded-3xl shadow-2xl p-8 space-y-4 border border-slate-200">
         <div className="flex items-center gap-3 mb-2">
           <div className="w-12 h-12 bg-red-600 rounded-xl flex items-center justify-center font-black text-lg text-white">PA</div>

@@ -158,6 +158,27 @@ export default function PublicLanding() {
           </article>
         </section>
 
+        <section className="mt-8 rounded-3xl border border-amber-200 bg-amber-50/70 p-6 sm:p-8 shadow-md shadow-amber-900/5">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-[0.2em] text-amber-800">Already in the seeded delegate list?</p>
+              <h3 className="mt-1 text-xl font-bold text-zinc-900">Claim your seeded account in 3 easy steps</h3>
+              <ol className="mt-3 text-sm text-zinc-700 space-y-1">
+                <li>1) Sign in using your preferred email.</li>
+                <li>2) Fill out your attendee details (name, travel dates, shirt size).</li>
+                <li>3) Committee staff confirms and tags your seeded profile.</li>
+              </ol>
+            </div>
+            <Link
+              to="/sign-in#claim-seeded"
+              className="inline-flex items-center justify-center gap-2 min-h-[46px] rounded-full px-6 py-2.5 text-xs font-black uppercase tracking-wide text-white bg-[#b91c1c] hover:bg-[#991b1b] transition-colors shadow-sm"
+            >
+              Start claim process
+              <ArrowRight size={15} aria-hidden />
+            </Link>
+          </div>
+        </section>
+
         {/* Two-column peg — early bird vs regular (placeholders; replace with live copy from committee) */}
         <section id="rates" className="mt-14 sm:mt-16 scroll-mt-28 grid md:grid-cols-2 gap-5">
           <div className="rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-lg shadow-zinc-900/5">
