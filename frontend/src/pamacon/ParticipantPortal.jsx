@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Calendar, ChevronDown, Film, ImageIcon, MapPin, Sparkles } from "lucide-react";
+import { Calendar, ChevronDown, ClipboardCheck, Film, ImageIcon, MapPin, Sparkles } from "lucide-react";
 import { DEFAULT_PAMACON_CONFIG, DEFAULT_ATTENDEE_PORTAL, PAMACON_TITLE } from "./defaultConfig";
 import AttendeeDetailsForm from "./AttendeeDetailsForm";
 
@@ -30,6 +30,7 @@ export default function ParticipantPortal({ config = DEFAULT_PAMACON_CONFIG, eve
   const youtubeUrl =
     String(portal.youtubeUrl || "").trim() || String(import.meta.env.VITE_ATTENDEE_YOUTUBE_URL || "").trim();
   const embedSrc = youtubeEmbedSrc(youtubeUrl);
+  const firstName = typeof profile?.firstName === "string" ? profile.firstName.trim() : "";
 
   return (
     <div
@@ -66,32 +67,90 @@ export default function ParticipantPortal({ config = DEFAULT_PAMACON_CONFIG, eve
       </header>
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-8 sm:space-y-10">
-        <section className="rounded-2xl sm:rounded-3xl bg-white border border-slate-200/80 p-5 sm:p-8 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wide text-red-600 mb-2">For attendees</p>
-          <h2 className="text-xl sm:text-2xl font-semibold text-slate-900 leading-snug">Welcome</h2>
-          <p className="mt-3 text-sm sm:text-base text-slate-600 leading-relaxed">
-            Use this page on your phone, tablet, or computer. Scroll down for event posters and a welcome video, then complete your travel and shirt information and optional
-            post-conference activities.
-          </p>
-          <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-            <a
-              href="#posters-heading"
-              className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-red-50 hover:border-red-200 transition"
-            >
-              1. View posters
-            </a>
-            <a
-              href="#video-heading"
-              className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-red-50 hover:border-red-200 transition"
-            >
-              2. Watch video
-            </a>
-            <a
-              href="#attendee-details"
-              className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 transition"
-            >
-              3. Complete your details
-            </a>
+        <section
+          aria-labelledby="welcome-heading"
+          className="relative overflow-hidden rounded-2xl sm:rounded-3xl border border-red-200/50 bg-gradient-to-br from-rose-50/95 via-white to-amber-50/70 p-5 sm:p-8 md:p-10 shadow-[0_20px_50px_-25px_rgba(185,28,28,0.25)]"
+        >
+          <div className="pointer-events-none absolute -top-28 -right-20 h-56 w-56 rounded-full bg-gradient-to-br from-red-400/20 to-fuchsia-400/15 blur-3xl" aria-hidden />
+          <div className="pointer-events-none absolute -bottom-24 -left-16 h-48 w-48 rounded-full bg-gradient-to-tr from-amber-300/25 to-orange-200/20 blur-3xl" aria-hidden />
+          <div className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[120%] w-[120%] opacity-[0.07] bg-[radial-gradient(circle_at_center,_#dc2626_0%,_transparent_55%)]" aria-hidden />
+
+          <div className="relative flex flex-col gap-6 sm:gap-8">
+            <div className="flex flex-col sm:flex-row sm:items-start gap-5">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-red-600 to-rose-600 text-white shadow-lg shadow-red-600/30 ring-4 ring-white/80">
+                <Sparkles className="h-7 w-7" strokeWidth={2} aria-hidden />
+              </div>
+              <div className="min-w-0 flex-1 space-y-3">
+                <p className="text-[11px] sm:text-xs font-bold uppercase tracking-[0.14em] text-red-700 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-white/80 px-2.5 py-1 text-[10px] sm:text-[11px] font-semibold tracking-wide text-red-800 shadow-sm ring-1 ring-red-100">
+                    <span className="relative flex h-2 w-2" aria-hidden>
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
+                    </span>
+                    Live · Your attendee hub
+                  </span>
+                </p>
+                <h2 id="welcome-heading" className="text-2xl sm:text-3xl md:text-[2rem] font-bold text-slate-900 leading-[1.15] tracking-tight">
+                  {firstName ? (
+                    <>
+                      <span className="block text-red-700">{firstName}, you made it!</span>
+                      <span className="mt-1 block text-slate-900 font-extrabold">Welcome to the heart of {title}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="block text-red-700">Welcome in!</span>
+                      <span className="mt-1 block text-slate-900 font-extrabold">So glad you&apos;re joining {title}</span>
+                    </>
+                  )}
+                </h2>
+                <p className="text-sm sm:text-base text-slate-700 leading-relaxed max-w-2xl">
+                  Dive into the posters, feel the buzz in the welcome video, then tell us how you&apos;re traveling — shirt size, Cebu dates, and any extra-day tours you&apos;re dreaming about.
+                  Every detail you share helps the team welcome you with open arms (and the right-sized tee).
+                </p>
+              </div>
+            </div>
+
+            <div className="relative grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <a
+                href="#posters-heading"
+                className="group flex gap-3 rounded-2xl border border-white/70 bg-white/75 backdrop-blur-sm p-4 shadow-sm ring-1 ring-slate-200/60 transition-all duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-md hover:ring-red-200/80 hover:border-red-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
+              >
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-slate-100 to-slate-50 text-slate-700 ring-1 ring-slate-200/80 group-hover:from-red-50 group-hover:to-rose-50 group-hover:text-red-700 group-hover:ring-red-200/60 transition-colors">
+                  <ImageIcon className="h-5 w-5" strokeWidth={2} aria-hidden />
+                </span>
+                <span className="min-w-0 text-left">
+                  <span className="block text-[11px] font-bold uppercase tracking-wide text-red-600/90">Step 1</span>
+                  <span className="mt-0.5 block text-sm font-bold text-slate-900 group-hover:text-red-900 transition-colors">Soak up the posters</span>
+                  <span className="mt-1 block text-xs text-slate-600 leading-snug">Tap to expand and preview every graphic.</span>
+                </span>
+              </a>
+              <a
+                href="#video-heading"
+                className="group flex gap-3 rounded-2xl border border-white/70 bg-white/75 backdrop-blur-sm p-4 shadow-sm ring-1 ring-slate-200/60 transition-all duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-md hover:ring-red-200/80 hover:border-red-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
+              >
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-slate-100 to-slate-50 text-slate-700 ring-1 ring-slate-200/80 group-hover:from-red-50 group-hover:to-rose-50 group-hover:text-red-700 group-hover:ring-red-200/60 transition-colors">
+                  <Film className="h-5 w-5" strokeWidth={2} aria-hidden />
+                </span>
+                <span className="min-w-0 text-left">
+                  <span className="block text-[11px] font-bold uppercase tracking-wide text-red-600/90">Step 2</span>
+                  <span className="mt-0.5 block text-sm font-bold text-slate-900 group-hover:text-red-900 transition-colors">Feel the energy</span>
+                  <span className="mt-1 block text-xs text-slate-600 leading-snug">Hit play on the welcome video — quick, lively, and worth it.</span>
+                </span>
+              </a>
+              <a
+                href="#attendee-details"
+                className="group flex gap-3 rounded-2xl border border-red-300/70 bg-gradient-to-br from-red-50 via-white to-rose-50/90 p-4 shadow-md shadow-red-600/10 ring-2 ring-red-200/70 transition-all duration-200 hover:-translate-y-0.5 hover:ring-red-400/80 hover:shadow-lg hover:shadow-red-600/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
+              >
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-red-600 to-rose-600 text-white shadow-md shadow-red-600/25">
+                  <ClipboardCheck className="h-5 w-5" strokeWidth={2} aria-hidden />
+                </span>
+                <span className="min-w-0 text-left">
+                  <span className="block text-[11px] font-bold uppercase tracking-wide text-red-700">Step 3 · Main event</span>
+                  <span className="mt-0.5 block text-sm font-bold text-red-950">Complete your details</span>
+                  <span className="mt-1 block text-xs text-red-950/75 leading-snug">Travel, shirt, extras — lock it in so we can roll out the red carpet.</span>
+                </span>
+              </a>
+            </div>
           </div>
         </section>
 
