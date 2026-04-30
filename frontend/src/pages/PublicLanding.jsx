@@ -152,30 +152,43 @@ export default function PublicLanding() {
           </div>
         </section>
 
-        {/* Quick facts — white rounded cards like speaker labels on poster */}
+        {/* Quick facts — richer hierarchy and stronger CTA affordance */}
         <section className="mt-14 sm:mt-20 grid sm:grid-cols-3 gap-4">
-          <article className="rounded-2xl bg-white border border-zinc-200/90 p-5 shadow-md shadow-zinc-900/5">
-            <div className="w-10 h-10 rounded-xl bg-[#1d4ed8]/10 text-[#1d4ed8] flex items-center justify-center mb-3">
-              <Calendar size={20} strokeWidth={2} />
+          <article className="rounded-2xl bg-white border border-zinc-200/90 p-5 shadow-md shadow-zinc-900/5 hover:shadow-lg transition-shadow">
+            <div className="w-11 h-11 rounded-xl bg-[#1d4ed8]/10 text-[#1d4ed8] flex items-center justify-center mb-3">
+              <Calendar size={20} strokeWidth={2.2} />
             </div>
-            <h2 className="font-extrabold text-zinc-900 text-sm uppercase tracking-wide">Dates</h2>
-            <p className="mt-2 text-zinc-600 text-sm font-medium leading-relaxed">
-              {start} → {end}
-            </p>
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Save the date</p>
+            <h2 className="mt-1 font-extrabold text-zinc-900 text-sm uppercase tracking-wide">Dates</h2>
+            <p className="mt-2 text-zinc-700 text-base font-bold leading-relaxed">{dateLabel}</p>
+            <p className="mt-1 text-zinc-500 text-xs font-medium">Conference window for delegates and working team.</p>
           </article>
-          <article className="rounded-2xl bg-white border border-zinc-200/90 p-5 shadow-md shadow-zinc-900/5">
-            <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center mb-3">
-              <MapPin size={20} strokeWidth={2} />
+          <article className="rounded-2xl bg-white border border-zinc-200/90 p-5 shadow-md shadow-zinc-900/5 hover:shadow-lg transition-shadow">
+            <div className="w-11 h-11 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center mb-3">
+              <MapPin size={20} strokeWidth={2.2} />
             </div>
-            <h2 className="font-extrabold text-zinc-900 text-sm uppercase tracking-wide">Venue</h2>
-            <p className="mt-2 text-zinc-600 text-sm font-medium leading-relaxed">{venue}</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Host property</p>
+            <h2 className="mt-1 font-extrabold text-zinc-900 text-sm uppercase tracking-wide">Venue</h2>
+            <p className="mt-2 text-zinc-700 text-sm font-semibold leading-relaxed">{venue}</p>
+            <a
+              href={`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${venue} photos`)}`}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-2 inline-flex items-center text-xs font-bold text-[#b91c1c] hover:text-[#991b1b] hover:underline"
+            >
+              View property photos
+            </a>
           </article>
-          <article className="rounded-2xl bg-white border border-zinc-200/90 p-5 shadow-md shadow-zinc-900/5">
-            <div className="w-10 h-10 rounded-xl bg-[#e11d74]/10 text-[#be185d] flex items-center justify-center mb-3">
-              <Sparkles size={20} strokeWidth={2} />
+          <article className="rounded-2xl bg-white border border-zinc-200/90 p-5 shadow-md shadow-zinc-900/5 hover:shadow-lg transition-shadow">
+            <div className="w-11 h-11 rounded-xl bg-[#e11d74]/10 text-[#be185d] flex items-center justify-center mb-3">
+              <Sparkles size={20} strokeWidth={2.2} />
             </div>
-            <h2 className="font-extrabold text-zinc-900 text-sm uppercase tracking-wide">Portal</h2>
-            <p className="mt-2 text-zinc-600 text-sm font-medium leading-relaxed">Delegates and working team — tailored screens after you sign in.</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">After sign-in</p>
+            <h2 className="mt-1 font-extrabold text-zinc-900 text-sm uppercase tracking-wide">Portal</h2>
+            <p className="mt-2 text-zinc-600 text-sm font-medium leading-relaxed">Delegates and working team get tailored screens for details, logistics, and claims.</p>
+            <Link to="/sign-in" className="mt-2 inline-flex items-center text-xs font-bold text-[#e11d74] hover:text-[#be185d] hover:underline">
+              Open sign-in
+            </Link>
           </article>
         </section>
 
