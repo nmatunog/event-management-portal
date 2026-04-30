@@ -85,8 +85,10 @@ export default function App() {
       const user = session?.user;
       const email = String(user?.email || "").trim().toLowerCase();
       const seededDelegateName = String(user?.user_metadata?.seededDelegateName || "").trim();
-      if (!email || !seededDelegateName) return;
-      const guardKey = `${email}|${seededDelegateName.toLowerCase()}`;
+      const firstName = String(user?.user_metadata?.firstName || "").trim().toLowerCase();
+      const lastName = String(user?.user_metadata?.lastName || "").trim().toLowerCase();
+      if (!email || (!seededDelegateName && !(firstName && lastName))) return;
+      const guardKey = `${email}|${(seededDelegateName || `${firstName} ${lastName}`).toLowerCase()}`;
       if (seedClaimSyncDoneFor === guardKey) return;
       try {
         const pinned = import.meta.env.VITE_PAMACON_EVENT_ID;
@@ -95,9 +97,16 @@ export default function App() {
         if (pinned) ev = (items || []).find((x) => x.id === pinned) || ev;
         if (!ev?.id) return;
         const regRes = await getRegistrations(ev.id);
-        const match = (regRes.items || []).find(
-          (r) => String(r.full_name || "").trim().toLowerCase() === seededDelegateName.toLowerCase()
-        );
+        const normalizedTarget = seededDelegateName.toLowerCase();
+        const match =
+          (regRes.items || []).find((r) => String(r.full_name || "").trim().toLowerCase() === normalizedTarget) ||
+          (regRes.items || []).find((r) => {
+            const full = String(r.full_name || "").trim().toLowerCase();
+            if (!full || !firstName || !lastName) return false;
+            const hasFirst = full.startsWith(`${firstName} `) || full.includes(` ${firstName} `);
+            const hasLast = full.endsWith(` ${lastName}`) || full.includes(` ${lastName} `);
+            return hasFirst && hasLast;
+          });
         if (!match?.id) return;
         await claimSeededRegistration(match.id, {
           email,
