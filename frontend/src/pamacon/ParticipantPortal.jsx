@@ -73,6 +73,26 @@ export default function ParticipantPortal({ config = DEFAULT_PAMACON_CONFIG, eve
             Use this page on your phone, tablet, or computer. Scroll down for event posters and a welcome video, then complete your travel and shirt information and optional
             post-conference activities.
           </p>
+          <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <a
+              href="#posters-heading"
+              className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-red-50 hover:border-red-200 transition"
+            >
+              1. View posters
+            </a>
+            <a
+              href="#video-heading"
+              className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-red-50 hover:border-red-200 transition"
+            >
+              2. Watch video
+            </a>
+            <a
+              href="#attendee-details"
+              className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 transition"
+            >
+              3. Complete your details
+            </a>
+          </div>
         </section>
 
         <section className="grid gap-4 sm:grid-cols-3">
@@ -86,35 +106,46 @@ export default function ParticipantPortal({ config = DEFAULT_PAMACON_CONFIG, eve
             <h2 id="posters-heading" className="text-lg sm:text-xl font-semibold text-slate-900">
               Event posters
             </h2>
-            <p className="text-xs text-slate-500 max-w-md">Up to five slots — tap each row to expand. Replace images in event configuration when ready.</p>
+            <p className="text-xs text-slate-500 max-w-md">Tap a card to zoom in. Replace images in event configuration whenever posters are finalized.</p>
           </div>
-          <div className="space-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {posterSlots.map((src, i) => (
               <details
                 key={i}
-                className="group rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden open:ring-1 open:ring-red-100"
+                className="group rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden open:ring-1 open:ring-red-100 transition hover:shadow-md"
               >
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 sm:px-5 sm:py-4 min-h-[52px] hover:bg-slate-50/80 [&::-webkit-details-marker]:hidden">
-                  <span className="flex items-center gap-3 text-sm font-semibold text-slate-800">
-                    <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
-                      <ImageIcon size={18} aria-hidden />
-                    </span>
-                    Poster {i + 1}
-                  </span>
-                  <ChevronDown className="h-5 w-5 shrink-0 text-slate-400 transition group-open:rotate-180" aria-hidden />
-                </summary>
-                <div className="border-t border-slate-100 px-4 pb-4 pt-2 sm:px-5 sm:pb-5">
-                  <div className="relative w-full overflow-hidden rounded-xl bg-slate-100 aspect-[3/4] sm:aspect-[4/5] max-h-[min(70vh,520px)] mx-auto max-w-md sm:max-w-lg">
+                <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                  <div className="relative w-full overflow-hidden bg-slate-100 aspect-[4/5]">
                     {src ? (
-                      <img src={src} alt={`Event poster ${i + 1}`} className="absolute inset-0 h-full w-full object-contain" loading="lazy" />
+                      <img src={src} alt={`Event poster ${i + 1}`} className="absolute inset-0 h-full w-full object-cover transition duration-300 group-open:scale-[1.02]" loading="lazy" />
                     ) : (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-6 text-center border-2 border-dashed border-slate-300/80 rounded-xl m-1">
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-6 text-center border-2 border-dashed border-slate-300/80 rounded-xl m-2">
                         <ImageIcon className="text-slate-300" size={40} strokeWidth={1.25} aria-hidden />
                         <p className="text-sm font-medium text-slate-500">Poster placeholder</p>
-                        <p className="text-xs text-slate-400 leading-relaxed">
-                          Set <code className="rounded bg-slate-200/80 px-1 py-0.5 text-[10px]">attendeePortal.posterImageUrls[{i}]</code> in your event JSON config.
-                        </p>
                       </div>
+                    )}
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-900/65 via-slate-900/25 to-transparent p-3">
+                      <span className="inline-flex items-center gap-2 rounded-lg bg-white/95 px-2.5 py-1 text-xs font-semibold text-slate-800">
+                        <ImageIcon size={14} aria-hidden />
+                        Poster {i + 1}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 px-3.5 py-3 border-t border-slate-100">
+                    <span className="text-sm font-semibold text-slate-800">{src ? "Tap to view details" : "Waiting for artwork"}</span>
+                    <ChevronDown className="h-5 w-5 shrink-0 text-slate-400 transition group-open:rotate-180" aria-hidden />
+                  </div>
+                </summary>
+                <div className="border-t border-slate-100 px-3.5 pb-3.5 pt-3">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-600 leading-relaxed">
+                    {src ? (
+                      <>
+                        High-resolution source loaded for this poster. Use this card as your quick preview before filling out your attendee details.
+                      </>
+                    ) : (
+                      <>
+                        Set <code className="rounded bg-slate-200/80 px-1 py-0.5 text-[10px]">attendeePortal.posterImageUrls[{i}]</code> in event configuration to publish this slot.
+                      </>
                     )}
                   </div>
                 </div>
