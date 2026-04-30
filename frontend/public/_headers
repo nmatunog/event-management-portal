@@ -1,0 +1,7 @@
+# Default: do not cache the SPA shell long-term (avoids stale JS after deploy).
+/*
+  Cache-Control: no-cache, must-revalidate
+
+# Hashed build assets — safe to cache forever.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
