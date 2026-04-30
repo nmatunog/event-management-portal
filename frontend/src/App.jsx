@@ -254,7 +254,7 @@ export default function App() {
   };
 
   const portalShell = session ? (
-    <div className="relative h-screen overflow-hidden">
+    <div className={canManage ? "relative h-screen overflow-hidden" : "relative min-h-screen"}>
       {apiBanner && (
         <button
           type="button"
@@ -271,7 +271,7 @@ export default function App() {
           {apiBanner.message}
         </button>
       )}
-      <div className={apiBanner ? "pt-12 h-full" : "h-full"}>
+      <div className={canManage ? (apiBanner ? "pt-12 h-full" : "h-full") : apiBanner ? "pt-12" : ""}>
         <PamaconApp
           canEdit={canManage}
           authEmail={authUser?.email ?? session.user?.email ?? ""}

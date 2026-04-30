@@ -27,6 +27,9 @@ export default function SignInPage({
   const [mobileNumber, setMobileNumber] = useState("");
   const [claimPassword, setClaimPassword] = useState("");
   const [confirmClaimPassword, setConfirmClaimPassword] = useState("");
+  const [showClaimPassword, setShowClaimPassword] = useState(false);
+  const [showConfirmClaimPassword, setShowConfirmClaimPassword] = useState(false);
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [claimCompleted, setClaimCompleted] = useState(false);
 
   useEffect(() => {
@@ -198,21 +201,39 @@ export default function SignInPage({
               </label>
               <label className="block">
                 <span className="text-xs font-bold uppercase tracking-wide text-slate-500">Create password</span>
-                <input
-                  type="password"
-                  value={claimPassword}
-                  onChange={(e) => setClaimPassword(e.target.value)}
-                  className="mt-1 w-full min-h-[44px] rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-amber-400"
-                />
+                <div className="mt-1 flex items-center rounded-xl border border-slate-200 focus-within:border-amber-400">
+                  <input
+                    type={showClaimPassword ? "text" : "password"}
+                    value={claimPassword}
+                    onChange={(e) => setClaimPassword(e.target.value)}
+                    className="w-full min-h-[44px] rounded-l-xl px-4 py-3 outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowClaimPassword((prev) => !prev)}
+                    className="mr-1 rounded-lg px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-slate-600 hover:bg-amber-50"
+                  >
+                    {showClaimPassword ? "Hide" : "Show"}
+                  </button>
+                </div>
               </label>
               <label className="block">
                 <span className="text-xs font-bold uppercase tracking-wide text-slate-500">Confirm password</span>
-                <input
-                  type="password"
-                  value={confirmClaimPassword}
-                  onChange={(e) => setConfirmClaimPassword(e.target.value)}
-                  className="mt-1 w-full min-h-[44px] rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-amber-400"
-                />
+                <div className="mt-1 flex items-center rounded-xl border border-slate-200 focus-within:border-amber-400">
+                  <input
+                    type={showConfirmClaimPassword ? "text" : "password"}
+                    value={confirmClaimPassword}
+                    onChange={(e) => setConfirmClaimPassword(e.target.value)}
+                    className="w-full min-h-[44px] rounded-l-xl px-4 py-3 outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmClaimPassword((prev) => !prev)}
+                    className="mr-1 rounded-lg px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-slate-600 hover:bg-amber-50"
+                  >
+                    {showConfirmClaimPassword ? "Hide" : "Show"}
+                  </button>
+                </div>
               </label>
             </div>
             {claimError && <p className="text-sm text-rose-600 font-semibold">{claimError}</p>}
@@ -252,14 +273,23 @@ export default function SignInPage({
         </label>
         <label className="block">
           <span className="text-xs font-bold uppercase tracking-wide text-slate-500">Password</span>
-          <input
-            value={loginPassword}
-            onChange={(e) => setLoginPassword(e.target.value)}
-            type="password"
-            required
-            autoComplete="current-password"
-            className="mt-1 w-full min-h-[44px] rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-red-400"
-          />
+          <div className="mt-1 flex items-center rounded-xl border border-slate-200 focus-within:border-red-400">
+            <input
+              value={loginPassword}
+              onChange={(e) => setLoginPassword(e.target.value)}
+              type={showLoginPassword ? "text" : "password"}
+              required
+              autoComplete="current-password"
+              className="w-full min-h-[44px] rounded-l-xl px-4 py-3 outline-none"
+            />
+            <button
+              type="button"
+              onClick={() => setShowLoginPassword((prev) => !prev)}
+              className="mr-1 rounded-lg px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-slate-600 hover:bg-red-50"
+            >
+              {showLoginPassword ? "Hide" : "Show"}
+            </button>
+          </div>
         </label>
         {authError && <p className="text-sm text-rose-600 font-semibold">{authError}</p>}
         {authInfo && <p className="text-sm text-emerald-700 font-semibold">{authInfo}</p>}
