@@ -53,6 +53,7 @@ import {
   getUserRoles,
   getSpeakers,
   getSponsors,
+  harmonizeRegistrations,
   patchEvent,
   patchRegistration,
   patchSpeaker,
@@ -529,6 +530,23 @@ export default function PamaconApp({ canEdit, authEmail, authRole, isSuperuser =
     },
     [eventId, isSuperuser, config, onApiInfo, onApiError, reloadAll, importSeedListParsedRows]
   );
+
+  const runHarmonizationSync = useCallback(async () => {
+    if (!eventId || !canEdit || !isAdmin) return;
+    try {
+      const res = await harmonizeRegistrations(eventId);
+      await reloadAll();
+      const merged = Number(res?.merged || 0);
+      const removed = Number(res?.removed || 0);
+      if (!merged && !removed) {
+        onApiInfo?.("Harmonization sync complete. No duplicates found.", "ok");
+        return;
+      }
+      onApiInfo?.(`Harmonization sync complete: ${merged} duplicate group(s) merged, ${removed} duplicate row(s) removed.`, "ok");
+    } catch (e) {
+      onApiError?.(e, "Could not run harmonization sync.");
+    }
+  }, [eventId, canEdit, isAdmin, reloadAll, onApiInfo, onApiError]);
 
   const toggleDelegateStaffClaim = useCallback(
     async (r) => {
@@ -1091,6 +1109,7 @@ export default function PamaconApp({ canEdit, authEmail, authRole, isSuperuser =
                 onPersistSeededListScreenshot={persistSeededListScreenshot}
                 onProcessReferenceScreenshot={processReferenceScreenshot}
                 onImportSeedListFromText={importSeedListFromText}
+                onRunHarmonizationSync={runHarmonizationSync}
                 authEmail={authEmail}
                 onToggleStaffClaim={toggleDelegateStaffClaim}
                 onUpdate={updateRegistrantRecord}
@@ -1197,6 +1216,7 @@ function RegistrantsLedger({
   onPersistSeededListScreenshot,
   onProcessReferenceScreenshot,
   onImportSeedListFromText,
+  onRunHarmonizationSync,
   authEmail,
   onToggleStaffClaim,
   onUpdate,
@@ -1239,6 +1259,7 @@ function RegistrantsLedger({
   const [savingRefScreenshot, setSavingRefScreenshot] = useState(false);
   const [seedListPasteText, setSeedListPasteText] = useState("");
   const [importingSeedText, setImportingSeedText] = useState(false);
+  const [harmonizingSeedRows, setHarmonizingSeedRows] = useState(false);
   const tableMinWidthClass = showMoreColumns ? "min-w-[1280px]" : isAdmin ? "min-w-[980px]" : "min-w-[860px]";
 
   useEffect(() => {
@@ -1811,6 +1832,24 @@ function RegistrantsLedger({
                     className="sr-only"
                   />
                 </label>
+                <button
+                  type="button"
+                  disabled={!isAdmin || harmonizingSeedRows || typeof onRunHarmonizationSync !== "function"}
+                  onClick={() => {
+                    if (typeof onRunHarmonizationSync !== "function") return;
+                    setHarmonizingSeedRows(true);
+                    void (async () => {
+                      try {
+                        await onRunHarmonizationSync();
+                      } finally {
+                        setHarmonizingSeedRows(false);
+                      }
+                    })();
+                  }}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-45 disabled:pointer-events-none"
+                >
+                  {harmonizingSeedRows ? "Harmonizing…" : "Run harmonization sync"}
+                </button>
               </div>
             </div>
           </div>

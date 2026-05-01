@@ -115,6 +115,43 @@ function asNumber(value: unknown, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function parseMetadataJson(raw: unknown): Record<string, unknown> {
+  if (!raw) return {};
+  if (typeof raw === "object") return raw as Record<string, unknown>;
+  try {
+    return JSON.parse(String(raw)) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+function normalizeName(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function isSeedSource(source: unknown) {
+  const src = String(source || "").trim();
+  return src === "pamacon-seed" || src === "pamacon-seed-ocr" || src === "pamacon-seed-text" || src === "pamacon-seed-manual";
+}
+
+function statusRank(value: unknown) {
+  const s = String(value || "").trim().toLowerCase();
+  if (s === "checked-in") return 3;
+  if (s === "registered") return 2;
+  if (s === "pre-registered") return 1;
+  return 0;
+}
+
+function statusByRank(rank: number) {
+  if (rank >= 3) return "checked-in";
+  if (rank >= 2) return "registered";
+  if (rank >= 1) return "pre-registered";
+  return "pre-registered";
+}
+
 app.get("/api/auth/me", async (c) => {
   const authUser = await resolveAuthUser(c);
   if (!authUser) {
@@ -284,7 +321,7 @@ app.post("/api/registrations/:id/claim-seeded", async (c) => {
     throw new HTTPException(409, { message: "This seeded delegate has already been claimed." });
   }
 
-  const nextMeta = {
+  const nextMeta: Record<string, unknown> = {
     ...meta,
     attendeeClaimEmail: email,
     attendeeClaimedAt: new Date().toISOString(),
@@ -336,6 +373,230 @@ app.post("/api/registrations/:id/claim-seeded", async (c) => {
     .run();
   const item = await c.env.DB.prepare("SELECT * FROM registrations WHERE id = ?").bind(id).first();
   return c.json({ item });
+});
+
+app.post("/api/events/:eventId/registrations/sync-my-profile", requireRole(["admin", "staff", "attendee"]), async (c) => {
+  const eventId = c.req.param("eventId");
+  const actor = c.get("authUser");
+  const email = String(actor?.email || "").trim().toLowerCase();
+  if (!email) throw new HTTPException(400, { message: "Signed-in email is required for profile sync." });
+  const body = await c.req.json();
+  const profile = body?.profile && typeof body.profile === "object" ? (body.profile as Record<string, unknown>) : {};
+  const seededRegistrationId = String(body?.seededRegistrationId ?? "").trim();
+  const seededDelegateName = String(body?.seededDelegateName ?? "").trim();
+
+  const rowsRes = await c.env.DB.prepare("SELECT * FROM registrations WHERE event_id = ? ORDER BY created_at ASC").bind(eventId).all<any>();
+  const rows = (rowsRes.results || []) as any[];
+  const normalizedSeededName = normalizeName(seededDelegateName);
+  const normalizedFirst = normalizeName(profile.firstName);
+  const normalizedLast = normalizeName(profile.lastName);
+  const normalizedNick = normalizeName(profile.nickname);
+
+  const candidate = rows.find((r) => String(r.id || "") === seededRegistrationId) ||
+    rows.find((r) => {
+      const meta = parseMetadataJson(r.metadata_json);
+      return normalizeName(meta.attendeeClaimEmail) === email;
+    }) ||
+    rows.find((r) => normalizeName(r.full_name) === normalizedSeededName) ||
+    rows.find((r) => {
+      const full = normalizeName(r.full_name);
+      if (!full || !normalizedLast) return false;
+      const hasLast = full.endsWith(` ${normalizedLast}`) || full.includes(` ${normalizedLast} `);
+      const hasFirst = normalizedFirst && (full.startsWith(`${normalizedFirst} `) || full.includes(` ${normalizedFirst} `));
+      const hasNick = normalizedNick && (full.startsWith(`${normalizedNick} `) || full.includes(` ${normalizedNick} `));
+      return hasLast && Boolean(hasFirst || hasNick);
+    });
+
+  const nextMetaBase = candidate ? parseMetadataJson(candidate.metadata_json) : {};
+  const nextMeta: Record<string, unknown> = {
+    ...nextMetaBase,
+    attendeeClaimEmail: email,
+    attendeeClaimedAt: String(nextMetaBase.attendeeClaimedAt || new Date().toISOString()),
+    attendeeClaimMobile: String(profile.mobileNumber ?? nextMetaBase.attendeeClaimMobile ?? "").trim(),
+    paymentValidationStatus: String(nextMetaBase.paymentValidationStatus || "pending"),
+    paymentValidatedAt: nextMetaBase.paymentValidatedAt ?? null,
+    paymentValidatedBy: nextMetaBase.paymentValidatedBy ?? null,
+    source: String(nextMetaBase.source || "public-signup"),
+  };
+  const copyText = (key: string) => {
+    const v = profile[key];
+    if (v === undefined || v === null) return;
+    nextMeta[key] = String(v).trim();
+  };
+  copyText("firstName");
+  copyText("middleName");
+  copyText("lastName");
+  copyText("nickname");
+  copyText("mobileNumber");
+  copyText("positionCode");
+  copyText("positionOther");
+  copyText("aiaAgentCode");
+  copyText("gender");
+  copyText("shirtSize");
+  copyText("shirtSizeOther");
+  copyText("arrivalCebu");
+  copyText("departureCebu");
+  copyText("extraOtherRequest");
+  if (profile.age !== undefined && profile.age !== null) nextMeta.age = String(profile.age).trim();
+  if (profile.extraIslandHopping !== undefined) nextMeta.extraIslandHopping = Boolean(profile.extraIslandHopping);
+  if (profile.extraCityTour !== undefined) nextMeta.extraCityTour = Boolean(profile.extraCityTour);
+  if (profile.extraMountainTour !== undefined) nextMeta.extraMountainTour = Boolean(profile.extraMountainTour);
+  if (profile.extraSafari !== undefined) nextMeta.extraSafari = Boolean(profile.extraSafari);
+
+  const positionCode = String(profile.positionCode ?? "").trim().toUpperCase();
+  const nextRole = positionCode || String(candidate?.attendee_type || "UM");
+  const nextName = [String(profile.firstName || "").trim(), String(profile.middleName || "").trim(), String(profile.lastName || "").trim()]
+    .filter(Boolean)
+    .join(" ")
+    .trim() || String(candidate?.full_name || seededDelegateName || email.split("@")[0] || "Unnamed").trim();
+
+  if (candidate?.id) {
+    await c.env.DB.prepare(
+      `UPDATE registrations SET
+        full_name = COALESCE(?, full_name),
+        attendee_type = COALESCE(?, attendee_type),
+        status = COALESCE(?, status),
+        metadata_json = ?
+      WHERE id = ?`
+    )
+      .bind(nextName, nextRole, candidate.status || "pre-registered", JSON.stringify(nextMeta), candidate.id)
+      .run();
+    const item = await c.env.DB.prepare("SELECT * FROM registrations WHERE id = ?").bind(candidate.id).first();
+    return c.json({ action: "updated", item });
+  }
+
+  const id = crypto.randomUUID();
+  await c.env.DB.prepare(
+    `INSERT INTO registrations (id, event_id, full_name, attendee_type, status, total_fee, paid_amount, payment_plan, metadata_json)
+     VALUES (?, ?, ?, ?, 'pre-registered', 8000, 0, 'full', ?)`
+  )
+    .bind(id, eventId, nextName, nextRole, JSON.stringify(nextMeta))
+    .run();
+  const item = await c.env.DB.prepare("SELECT * FROM registrations WHERE id = ?").bind(id).first();
+  return c.json({ action: "created", item }, 201);
+});
+
+app.post("/api/events/:eventId/registrations/harmonize", requireRole(["admin", "staff"]), async (c) => {
+  const eventId = c.req.param("eventId");
+  const rowsRes = await c.env.DB.prepare("SELECT * FROM registrations WHERE event_id = ? ORDER BY created_at ASC").bind(eventId).all<any>();
+  const rows = (rowsRes.results || []) as any[];
+  if (!rows.length) return c.json({ merged: 0, removed: 0, groups: [] });
+
+  const indexById = new Map(rows.map((r) => [String(r.id), r]));
+  const groupsByName = new Map<string, any[]>();
+  for (const row of rows) {
+    const key = normalizeName(row.full_name);
+    if (!key) continue;
+    const arr = groupsByName.get(key) || [];
+    arr.push(row);
+    groupsByName.set(key, arr);
+  }
+
+  const mergedGroupNames: string[] = [];
+  let removed = 0;
+
+  const choosePrimary = (group: any[]) =>
+    [...group].sort((a, b) => {
+      const aMeta = parseMetadataJson(a.metadata_json);
+      const bMeta = parseMetadataJson(b.metadata_json);
+      const aSeed = isSeedSource(aMeta.seedSource) ? 1 : 0;
+      const bSeed = isSeedSource(bMeta.seedSource) ? 1 : 0;
+      if (aSeed !== bSeed) return bSeed - aSeed;
+      const paidDiff = asNumber(b.paid_amount, 0) - asNumber(a.paid_amount, 0);
+      if (paidDiff !== 0) return paidDiff;
+      return String(a.created_at || "").localeCompare(String(b.created_at || ""));
+    })[0];
+
+  for (const [nameKey, group] of groupsByName.entries()) {
+    if (group.length < 2) continue;
+    const primary = choosePrimary(group);
+    const duplicates = group.filter((r) => String(r.id) !== String(primary.id));
+    if (!duplicates.length) continue;
+
+    let primaryMeta = parseMetadataJson(primary.metadata_json);
+    let bestPaid = asNumber(primary.paid_amount, 0);
+    let bestTotal = asNumber(primary.total_fee, 0);
+    let bestStatusRank = statusRank(primary.status);
+
+    for (const dup of duplicates) {
+      const dupMeta = parseMetadataJson(dup.metadata_json);
+      for (const [k, v] of Object.entries(dupMeta)) {
+        if (primaryMeta[k] === undefined || primaryMeta[k] === null || primaryMeta[k] === "") {
+          primaryMeta[k] = v;
+        }
+      }
+      bestPaid = Math.max(bestPaid, asNumber(dup.paid_amount, 0));
+      bestTotal = Math.max(bestTotal, asNumber(dup.total_fee, 0));
+      bestStatusRank = Math.max(bestStatusRank, statusRank(dup.status));
+
+      await c.env.DB.prepare("DELETE FROM billing_ledger WHERE registration_id = ?").bind(dup.id).run();
+      await c.env.DB.prepare("DELETE FROM registrations WHERE id = ?").bind(dup.id).run();
+      indexById.delete(String(dup.id));
+      removed += 1;
+    }
+
+    await c.env.DB.prepare(
+      `UPDATE registrations SET
+        paid_amount = ?,
+        total_fee = ?,
+        status = ?,
+        metadata_json = ?
+      WHERE id = ?`
+    )
+      .bind(bestPaid, bestTotal, statusByRank(bestStatusRank), JSON.stringify(primaryMeta), primary.id)
+      .run();
+
+    mergedGroupNames.push(nameKey);
+    indexById.set(String(primary.id), { ...primary, paid_amount: bestPaid, total_fee: bestTotal, status: statusByRank(bestStatusRank), metadata_json: JSON.stringify(primaryMeta) });
+  }
+
+  // Second pass: merge rows linked by attendeeClaimEmail even if names differ.
+  const emailGroups = new Map<string, any[]>();
+  for (const row of indexById.values()) {
+    const meta = parseMetadataJson(row.metadata_json);
+    const email = normalizeName(meta.attendeeClaimEmail);
+    if (!email) continue;
+    const arr = emailGroups.get(email) || [];
+    arr.push(row);
+    emailGroups.set(email, arr);
+  }
+  for (const rowsByEmail of emailGroups.values()) {
+    if (rowsByEmail.length < 2) continue;
+    const primary = choosePrimary(rowsByEmail);
+    const duplicates = rowsByEmail.filter((r) => String(r.id) !== String(primary.id));
+    if (!duplicates.length) continue;
+    let primaryMeta = parseMetadataJson(primary.metadata_json);
+    let bestPaid = asNumber(primary.paid_amount, 0);
+    let bestTotal = asNumber(primary.total_fee, 0);
+    let bestStatusRank = statusRank(primary.status);
+    for (const dup of duplicates) {
+      const dupMeta = parseMetadataJson(dup.metadata_json);
+      for (const [k, v] of Object.entries(dupMeta)) {
+        if (primaryMeta[k] === undefined || primaryMeta[k] === null || primaryMeta[k] === "") {
+          primaryMeta[k] = v;
+        }
+      }
+      bestPaid = Math.max(bestPaid, asNumber(dup.paid_amount, 0));
+      bestTotal = Math.max(bestTotal, asNumber(dup.total_fee, 0));
+      bestStatusRank = Math.max(bestStatusRank, statusRank(dup.status));
+      await c.env.DB.prepare("DELETE FROM billing_ledger WHERE registration_id = ?").bind(dup.id).run();
+      await c.env.DB.prepare("DELETE FROM registrations WHERE id = ?").bind(dup.id).run();
+      indexById.delete(String(dup.id));
+      removed += 1;
+    }
+    await c.env.DB.prepare(
+      `UPDATE registrations SET
+        paid_amount = ?,
+        total_fee = ?,
+        status = ?,
+        metadata_json = ?
+      WHERE id = ?`
+    )
+      .bind(bestPaid, bestTotal, statusByRank(bestStatusRank), JSON.stringify(primaryMeta), primary.id)
+      .run();
+  }
+
+  return c.json({ merged: mergedGroupNames.length, removed, groups: mergedGroupNames.slice(0, 50) });
 });
 
 app.post("/api/events/:eventId/registrations", requireRole(["admin", "staff"]), async (c) => {

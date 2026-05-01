@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
-import { claimSeededRegistration, getAuthMe, getEvents, getRegistrations, setAccessToken } from "./lib/api";
+import { claimSeededRegistration, getAuthMe, getEvents, setAccessToken, syncMyRegistrationProfile } from "./lib/api";
 import { supabase } from "./lib/supabaseClient";
 import PamaconApp from "./pamacon/PamaconApp";
 import PublicLanding from "./pages/PublicLanding.jsx";
@@ -72,74 +72,23 @@ export default function App() {
     const firstName = String(profileOverride?.firstName ?? user?.user_metadata?.firstName ?? "").trim().toLowerCase();
     const lastName = String(profileOverride?.lastName ?? user?.user_metadata?.lastName ?? "").trim().toLowerCase();
     const nickname = String(profileOverride?.nickname ?? user?.user_metadata?.nickname ?? "").trim().toLowerCase();
-    if (!email || (!seededRegistrationId && !seededDelegateName && !lastName && !nickname)) return;
+    if (!email) return;
 
     const pinned = import.meta.env.VITE_PAMACON_EVENT_ID;
     const { items } = await getEvents();
     let ev = (items || []).find((x) => String(x.title || "").includes("PAMACON"));
     if (pinned) ev = (items || []).find((x) => x.id === pinned) || ev;
     if (!ev?.id) return;
-
-    const regRes = await getRegistrations(ev.id);
-    const rows = regRes.items || [];
-    const seededRows = rows.filter((r) => {
-      try {
-        const meta = r.metadata_json ? JSON.parse(r.metadata_json) : {};
-        const src = String(meta.seedSource || "").trim();
-        return (
-          src === "pamacon-seed" ||
-          src === "pamacon-seed-ocr" ||
-          src === "pamacon-seed-text" ||
-          src === "pamacon-seed-manual"
-        );
-      } catch {
-        return false;
-      }
-    });
-    const candidateRows = seededRows.length ? seededRows : rows;
-    const normalizedTarget = seededDelegateName.toLowerCase();
-    const match =
-      candidateRows.find((r) => String(r.id || "") === seededRegistrationId) ||
-      candidateRows.find((r) => String(r.full_name || "").trim().toLowerCase() === normalizedTarget) ||
-      candidateRows.find((r) => {
-        const full = String(r.full_name || "").trim().toLowerCase();
-        if (!full || !nickname || !lastName) return false;
-        const hasNick = full.startsWith(`${nickname} `) || full.includes(` ${nickname} `);
-        const hasLast = full.endsWith(` ${lastName}`) || full.includes(` ${lastName} `);
-        return hasNick && hasLast;
-      }) ||
-      candidateRows.find((r) => {
-        const full = String(r.full_name || "").trim().toLowerCase();
-        if (!full || !firstName || !lastName) return false;
-        const hasFirst = full.startsWith(`${firstName} `) || full.includes(` ${firstName} `);
-        const hasLast = full.endsWith(` ${lastName}`) || full.includes(` ${lastName} `);
-        return hasFirst && hasLast;
-      }) ||
-      (() => {
-        if (!lastName) return null;
-        const lastNameMatches = candidateRows.filter((r) => {
-          try {
-            const meta = r.metadata_json ? JSON.parse(r.metadata_json) : {};
-            const metaLast = String(meta.lastName || "").trim().toLowerCase();
-            const full = String(r.full_name || "").trim().toLowerCase();
-            return (
-              metaLast === lastName ||
-              full.endsWith(` ${lastName}`) ||
-              full.includes(` ${lastName} `)
-            );
-          } catch {
-            return false;
-          }
-        });
-        return lastNameMatches.length === 1 ? lastNameMatches[0] : null;
-      })();
-    if (!match?.id) return;
-
-    await claimSeededRegistration(match.id, {
-      email,
-      mobileNumber: String(profileOverride?.mobileNumber ?? user?.user_metadata?.mobileNumber ?? "").trim(),
-      seededDelegateName: seededDelegateName || String(match.full_name || "").trim(),
-      attendeeProfile: profileOverride || user?.user_metadata || {},
+    await syncMyRegistrationProfile(ev.id, {
+      seededRegistrationId,
+      seededDelegateName,
+      profile: {
+        ...(user?.user_metadata || {}),
+        ...(profileOverride || {}),
+        firstName,
+        lastName,
+        nickname,
+      },
     });
   };
 
@@ -185,8 +134,8 @@ export default function App() {
       const seededDelegateName = String(user?.user_metadata?.seededDelegateName || "").trim();
       const firstName = String(user?.user_metadata?.firstName || "").trim().toLowerCase();
       const lastName = String(user?.user_metadata?.lastName || "").trim().toLowerCase();
-      if (!email || (!seededDelegateName && !(firstName && lastName))) return;
-      const guardKey = `${email}|${(seededDelegateName || `${firstName} ${lastName}`).toLowerCase()}`;
+      if (!email) return;
+      const guardKey = `${email}|${(seededDelegateName || `${firstName} ${lastName}` || "sync").toLowerCase()}`;
       if (seedClaimSyncDoneFor === guardKey) return;
       try {
         await syncSeededRegistrationProfile(user);

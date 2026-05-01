@@ -90,6 +90,19 @@ export function claimSeededRegistration(registrationId, payload) {
   });
 }
 
+export function syncMyRegistrationProfile(eventId, payload) {
+  return request(`/api/events/${eventId}/registrations/sync-my-profile`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function harmonizeRegistrations(eventId) {
+  return request(`/api/events/${eventId}/registrations/harmonize`, {
+    method: "POST",
+  });
+}
+
 export function deleteRegistration(registrationId) {
   return request(`/api/registrations/${registrationId}`, { method: "DELETE" });
 }
