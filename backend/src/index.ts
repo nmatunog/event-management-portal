@@ -132,6 +132,33 @@ function normalizeName(value: unknown) {
     .replace(/\s+/g, " ");
 }
 
+function toNameCase(raw: unknown) {
+  const src = String(raw ?? "")
+    .trim()
+    .replace(/\s+/g, " ");
+  if (!src) return "";
+  return src
+    .split(" ")
+    .map((word) =>
+      word
+        .split("-")
+        .map((part) => {
+          const t = String(part || "").trim();
+          if (!t) return "";
+          const apos = t.split("'");
+          return apos
+            .map((chunk) => {
+              const c = String(chunk || "").trim();
+              if (!c) return "";
+              return c.charAt(0).toUpperCase() + c.slice(1).toLowerCase();
+            })
+            .join("'");
+        })
+        .join("-")
+    )
+    .join(" ");
+}
+
 function isSeedSource(source: unknown) {
   const src = String(source || "").trim();
   return src === "pamacon-seed" || src === "pamacon-seed-ocr" || src === "pamacon-seed-text" || src === "pamacon-seed-manual";
@@ -367,11 +394,11 @@ app.post("/api/registrations/:id/claim-seeded", async (c) => {
     const middleName = String(p.middleName ?? "").trim();
     const lastName = String(p.lastName ?? "").trim();
     const joined = [firstName, middleName, lastName].filter(Boolean).join(" ").trim();
-    if (joined) nextFullName = joined;
+    if (joined) nextFullName = toNameCase(joined);
   }
 
   await c.env.DB.prepare("UPDATE registrations SET metadata_json = ?, attendee_type = COALESCE(?, attendee_type), full_name = COALESCE(?, full_name), updated_at = CURRENT_TIMESTAMP WHERE id = ?")
-    .bind(JSON.stringify(nextMeta), nextAttendeeType, nextFullName, id)
+      .bind(JSON.stringify(nextMeta), nextAttendeeType, nextFullName ? toNameCase(nextFullName) : null, id)
     .run();
   const item = await c.env.DB.prepare("SELECT * FROM registrations WHERE id = ?").bind(id).first();
   return c.json({ item });
@@ -453,6 +480,7 @@ app.post("/api/events/:eventId/registrations/sync-my-profile", requireRole(["adm
     .filter(Boolean)
     .join(" ")
     .trim() || String(candidate?.full_name || seededDelegateName || email.split("@")[0] || "Unnamed").trim();
+  const normalizedNextName = toNameCase(nextName);
 
   if (candidate?.id) {
     await c.env.DB.prepare(
@@ -464,7 +492,7 @@ app.post("/api/events/:eventId/registrations/sync-my-profile", requireRole(["adm
         updated_at = CURRENT_TIMESTAMP
       WHERE id = ?`
     )
-      .bind(nextName, nextRole, candidate.status || "pre-registered", JSON.stringify(nextMeta), candidate.id)
+      .bind(normalizedNextName, nextRole, candidate.status || "pre-registered", JSON.stringify(nextMeta), candidate.id)
       .run();
     const item = await c.env.DB.prepare("SELECT * FROM registrations WHERE id = ?").bind(candidate.id).first();
     return c.json({ action: "updated", item });
@@ -475,7 +503,7 @@ app.post("/api/events/:eventId/registrations/sync-my-profile", requireRole(["adm
     `INSERT INTO registrations (id, event_id, full_name, attendee_type, status, total_fee, paid_amount, payment_plan, metadata_json, updated_at)
      VALUES (?, ?, ?, ?, 'pre-registered', 8000, 0, 'full', ?, CURRENT_TIMESTAMP)`
   )
-    .bind(id, eventId, nextName, nextRole, JSON.stringify(nextMeta))
+    .bind(id, eventId, normalizedNextName, nextRole, JSON.stringify(nextMeta))
     .run();
   const item = await c.env.DB.prepare("SELECT * FROM registrations WHERE id = ?").bind(id).first();
   return c.json({ action: "created", item }, 201);
@@ -623,7 +651,7 @@ app.post("/api/events/:eventId/registrations", requireRole(["admin", "staff"]), 
     .bind(
       id,
       eventId,
-      body.fullName ?? "Unnamed",
+      toNameCase(body.fullName ?? "Unnamed"),
       body.attendeeType ?? "Standard",
       body.status ?? "pre-registered",
       asNumber(body.totalFee, 0),
@@ -660,7 +688,7 @@ app.patch("/api/registrations/:id", requireRole(["admin", "staff"]), async (c) =
     WHERE id = ?`
   )
     .bind(
-      body.fullName ?? null,
+      body.fullName != null ? toNameCase(body.fullName) : null,
       body.attendeeType ?? null,
       body.status ?? null,
       body.totalFee != null ? asNumber(body.totalFee, 0) : null,
@@ -942,7 +970,7 @@ app.patch("/api/invitations/respond/:token", async (c) => {
     await c.env.DB.prepare(
       "INSERT INTO registrations (id, event_id, full_name, attendee_type, status, total_fee, paid_amount, payment_plan, updated_at) VALUES (?, ?, ?, ?, 'pre-registered', 0, 0, 'full', CURRENT_TIMESTAMP)"
     )
-      .bind(regId, invitation.event_id, invitation.full_name ?? invitation.email, invitation.invitation_type ?? "Standard")
+      .bind(regId, invitation.event_id, toNameCase(invitation.full_name ?? invitation.email), invitation.invitation_type ?? "Standard")
       .run();
   }
   return c.json({ ok: true, status });

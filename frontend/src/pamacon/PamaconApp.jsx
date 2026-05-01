@@ -3184,6 +3184,7 @@ function OtherActivitiesHub({ registrants }) {
     out.sort((a, b) => a.name.localeCompare(b.name));
     return out;
   }, [registrants]);
+  const [selectedFilter, setSelectedFilter] = useState("all");
 
   const summary = useMemo(() => {
     const counts = Object.fromEntries(defs.map((d) => [d.key, 0]));
@@ -3197,6 +3198,14 @@ function OtherActivitiesHub({ registrants }) {
     return { counts, withOther };
   }, [rows]);
 
+  const filteredRows = useMemo(() => {
+    if (selectedFilter === "all") return rows;
+    if (selectedFilter === "other") return rows.filter((r) => Boolean(r.other));
+    const def = defs.find((d) => d.key === selectedFilter);
+    if (!def) return rows;
+    return rows.filter((r) => r.selected.includes(def.label));
+  }, [rows, selectedFilter]);
+
   return (
     <div className="space-y-6 pb-20">
       <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-sm space-y-4">
@@ -3204,13 +3213,47 @@ function OtherActivitiesHub({ registrants }) {
         <p className="text-sm text-slate-500">Use this to prepare bookings, transport, and delegate coordination for optional Cebu activities.</p>
         <div className="flex flex-wrap gap-2">
           {defs.map((d) => (
-            <span key={d.key} className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700">
+            <button
+              key={d.key}
+              type="button"
+              onClick={() => setSelectedFilter(d.key)}
+              className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors ${
+                selectedFilter === d.key ? "border-red-300 bg-red-50 text-red-700" : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
+              }`}
+            >
               {d.label}: {summary.counts[d.key] || 0}
-            </span>
+            </button>
           ))}
-          <span className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-800">With other request: {summary.withOther}</span>
-          <span className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-bold text-red-700">Total respondents: {rows.length}</span>
+          <button
+            type="button"
+            onClick={() => setSelectedFilter("other")}
+            className={`rounded-lg border px-2.5 py-1 text-xs font-bold transition-colors ${
+              selectedFilter === "other" ? "border-amber-300 bg-amber-100 text-amber-900" : "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100"
+            }`}
+          >
+            With other request: {summary.withOther}
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedFilter("all")}
+            className={`rounded-lg border px-2.5 py-1 text-xs font-bold transition-colors ${
+              selectedFilter === "all" ? "border-red-300 bg-red-100 text-red-800" : "border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+            }`}
+          >
+            Delegates with responses: {rows.length}
+          </button>
         </div>
+        <p className="text-xs text-slate-500">
+          Showing:{" "}
+          <strong>
+            {selectedFilter === "all"
+              ? "All respondents"
+              : selectedFilter === "other"
+              ? "Delegates with other requests"
+              : defs.find((d) => d.key === selectedFilter)?.label || "Filtered"}
+          </strong>{" "}
+          ({filteredRows.length})
+        </p>
       </div>
 
       <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm">
@@ -3228,7 +3271,7 @@ function OtherActivitiesHub({ registrants }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {rows.map((row) => (
+              {filteredRows.map((row) => (
                 <tr key={`oa-${row.id}`}>
                   <td className="py-2.5 pr-3 text-slate-800 font-medium">{row.name}</td>
                   <td className="py-2.5 pr-3 text-slate-600">{row.email || "—"}</td>
@@ -3239,10 +3282,10 @@ function OtherActivitiesHub({ registrants }) {
                   <td className="py-2.5 pr-3 text-slate-600">{row.other || "—"}</td>
                 </tr>
               ))}
-              {rows.length === 0 ? (
+              {filteredRows.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-3 text-slate-500">
-                    No activity responses yet.
+                    No delegates found for this filter.
                   </td>
                 </tr>
               ) : null}
