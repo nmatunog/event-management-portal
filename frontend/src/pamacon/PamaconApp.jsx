@@ -318,7 +318,7 @@ const NAV_GROUPS = [
   },
 ];
 
-export default function PamaconApp({ canEdit, authEmail, authRole, profile, onSaveProfile, profileSaving, onApiInfo, onApiError, onLogout }) {
+export default function PamaconApp({ canEdit, authEmail, authRole, isSuperuser = false, profile, onSaveProfile, profileSaving, onApiInfo, onApiError, onLogout }) {
   const [activeTab, setActiveTab] = useState("dashboard");
   /** When `attendee`, committee users preview the same portal delegates see. */
   const [committeePortalView, setCommitteePortalView] = useState("admin");
@@ -886,6 +886,7 @@ export default function PamaconApp({ canEdit, authEmail, authRole, profile, onSa
                 registrants={registrants}
                 canEdit={canEdit}
                 isAdmin={isAdmin}
+                isSuperuser={isSuperuser}
                 authEmail={authEmail}
                 onToggleStaffClaim={toggleDelegateStaffClaim}
                 onUpdate={updateRegistrantRecord}
@@ -935,6 +936,7 @@ export default function PamaconApp({ canEdit, authEmail, authRole, profile, onSa
                 eventId={eventId}
                 canEdit={canEdit}
                 isAdmin={isAdmin}
+                isSuperuser={isSuperuser}
                 onSaved={reloadAll}
                 onError={onApiError}
                 onInfo={onApiInfo}
@@ -985,6 +987,7 @@ function RegistrantsLedger({
   registrants,
   canEdit,
   isAdmin,
+  isSuperuser,
   authEmail,
   onToggleStaffClaim,
   onUpdate,
@@ -995,8 +998,20 @@ function RegistrantsLedger({
   onApiError,
 }) {
   const myEmail = String(authEmail || "").trim().toLowerCase();
+  const superUserEmails = useMemo(
+    () =>
+      new Set(
+        String(import.meta.env.VITE_SUPERUSER_EMAILS || "")
+          .split(",")
+          .map((x) => x.trim().toLowerCase())
+          .filter(Boolean)
+      ),
+    []
+  );
   const [editing, setEditing] = useState(null);
   const [sort, setSort] = useState({ key: "name", dir: "asc" });
+  const [committeeRoles, setCommitteeRoles] = useState([]);
+  const [committeeRolesLoading, setCommitteeRolesLoading] = useState(false);
   const [claimFilter, setClaimFilter] = useState("all");
   const [fName, setFName] = useState("");
   const [fRole, setFRole] = useState("");
@@ -1010,7 +1025,53 @@ function RegistrantsLedger({
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showMoreColumns, setShowMoreColumns] = useState(false);
   const [showDangerZone, setShowDangerZone] = useState(false);
-  const tableMinWidthClass = showMoreColumns ? "min-w-[1180px]" : "min-w-[860px]";
+  const tableMinWidthClass = showMoreColumns ? "min-w-[1280px]" : isAdmin ? "min-w-[980px]" : "min-w-[860px]";
+
+  useEffect(() => {
+    if (!isAdmin) return undefined;
+    let cancelled = false;
+    setCommitteeRolesLoading(true);
+    getUserRoles()
+      .then((res) => {
+        if (!cancelled) setCommitteeRoles(res.items || []);
+      })
+      .catch((e) => {
+        if (!cancelled) onApiError?.(e, "Could not load portal roles.");
+      })
+      .finally(() => {
+        if (!cancelled) setCommitteeRolesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, onApiError]);
+
+  const committeeRoleByEmail = useMemo(() => {
+    const map = new Map();
+    for (const row of committeeRoles) {
+      const em = String(row.email || "").trim().toLowerCase();
+      if (em) map.set(em, String(row.role || "attendee"));
+    }
+    return map;
+  }, [committeeRoles]);
+
+  const handlePortalRoleChange = async (row, nextRole) => {
+    const email = String(row.attendeeClaimEmail || "").trim().toLowerCase();
+    if (!email || !isSuperuser) return;
+    const prev = committeeRoleByEmail.get(email) || "attendee";
+    if (prev === nextRole) return;
+    if (email === myEmail && prev === "admin" && nextRole !== "admin") {
+      if (!window.confirm("You are changing your own account away from Admin. Continue?")) return;
+    }
+    try {
+      await upsertUserRole({ email, role: nextRole });
+      const res = await getUserRoles();
+      setCommitteeRoles(res.items || []);
+      onInfo?.(`Portal role updated for ${email}.`);
+    } catch (e) {
+      onApiError?.(e, "Could not update portal role.");
+    }
+  };
 
   const toggleSort = (key) => {
     setSort((s) => ({
@@ -1444,6 +1505,7 @@ function RegistrantsLedger({
             <colgroup>
               <col className="w-[240px]" />
               <col className="w-[110px]" />
+              {isAdmin ? <col className="w-[140px]" /> : null}
               <col className="w-[130px]" />
               <col className="w-[130px]" />
               <col className="w-[100px]" />
@@ -1465,6 +1527,16 @@ function RegistrantsLedger({
                 <th className="px-4 py-3.5 align-bottom">
                   <SortBtn col="role" label="Position" />
                 </th>
+                {isAdmin ? (
+                  <th className="px-4 py-3.5 align-bottom text-left">
+                    <span className="inline-flex flex-col gap-0.5">
+                      <span className="inline-flex items-center gap-1 font-semibold uppercase tracking-wide text-slate-500">Portal role</span>
+                      {!isSuperuser ? (
+                        <span className="normal-case font-normal text-[10px] text-slate-400">Superuser assigns Staff / Admin</span>
+                      ) : null}
+                    </span>
+                  </th>
+                ) : null}
                 <th className="px-4 py-3.5 text-right align-bottom">
                   <SortBtn col="totalFee" label="Reg. fee" />
                 </th>
@@ -1515,6 +1587,11 @@ function RegistrantsLedger({
                     <span className="text-slate-300">—</span>
                   )}
                 </th>
+                {isAdmin ? (
+                  <th className="px-4 py-2.5 font-normal">
+                    <span className="text-slate-300">—</span>
+                  </th>
+                ) : null}
                 <th className="px-4 py-2.5 font-normal">
                   {showAdvancedFilters ? (
                     <div className="flex gap-1 justify-end">
@@ -1659,6 +1736,40 @@ function RegistrantsLedger({
                     <td className="px-4 py-4">
                       <span className={`text-[10px] font-bold px-2 py-1 rounded border ${positionBadgeClass(r.role)}`}>{formatPositionShort(r.role)}</span>
                     </td>
+                    {isAdmin ? (
+                      <td className="px-4 py-4 align-top">
+                        {(() => {
+                          const claimEmail = String(r.attendeeClaimEmail || "").trim().toLowerCase();
+                          if (!claimEmail) {
+                            return <span className="text-xs text-slate-400">After attendee claim</span>;
+                          }
+                          if (superUserEmails.has(claimEmail)) {
+                            return <span className="text-xs font-semibold text-amber-800">Admin (env)</span>;
+                          }
+                          const current = committeeRoleByEmail.get(claimEmail) || "attendee";
+                          if (!isSuperuser) {
+                            return (
+                              <span className="text-xs font-semibold text-slate-700">
+                                {current === "staff" ? "Working Team" : current === "admin" ? "Admin" : "Viewer"}
+                              </span>
+                            );
+                          }
+                          return (
+                            <select
+                              value={current}
+                              disabled={committeeRolesLoading}
+                              onChange={(e) => handlePortalRoleChange(r, e.target.value)}
+                              className="w-full max-w-[9.5rem] rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-800 disabled:opacity-50"
+                              aria-label={`Portal role for ${claimEmail}`}
+                            >
+                              <option value="attendee">Viewer</option>
+                              <option value="staff">Staff</option>
+                              <option value="admin">Admin</option>
+                            </select>
+                          );
+                        })()}
+                      </td>
+                    ) : null}
                     <td className="px-4 py-4 text-right font-medium text-slate-800 tabular-nums">₱{(Number(r.totalFee) || 0).toLocaleString()}</td>
                     <td className="px-4 py-4 text-right font-semibold text-slate-800 tabular-nums">₱{(Number(r.paid) || 0).toLocaleString()}</td>
                     <td className="px-4 py-4">
@@ -1719,7 +1830,7 @@ function RegistrantsLedger({
             </tbody>
             <tfoot>
               <tr className="bg-slate-100/90 border-t-2 border-slate-200 font-semibold text-slate-900">
-                <td colSpan={2} className="px-4 py-3.5 text-sm">
+                <td colSpan={isAdmin ? 3 : 2} className="px-4 py-3.5 text-sm">
                   Totals (filtered)
                 </td>
                 <td className="px-4 py-3.5 text-right tabular-nums">₱{feesTotalFiltered.toLocaleString()}</td>
@@ -2655,7 +2766,7 @@ function ProgramModulesView({ config, setConfig, eventId, canEdit, onError }) {
   );
 }
 
-function SetupView({ config, setConfig, eventId, canEdit, isAdmin, onSaved, onError, onInfo, profile, onSaveProfile, profileSaving }) {
+function SetupView({ config, setConfig, eventId, canEdit, isAdmin, isSuperuser, onSaved, onError, onInfo, profile, onSaveProfile, profileSaving }) {
   const [local, setLocal] = useState(config);
   const [saved, setSaved] = useState(false);
   const [userRoles, setUserRoles] = useState([]);
@@ -2740,7 +2851,7 @@ function SetupView({ config, setConfig, eventId, canEdit, isAdmin, onSaved, onEr
   };
 
   const handleSaveRole = async () => {
-    if (!canEdit) return;
+    if (!canEdit || !isSuperuser) return;
     const email = String(roleForm.email || "").trim().toLowerCase();
     if (!email) return;
     try {
@@ -2755,7 +2866,7 @@ function SetupView({ config, setConfig, eventId, canEdit, isAdmin, onSaved, onEr
   };
 
   const handleDeleteRole = async (email) => {
-    if (!canEdit) return;
+    if (!canEdit || !isSuperuser) return;
     if (!window.confirm(`Remove role override for ${email}?`)) return;
     try {
       await deleteUserRole(email);
@@ -3012,17 +3123,24 @@ function SetupView({ config, setConfig, eventId, canEdit, isAdmin, onSaved, onEr
         <h4 className="text-[10px] font-black uppercase text-slate-600 border-b pb-3 tracking-[0.2em] leading-none">
           Account Roles (Viewer/Working Team/Admin)
         </h4>
+        {!isSuperuser ? (
+          <p className="text-sm text-slate-600 rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3">
+            Only a <strong>superuser</strong> (email listed in <code className="text-xs">VITE_SUPERUSER_EMAILS</code> / worker{" "}
+            <code className="text-xs">SUPERUSER_EMAILS</code>) can promote accounts to <strong>Working Team</strong> or <strong>Admin</strong>. You can review the list
+            below; ask a superuser to make changes.
+          </p>
+        ) : null}
         <div className="grid grid-cols-1 md:grid-cols-[1fr_180px_120px] gap-3">
           <input
             value={roleForm.email}
-            disabled={!canEdit}
+            disabled={!canEdit || !isSuperuser}
             onChange={(e) => setRoleForm((s) => ({ ...s, email: e.target.value }))}
             placeholder="user@email.com"
             className="rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 disabled:opacity-50"
           />
           <select
             value={roleForm.role}
-            disabled={!canEdit}
+            disabled={!canEdit || !isSuperuser}
             onChange={(e) => setRoleForm((s) => ({ ...s, role: e.target.value }))}
             className="rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 disabled:opacity-50"
           >
@@ -3032,7 +3150,7 @@ function SetupView({ config, setConfig, eventId, canEdit, isAdmin, onSaved, onEr
           </select>
           <button
             type="button"
-            disabled={!canEdit}
+            disabled={!canEdit || !isSuperuser}
             onClick={handleSaveRole}
             className="rounded-xl bg-slate-900 text-white text-sm font-semibold px-3 py-2 disabled:opacity-40"
           >
@@ -3064,7 +3182,7 @@ function SetupView({ config, setConfig, eventId, canEdit, isAdmin, onSaved, onEr
                     <td className="px-4 py-3 text-center">
                       <button
                         type="button"
-                        disabled={!canEdit}
+                        disabled={!canEdit || !isSuperuser}
                         onClick={() => handleDeleteRole(r.email)}
                         className="p-2 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 disabled:opacity-30"
                       >

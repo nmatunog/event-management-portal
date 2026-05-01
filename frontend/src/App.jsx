@@ -25,7 +25,8 @@ export default function App() {
       .filter(Boolean)
   );
   const sessionEmail = String(authUser?.email ?? session?.user?.email ?? "").toLowerCase();
-  const authRole = superUserEmails.has(sessionEmail) ? "admin" : authUser?.role ?? "attendee";
+  const isSuperuser = superUserEmails.has(sessionEmail);
+  const authRole = isSuperuser ? "admin" : authUser?.role ?? "attendee";
   const canManage = authRole === "admin" || authRole === "staff";
 
   const showApiError = (error, fallbackMessage) => {
@@ -397,6 +398,7 @@ export default function App() {
           canEdit={canManage}
           authEmail={authUser?.email ?? session.user?.email ?? ""}
           authRole={authRole}
+          isSuperuser={isSuperuser}
           profile={profile}
           onSaveProfile={handleSaveProfile}
           profileSaving={profileSaving}

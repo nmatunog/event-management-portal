@@ -128,7 +128,22 @@ app.get("/api/admin/user-roles", requireRole(["admin"]), async (c) => {
   return c.json({ items: res.results });
 });
 
+function assertSuperuserRoleManager(c: Context<AppContext>) {
+  const supers = parseCsvSet(c.env.SUPERUSER_EMAILS);
+  const actor = String(c.get("authUser")?.email ?? "").trim().toLowerCase();
+  if (!actor) throw new HTTPException(403, { message: "Forbidden: signed-in email required to manage roles." });
+  if (supers.size === 0) {
+    throw new HTTPException(403, {
+      message: "Forbidden: configure SUPERUSER_EMAILS on the worker to allow role assignments.",
+    });
+  }
+  if (!supers.has(actor)) {
+    throw new HTTPException(403, { message: "Forbidden: only a configured superuser can assign Admin or Working Team roles." });
+  }
+}
+
 app.put("/api/admin/user-roles", requireRole(["admin"]), async (c) => {
+  assertSuperuserRoleManager(c);
   const body = await c.req.json();
   const email = String(body.email ?? "").trim().toLowerCase();
   const role = roleFromClaim(body.role);
@@ -145,6 +160,7 @@ app.put("/api/admin/user-roles", requireRole(["admin"]), async (c) => {
 });
 
 app.delete("/api/admin/user-roles/:email", requireRole(["admin"]), async (c) => {
+  assertSuperuserRoleManager(c);
   const email = String(c.req.param("email") ?? "").trim().toLowerCase();
   if (!email) throw new HTTPException(400, { message: "Email is required." });
   await c.env.DB.prepare("DELETE FROM user_roles WHERE email = ?").bind(email).run();
