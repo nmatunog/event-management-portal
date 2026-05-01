@@ -255,7 +255,10 @@ export default function PublicLanding() {
                 </div>
               </div>
             </div>
-            <p className="mt-4 text-xs text-zinc-500">Verify account details with the finance team before sending payment.</p>
+            <p className="mt-4 text-xs text-zinc-500">
+              Verify account details with the finance team before sending payment. After payment, screenshot your confirmation and upload it in the attendee portal
+              (“Payment proof screenshot” section) so staff can validate your payment.
+            </p>
           </div>
         </section>
 

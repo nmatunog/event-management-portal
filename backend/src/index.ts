@@ -349,6 +349,8 @@ app.post("/api/registrations/:id/claim-seeded", async (c) => {
     applyText("arrivalCebu");
     applyText("departureCebu");
     applyText("extraOtherRequest");
+    applyText("paymentProofScreenshotDataUrl");
+    applyText("paymentProofUploadedAt");
     if (p.age !== undefined && p.age !== null) nextMeta.age = String(p.age).trim();
     if (p.extraIslandHopping !== undefined) nextMeta.extraIslandHopping = Boolean(p.extraIslandHopping);
     if (p.extraCityTour !== undefined) nextMeta.extraCityTour = Boolean(p.extraCityTour);
@@ -437,6 +439,8 @@ app.post("/api/events/:eventId/registrations/sync-my-profile", requireRole(["adm
   copyText("arrivalCebu");
   copyText("departureCebu");
   copyText("extraOtherRequest");
+  copyText("paymentProofScreenshotDataUrl");
+  copyText("paymentProofUploadedAt");
   if (profile.age !== undefined && profile.age !== null) nextMeta.age = String(profile.age).trim();
   if (profile.extraIslandHopping !== undefined) nextMeta.extraIslandHopping = Boolean(profile.extraIslandHopping);
   if (profile.extraCityTour !== undefined) nextMeta.extraCityTour = Boolean(profile.extraCityTour);

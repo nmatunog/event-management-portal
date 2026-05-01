@@ -150,6 +150,8 @@ function delegateFromApi(row) {
     shirtSize: meta.shirtSize || "",
     tshirtClaimed: Boolean(meta.tshirtClaimed),
     conferenceKitClaimed: Boolean(meta.conferenceKitClaimed),
+    paymentProofScreenshotDataUrl: meta.paymentProofScreenshotDataUrl || "",
+    paymentProofUploadedAt: meta.paymentProofUploadedAt || "",
   };
 }
 
@@ -654,6 +656,8 @@ export default function PamaconApp({ canEdit, authEmail, authRole, isSuperuser =
       shirtSize: u.shirtSize ?? prev.shirtSize ?? "",
       tshirtClaimed: Boolean(u.tshirtClaimed ?? prev.tshirtClaimed),
       conferenceKitClaimed: Boolean(u.conferenceKitClaimed ?? prev.conferenceKitClaimed),
+      paymentProofScreenshotDataUrl: u.paymentProofScreenshotDataUrl ?? prev.paymentProofScreenshotDataUrl ?? "",
+      paymentProofUploadedAt: u.paymentProofUploadedAt ?? prev.paymentProofUploadedAt ?? "",
       gender: u.gender ?? "Unspecified",
       solo: u.solo,
       manualPairId: u.manualPairId,
@@ -688,6 +692,8 @@ export default function PamaconApp({ canEdit, authEmail, authRole, isSuperuser =
         shirtSize: u.shirtSize ?? "",
         tshirtClaimed: Boolean(u.tshirtClaimed),
         conferenceKitClaimed: Boolean(u.conferenceKitClaimed),
+        paymentProofScreenshotDataUrl: u.paymentProofScreenshotDataUrl ?? "",
+        paymentProofUploadedAt: u.paymentProofUploadedAt ?? "",
         gender: u.gender ?? "Unspecified",
         solo: Boolean(u.solo),
         manualPairId: null,
@@ -710,6 +716,8 @@ export default function PamaconApp({ canEdit, authEmail, authRole, isSuperuser =
         shirtSize: r.shirtSize ?? prev.shirtSize ?? "",
         tshirtClaimed: Boolean(r.tshirtClaimed ?? prev.tshirtClaimed),
         conferenceKitClaimed: Boolean(r.conferenceKitClaimed ?? prev.conferenceKitClaimed),
+        paymentProofScreenshotDataUrl: r.paymentProofScreenshotDataUrl ?? prev.paymentProofScreenshotDataUrl ?? "",
+        paymentProofUploadedAt: r.paymentProofUploadedAt ?? prev.paymentProofUploadedAt ?? "",
         gender: r.gender ?? "Unspecified",
         solo: r.solo,
         manualPairId: r.manualPairId,
@@ -2148,6 +2156,18 @@ function RegistrantsLedger({
                     <td className="px-4 py-4 text-slate-800">
                       <div className="font-semibold">{r.name}</div>
                       {r.nickname && <div className="text-xs text-slate-500 mt-1">Nickname: {r.nickname}</div>}
+                      {r.paymentProofScreenshotDataUrl ? (
+                        <div className="mt-1">
+                          <a
+                            href={r.paymentProofScreenshotDataUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[11px] font-semibold text-amber-700 hover:underline"
+                          >
+                            View payment proof screenshot
+                          </a>
+                        </div>
+                      ) : null}
                       {isSeededDelegateRow(r) && (
                         <div className="mt-2 flex flex-col gap-1.5">
                           {r.attendeeClaimEmail ? (
@@ -3019,6 +3039,13 @@ function PaymentsHub({ config, realized, projection }) {
           <p className="text-6xl font-black tracking-tighter mt-4 leading-none">₱{(Number(gap) || 0).toLocaleString()}</p>
         </div>
         <p className="text-[10px] font-black opacity-40 mt-10 uppercase tracking-widest italic leading-none">Projection Target: ₱{(projection / 1000).toFixed(0)}k</p>
+      </div>
+      <div className="md:col-span-2 rounded-3xl border border-amber-200 bg-amber-50 p-6 sm:p-7">
+        <h4 className="text-sm font-black uppercase tracking-wide text-amber-900">Payment proof reminder</h4>
+        <p className="mt-2 text-sm text-amber-900/90 leading-relaxed">
+          Ask delegates to screenshot their payment confirmation right after transfer and upload it in their attendee portal under{" "}
+          <strong>Payment proof screenshot</strong>. Staff/Admin can then open the proof link directly from the Delegates list during validation.
+        </p>
       </div>
     </div>
   );

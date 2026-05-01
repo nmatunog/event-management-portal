@@ -299,6 +299,8 @@ export default function App() {
     extraMountainTour: Boolean(userMetadata.extraMountainTour),
     extraSafari: Boolean(userMetadata.extraSafari),
     extraOtherRequest: userMetadata.extraOtherRequest || "",
+    paymentProofScreenshotDataUrl: userMetadata.paymentProofScreenshotDataUrl || "",
+    paymentProofUploadedAt: userMetadata.paymentProofUploadedAt || "",
   };
 
   const handleSaveProfile = async (nextProfile) => {
@@ -328,6 +330,8 @@ export default function App() {
         extraMountainTour: Boolean(nextProfile?.extraMountainTour),
         extraSafari: Boolean(nextProfile?.extraSafari),
         extraOtherRequest: String(nextProfile?.extraOtherRequest || "").trim(),
+        paymentProofScreenshotDataUrl: String(nextProfile?.paymentProofScreenshotDataUrl || ""),
+        paymentProofUploadedAt: String(nextProfile?.paymentProofUploadedAt || ""),
       };
       const { data, error } = await supabase.auth.updateUser({ data: nextMeta });
       if (error) throw error;

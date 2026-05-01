@@ -57,6 +57,8 @@ function draftFromProfile(p) {
     extraSafari: Boolean(p?.extraSafari),
     extraOtherRequest: p?.extraOtherRequest || "",
     mobileNumber: p?.mobileNumber || "",
+    paymentProofScreenshotDataUrl: p?.paymentProofScreenshotDataUrl || "",
+    paymentProofUploadedAt: p?.paymentProofUploadedAt || "",
   };
 }
 
@@ -358,6 +360,60 @@ export default function AttendeeDetailsForm({ profile, authEmail, onSaveProfile,
           />
         </label>
       </fieldset>
+
+      <section className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 sm:p-6 space-y-3">
+        <h3 className="text-base font-semibold text-slate-900">Payment proof screenshot</h3>
+        <p className="text-sm text-slate-700 leading-relaxed">
+          After you pay, screenshot your bank / GCash confirmation and upload it here. Staff/Admin will use this for payment validation.
+        </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <label className="inline-flex cursor-pointer items-center justify-center rounded-xl bg-amber-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-800">
+            Upload screenshot
+            <input
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = () => {
+                  if (typeof reader.result !== "string") return;
+                  setDraft((s) => ({
+                    ...s,
+                    paymentProofScreenshotDataUrl: reader.result,
+                    paymentProofUploadedAt: new Date().toISOString(),
+                  }));
+                };
+                reader.readAsDataURL(file);
+              }}
+            />
+          </label>
+          {draft.paymentProofScreenshotDataUrl ? (
+            <button
+              type="button"
+              onClick={() => setDraft((s) => ({ ...s, paymentProofScreenshotDataUrl: "", paymentProofUploadedAt: "" }))}
+              className="inline-flex items-center justify-center rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-700 hover:bg-rose-100"
+            >
+              Remove screenshot
+            </button>
+          ) : null}
+        </div>
+        {draft.paymentProofScreenshotDataUrl ? (
+          <div className="space-y-2">
+            <img
+              src={draft.paymentProofScreenshotDataUrl}
+              alt="Payment proof screenshot preview"
+              className="max-h-56 w-full max-w-md rounded-xl border border-slate-200 bg-white object-contain"
+            />
+            <p className="text-xs text-slate-500">
+              Uploaded {draft.paymentProofUploadedAt ? new Date(draft.paymentProofUploadedAt).toLocaleString() : "just now"}.
+              Click <strong>Save to my account</strong> to submit this to staff.
+            </p>
+          </div>
+        ) : null}
+      </section>
 
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
         <button
