@@ -370,7 +370,7 @@ app.post("/api/registrations/:id/claim-seeded", async (c) => {
     if (joined) nextFullName = joined;
   }
 
-  await c.env.DB.prepare("UPDATE registrations SET metadata_json = ?, attendee_type = COALESCE(?, attendee_type), full_name = COALESCE(?, full_name) WHERE id = ?")
+  await c.env.DB.prepare("UPDATE registrations SET metadata_json = ?, attendee_type = COALESCE(?, attendee_type), full_name = COALESCE(?, full_name), updated_at = CURRENT_TIMESTAMP WHERE id = ?")
     .bind(JSON.stringify(nextMeta), nextAttendeeType, nextFullName, id)
     .run();
   const item = await c.env.DB.prepare("SELECT * FROM registrations WHERE id = ?").bind(id).first();
@@ -460,7 +460,8 @@ app.post("/api/events/:eventId/registrations/sync-my-profile", requireRole(["adm
         full_name = COALESCE(?, full_name),
         attendee_type = COALESCE(?, attendee_type),
         status = COALESCE(?, status),
-        metadata_json = ?
+        metadata_json = ?,
+        updated_at = CURRENT_TIMESTAMP
       WHERE id = ?`
     )
       .bind(nextName, nextRole, candidate.status || "pre-registered", JSON.stringify(nextMeta), candidate.id)
@@ -471,8 +472,8 @@ app.post("/api/events/:eventId/registrations/sync-my-profile", requireRole(["adm
 
   const id = crypto.randomUUID();
   await c.env.DB.prepare(
-    `INSERT INTO registrations (id, event_id, full_name, attendee_type, status, total_fee, paid_amount, payment_plan, metadata_json)
-     VALUES (?, ?, ?, ?, 'pre-registered', 8000, 0, 'full', ?)`
+    `INSERT INTO registrations (id, event_id, full_name, attendee_type, status, total_fee, paid_amount, payment_plan, metadata_json, updated_at)
+     VALUES (?, ?, ?, ?, 'pre-registered', 8000, 0, 'full', ?, CURRENT_TIMESTAMP)`
   )
     .bind(id, eventId, nextName, nextRole, JSON.stringify(nextMeta))
     .run();
@@ -544,7 +545,8 @@ app.post("/api/events/:eventId/registrations/harmonize", requireRole(["admin", "
         paid_amount = ?,
         total_fee = ?,
         status = ?,
-        metadata_json = ?
+        metadata_json = ?,
+        updated_at = CURRENT_TIMESTAMP
       WHERE id = ?`
     )
       .bind(bestPaid, bestTotal, statusByRank(bestStatusRank), JSON.stringify(primaryMeta), primary.id)
@@ -593,7 +595,8 @@ app.post("/api/events/:eventId/registrations/harmonize", requireRole(["admin", "
         paid_amount = ?,
         total_fee = ?,
         status = ?,
-        metadata_json = ?
+        metadata_json = ?,
+        updated_at = CURRENT_TIMESTAMP
       WHERE id = ?`
     )
       .bind(bestPaid, bestTotal, statusByRank(bestStatusRank), JSON.stringify(primaryMeta), primary.id)
@@ -614,8 +617,8 @@ app.post("/api/events/:eventId/registrations", requireRole(["admin", "staff"]), 
         : JSON.stringify(body.metadata)
       : null;
   await c.env.DB.prepare(
-    `INSERT INTO registrations (id, event_id, full_name, attendee_type, status, total_fee, paid_amount, payment_plan, metadata_json)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO registrations (id, event_id, full_name, attendee_type, status, total_fee, paid_amount, payment_plan, metadata_json, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
   )
     .bind(
       id,
@@ -652,7 +655,8 @@ app.patch("/api/registrations/:id", requireRole(["admin", "staff"]), async (c) =
       total_fee = COALESCE(?, total_fee),
       paid_amount = COALESCE(?, paid_amount),
       payment_plan = COALESCE(?, payment_plan),
-      metadata_json = COALESCE(?, metadata_json)
+      metadata_json = COALESCE(?, metadata_json),
+      updated_at = CURRENT_TIMESTAMP
     WHERE id = ?`
   )
     .bind(
@@ -679,7 +683,7 @@ app.delete("/api/registrations/:id", requireRole(["admin", "staff"]), async (c) 
 
 app.patch("/api/registrations/:id/check-in", requireRole(["admin", "staff"]), async (c) => {
   const id = c.req.param("id");
-  await c.env.DB.prepare("UPDATE registrations SET status = 'checked-in', checked_in_at = CURRENT_TIMESTAMP WHERE id = ?").bind(id).run();
+  await c.env.DB.prepare("UPDATE registrations SET status = 'checked-in', checked_in_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(id).run();
   const item = await c.env.DB.prepare("SELECT * FROM registrations WHERE id = ?").bind(id).first();
   return c.json({ item });
 });
@@ -741,7 +745,7 @@ app.post("/api/registrations/:id/payments", requireRole(["admin", "staff"]), asy
     .bind(registrationId)
     .first<{ paid: number; due: number }>();
 
-  await c.env.DB.prepare("UPDATE registrations SET paid_amount = ?, status = CASE WHEN ? >= total_fee THEN 'registered' ELSE status END WHERE id = ?")
+  await c.env.DB.prepare("UPDATE registrations SET paid_amount = ?, status = CASE WHEN ? >= total_fee THEN 'registered' ELSE status END, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
     .bind(asNumber(summary?.paid, 0), asNumber(summary?.paid, 0), registrationId)
     .run();
 
@@ -936,7 +940,7 @@ app.patch("/api/invitations/respond/:token", async (c) => {
   if (status === "accepted" && invitation) {
     const regId = crypto.randomUUID();
     await c.env.DB.prepare(
-      "INSERT INTO registrations (id, event_id, full_name, attendee_type, status, total_fee, paid_amount, payment_plan) VALUES (?, ?, ?, ?, 'pre-registered', 0, 0, 'full')"
+      "INSERT INTO registrations (id, event_id, full_name, attendee_type, status, total_fee, paid_amount, payment_plan, updated_at) VALUES (?, ?, ?, ?, 'pre-registered', 0, 0, 'full', CURRENT_TIMESTAMP)"
     )
       .bind(regId, invitation.event_id, invitation.full_name ?? invitation.email, invitation.invitation_type ?? "Standard")
       .run();

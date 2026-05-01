@@ -344,6 +344,7 @@ export default function PamaconApp({ canEdit, authEmail, authRole, isSuperuser =
   const [suppliers, setSuppliers] = useState([]);
   const [speakers, setSpeakers] = useState([]);
   const [eventRecord, setEventRecord] = useState(null);
+  const [lastSyncAt, setLastSyncAt] = useState("");
   const isAdmin = authRole === "admin";
 
   const reloadAll = useCallback(async () => {
@@ -383,6 +384,7 @@ export default function PamaconApp({ canEdit, authEmail, authRole, isSuperuser =
           honorarium: Number(s.honorarium || 0),
         }))
       );
+      setLastSyncAt(new Date().toISOString());
     } catch (e) {
       onApiError?.(e, "Failed to load PAMACON data.");
     }
@@ -623,6 +625,26 @@ export default function PamaconApp({ canEdit, authEmail, authRole, isSuperuser =
   useEffect(() => {
     reloadAll();
   }, [reloadAll]);
+
+  useEffect(() => {
+    if (!eventId) return undefined;
+    const tick = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      void reloadAll();
+    };
+    const intervalId = setInterval(tick, 15000);
+    const onFocus = () => void reloadAll();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void reloadAll();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [eventId, reloadAll]);
 
   const sponsorRevenueTotal = useMemo(() => sponsors.reduce((s, x) => s + (Number(x.amount) || 0), 0), [sponsors]);
   const delegateRevenueActual = useMemo(() => registrants.reduce((s, x) => s + (Number(x.paid) || 0), 0), [registrants]);
@@ -1065,6 +1087,9 @@ export default function PamaconApp({ canEdit, authEmail, authRole, isSuperuser =
               <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Signed in</p>
               <p className="text-xs font-semibold text-slate-700 truncate max-w-[260px]">{signedInLabel}</p>
               <p className="text-[11px] text-slate-500">{roleLabel}</p>
+              <p className="text-[11px] text-slate-500">
+                Last sync: {lastSyncAt ? new Date(lastSyncAt).toLocaleTimeString() : "—"}
+              </p>
             </div>
             <button
               type="button"
