@@ -3495,6 +3495,32 @@ function SetupView({ config, setConfig, eventId, canEdit, isAdmin, isSuperuser, 
             <div className="space-y-4 rounded-2xl border border-slate-200 p-4 bg-slate-50/50">
               <h5 className="text-[10px] font-black uppercase text-slate-600 tracking-[0.2em] leading-none">Attendee Portal Posters</h5>
               <label className="block space-y-1">
+                <span className="text-xs font-semibold text-slate-600">Quote request email (this event)</span>
+                <input
+                  type="email"
+                  disabled={!canEdit}
+                  value={String(portalConfig.quoteRequestEmail || "")}
+                  onChange={(e) => updatePortalConfig({ quoteRequestEmail: e.target.value.trim() })}
+                  placeholder="events@example.com"
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 disabled:opacity-50"
+                />
+                <p className="text-[11px] text-slate-500">
+                  This overrides <code className="text-xs">VITE_QUOTE_REQUEST_EMAIL</code> for this specific event.
+                </p>
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs font-semibold text-slate-600">Welcome video URL (optional)</span>
+                <input
+                  type="url"
+                  disabled={!canEdit}
+                  value={String(portalConfig.youtubeUrl || "")}
+                  onChange={(e) => updatePortalConfig({ youtubeUrl: e.target.value.trim() })}
+                  placeholder="https://www.youtube.com/watch?v=..."
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 disabled:opacity-50"
+                />
+                <p className="text-[11px] text-slate-500">Leave blank to use the environment-level attendee video link.</p>
+              </label>
+              <label className="block space-y-1">
                 <span className="text-xs font-semibold text-slate-600">No. of posters to display (1-6)</span>
                 <input
                   type="number"
