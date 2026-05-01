@@ -68,6 +68,8 @@ const PAMACON_SEED_DELEGATES_RAW = [
   { name: "Sarah Recla", lastName: "Recla", gender: "Female", paid: 2850, mode: "Installment", solo: false, remarks: "UM installment 1/3" },
   { name: "Belinda Manliquez", lastName: "Manliquez", gender: "Female", paid: 8500, mode: "Full", solo: false },
   { name: "Genie Melendres", lastName: "Melendres", gender: "Female", paid: 2850, mode: "Installment", solo: false, remarks: "UM installment 1/3" },
+  { name: "Maybelle Arriola", lastName: "Arriola", gender: "Female", paid: 8500, mode: "Full", solo: false },
+  { name: "Virginia Iway", lastName: "Iway", gender: "Female", paid: 2850, mode: "Installment", solo: false, remarks: "UM installment 1/3" },
 ];
 
 function uniqDelegateSeedRows(rows) {

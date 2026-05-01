@@ -1,6 +1,20 @@
 /**
+ * Delegates who opted out of hotel rooming (by remarks) are excluded from roommate pools and room cards.
+ * Matching is case-insensitive on trimmed remarks.
+ * @param {{ remarks?: string }} registrant
+ */
+export function isExcludedFromRoomAssignments(registrant) {
+  const t = String(registrant?.remarks ?? "").trim().toLowerCase();
+  if (!t) return false;
+  if (t.includes("no room booking")) return true;
+  if (t === "no room") return true;
+  if (/^no room(\W|$)/.test(t)) return true;
+  return false;
+}
+
+/**
  * Room assignment logic aligned with the PAMACON reference portal.
- * @param {Array<{ id: string, name: string, gender: string, solo: boolean, manualPairId: string | null }>} registrants
+ * @param {Array<{ id: string, name: string, gender: string, solo: boolean, manualPairId: string | null, remarks?: string }>} registrants
  * @param {{ roomRate: number, soloUpgrade: number }} config
  * @param {{ autoPair?: boolean }} options
  */
@@ -8,8 +22,9 @@ export function buildRoomAssignments(registrants, config, options = {}) {
   const autoPair = Boolean(options.autoPair);
   const roomRate = Number(config.roomRate) || 3800;
   const soloUpgrade = Number(config.soloUpgrade) || 3800;
-  const byId = new Map(registrants.map((r) => [r.id, r]));
-  let unassigned = [...registrants];
+  const eligible = registrants.filter((r) => !isExcludedFromRoomAssignments(r));
+  const byId = new Map(eligible.map((r) => [r.id, r]));
+  let unassigned = [...eligible];
   const rooms = [];
   let roomId = 101;
   const used = new Set();

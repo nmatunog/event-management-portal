@@ -44,6 +44,8 @@ export const DEFAULT_PAMACON_CONFIG = {
   eventName: PAMACON_TITLE,
   theme: "Sulog: Rise with the current",
   targetRegistrants: 100,
+  /** Superuser-only: data URL of uploaded image (paper/Excel/chat-style list); reference only, not an import. */
+  seededListScreenshotDataUrl: "",
   attendeePortal: { ...DEFAULT_ATTENDEE_PORTAL },
   roomRate: 3800,
   soloUpgrade: 3800,
@@ -71,9 +73,12 @@ export function mergeConfigFromEvent(eventRow) {
     const posterDisplayCount = Number.isFinite(parsedDisplayCount)
       ? Math.max(1, Math.min(6, Math.trunc(parsedDisplayCount)))
       : DEFAULT_ATTENDEE_PORTAL.posterDisplayCount;
+    const seededShot =
+      typeof parsed.seededListScreenshotDataUrl === "string" ? parsed.seededListScreenshotDataUrl : DEFAULT_PAMACON_CONFIG.seededListScreenshotDataUrl;
     return {
       ...DEFAULT_PAMACON_CONFIG,
       ...parsed,
+      seededListScreenshotDataUrl: seededShot,
       projections: {
         ...DEFAULT_PAMACON_CONFIG.projections,
         ...(parsed.projections || {}),

@@ -62,7 +62,7 @@ import {
   mergeConfigFromEvent,
   PAMACON_TITLE,
 } from "./defaultConfig";
-import { buildRoomAssignments } from "./rooming";
+import { buildRoomAssignments, isExcludedFromRoomAssignments } from "./rooming";
 import { formatPositionShort, positionBadgeClass, POSITION_CODES } from "./positionCodes";
 import { PAMACON_SEED_EXPENSES } from "./seedExpenses";
 import { modeToPaymentPlan, PAMACON_SEED_DELEGATES } from "./seedDelegates";
@@ -375,6 +375,24 @@ export default function PamaconApp({ canEdit, authEmail, authRole, isSuperuser =
     }
   }, [eventId, onApiError]);
 
+  const persistSeededListScreenshot = useCallback(
+    async (dataUrl) => {
+      if (!eventId || !isSuperuser) return;
+      const nextConfig = { ...config, seededListScreenshotDataUrl: String(dataUrl ?? "") };
+      try {
+        await patchEvent(eventId, {
+          attendeeGoal: config.targetRegistrants,
+          config: nextConfig,
+        });
+        setConfig(nextConfig);
+        onApiInfo?.("Reference list screenshot saved.");
+      } catch (e) {
+        onApiError?.(e, "Could not save reference screenshot.");
+      }
+    },
+    [eventId, isSuperuser, config, onApiInfo, onApiError]
+  );
+
   const toggleDelegateStaffClaim = useCallback(
     async (r) => {
       if (!canEdit || !isSeededDelegateRow(r)) return;
@@ -589,6 +607,10 @@ export default function PamaconApp({ canEdit, authEmail, authRole, isSuperuser =
     const rA = registrants.find((r) => r.id === idA);
     const rB = registrants.find((r) => r.id === idB);
     if (!rA || !rB || rA.id === rB.id) return;
+    if (isExcludedFromRoomAssignments(rA) || isExcludedFromRoomAssignments(rB)) {
+      onApiInfo?.("One or both delegates are marked as not taking a room (remarks); they are not included in rooming.", "warn");
+      return;
+    }
 
     const mergeRowMeta = (row, patch) => ({
       ...(row?.metaBase && typeof row.metaBase === "object" ? { ...row.metaBase } : {}),
@@ -887,6 +909,8 @@ export default function PamaconApp({ canEdit, authEmail, authRole, isSuperuser =
                 canEdit={canEdit}
                 isAdmin={isAdmin}
                 isSuperuser={isSuperuser}
+                seededListScreenshotDataUrl={config?.seededListScreenshotDataUrl || ""}
+                onPersistSeededListScreenshot={persistSeededListScreenshot}
                 authEmail={authEmail}
                 onToggleStaffClaim={toggleDelegateStaffClaim}
                 onUpdate={updateRegistrantRecord}
@@ -988,6 +1012,8 @@ function RegistrantsLedger({
   canEdit,
   isAdmin,
   isSuperuser,
+  seededListScreenshotDataUrl = "",
+  onPersistSeededListScreenshot,
   authEmail,
   onToggleStaffClaim,
   onUpdate,
@@ -1025,6 +1051,8 @@ function RegistrantsLedger({
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showMoreColumns, setShowMoreColumns] = useState(false);
   const [showDangerZone, setShowDangerZone] = useState(false);
+  const [refScreenshotModalOpen, setRefScreenshotModalOpen] = useState(false);
+  const [savingRefScreenshot, setSavingRefScreenshot] = useState(false);
   const tableMinWidthClass = showMoreColumns ? "min-w-[1280px]" : isAdmin ? "min-w-[980px]" : "min-w-[860px]";
 
   useEffect(() => {
@@ -1286,10 +1314,61 @@ function RegistrantsLedger({
     }
   };
 
+  const handleReferenceScreenshotFile = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !isSuperuser || typeof onPersistSeededListScreenshot !== "function") return;
+    setSavingRefScreenshot(true);
+    const reader = new FileReader();
+    reader.onload = () => {
+      void (async () => {
+        try {
+          if (typeof reader.result === "string") await onPersistSeededListScreenshot(reader.result);
+        } finally {
+          setSavingRefScreenshot(false);
+        }
+      })();
+    };
+    reader.onerror = () => setSavingRefScreenshot(false);
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveReferenceScreenshot = () => {
+    if (!isSuperuser || typeof onPersistSeededListScreenshot !== "function") return;
+    void onPersistSeededListScreenshot("");
+  };
+
   let cumulative = 0;
 
   return (
     <div className="space-y-6 pb-20">
+      {refScreenshotModalOpen && isSuperuser && seededListScreenshotDataUrl ? (
+        <div
+          className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-900/70 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Uploaded reference list image"
+          onClick={() => setRefScreenshotModalOpen(false)}
+        >
+          <div
+            className="relative max-h-[92vh] w-full max-w-5xl overflow-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setRefScreenshotModalOpen(false)}
+              className="absolute right-3 top-3 z-10 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              Close
+            </button>
+            <img
+              src={seededListScreenshotDataUrl}
+              alt="Uploaded reference list for seeded participants"
+              className="mx-auto mt-10 max-h-[80vh] w-auto max-w-full object-contain"
+            />
+          </div>
+        </div>
+      ) : null}
       {editing && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
           <div className="bg-white w-full max-w-lg rounded-[40px] shadow-2xl p-10 space-y-4 max-h-[90vh] overflow-y-auto">
@@ -1408,9 +1487,61 @@ function RegistrantsLedger({
           </div>
         </div>
       )}
+      {isSuperuser ? (
+        <div className="rounded-3xl border-2 border-dashed border-amber-300/90 bg-gradient-to-br from-amber-50/90 to-white p-6 sm:p-8 shadow-sm">
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-800">Superuser · Reference only</p>
+          <h3 className="mt-2 text-lg font-semibold text-slate-900">Upload screenshot of your seeded participant list</h3>
+          <p className="mt-2 text-sm text-slate-600 max-w-3xl leading-relaxed">
+            Use this like attaching a photo in chat: upload an image of your official paper list, spreadsheet, or PDF screenshot. It is stored for the committee as a visual
+            reference only. It does <strong>not</strong> import rows or change registrants in the table below.
+          </p>
+          <div className="mt-5 flex flex-col gap-4 lg:flex-row lg:items-stretch">
+            <label className="flex min-h-[140px] flex-1 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-white px-4 py-6 text-center transition-colors hover:border-amber-400 hover:bg-amber-50/30">
+              <span className="text-sm font-semibold text-slate-700">{savingRefScreenshot ? "Saving…" : "Click to choose image"}</span>
+              <span className="mt-1 text-xs text-slate-500">PNG, JPG, WebP — saved to event config</span>
+              <input
+                type="file"
+                accept="image/*"
+                disabled={savingRefScreenshot}
+                onChange={handleReferenceScreenshotFile}
+                className="sr-only"
+              />
+            </label>
+            <div className="flex w-full max-w-sm flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Current upload</p>
+              {seededListScreenshotDataUrl ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setRefScreenshotModalOpen(true)}
+                    className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50 text-left"
+                  >
+                    <img
+                      src={seededListScreenshotDataUrl}
+                      alt="Reference list thumbnail"
+                      className="h-36 w-full object-contain"
+                    />
+                  </button>
+                  <p className="text-xs text-slate-500">Tap thumbnail to view full size.</p>
+                  <button
+                    type="button"
+                    disabled={savingRefScreenshot}
+                    onClick={handleRemoveReferenceScreenshot}
+                    className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-800 hover:bg-rose-100 disabled:opacity-50"
+                  >
+                    Remove image
+                  </button>
+                </>
+              ) : (
+                <p className="text-sm text-slate-500">No image uploaded yet.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
       <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
         <div className="p-6 md:p-8 border-b border-slate-100 bg-slate-50/50 flex flex-col gap-4">
-          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
             <div>
               <h3 className="text-lg font-semibold text-slate-900">Conference Delegates</h3>
               <p className="text-sm text-slate-500 mt-1 max-w-xl">
@@ -1949,7 +2080,7 @@ function AccommodationView({ config, registrants, onPair, onToggleSolo, canEdit 
   const availablePartners = useMemo(() => {
     if (!target) return [];
     return registrants
-      .filter((r) => !r.solo && r.id !== target.id && !r.manualPairId)
+      .filter((r) => !isExcludedFromRoomAssignments(r) && !r.solo && r.id !== target.id && !r.manualPairId)
       .sort((a, b) => {
         const aScore = a.gender === target.gender ? 0 : 1;
         const bScore = b.gender === target.gender ? 0 : 1;
@@ -1977,7 +2108,7 @@ function AccommodationView({ config, registrants, onPair, onToggleSolo, canEdit 
     const unpaired = list.filter((x) => x.status === "Needs Pairing").map((x) => x.a);
     return unpaired.map((u) => {
       const candidates = registrants
-        .filter((r) => r.id !== u.id && !r.solo && r.gender === u.gender)
+        .filter((r) => !isExcludedFromRoomAssignments(r) && r.id !== u.id && !r.solo && r.gender === u.gender)
         .sort((a, b) => Number(Boolean(a.manualPairId)) - Number(Boolean(b.manualPairId)) || a.name.localeCompare(b.name))
         .slice(0, 2);
       return { unpaired: u, candidates };
