@@ -268,7 +268,12 @@ app.post("/api/registrations/:id/claim-seeded", async (c) => {
   const claimedBy = String(meta.attendeeClaimEmail || "").trim().toLowerCase();
   const providedSeededName = String(body?.seededDelegateName ?? "").trim().toLowerCase();
   const rowName = String(existing.full_name || "").trim().toLowerCase();
-  const isSeedFlagged = String(meta.seedSource || "") === "pamacon-seed";
+  const seedSrc = String(meta.seedSource || "").trim();
+  const isSeedFlagged =
+    seedSrc === "pamacon-seed" ||
+    seedSrc === "pamacon-seed-ocr" ||
+    seedSrc === "pamacon-seed-text" ||
+    seedSrc === "pamacon-seed-manual";
   const isNameMatchedSeed = Boolean(providedSeededName && rowName && providedSeededName === rowName);
   const isAlreadyClaimedBySameAttendee = Boolean(claimedBy && claimedBy === email);
   if (!isSeedFlagged && !isNameMatchedSeed && !isAlreadyClaimedBySameAttendee) {

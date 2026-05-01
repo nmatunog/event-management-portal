@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { claimSeededRegistration, getAuthMe, getEvents, getRegistrations, setAccessToken } from "./lib/api";
 import { supabase } from "./lib/supabaseClient";
@@ -46,6 +46,25 @@ export default function App() {
     setApiBanner({ type, message });
   };
 
+  const apiBannerDismissRef = useRef(null);
+  useEffect(() => {
+    if (apiBannerDismissRef.current) {
+      clearTimeout(apiBannerDismissRef.current);
+      apiBannerDismissRef.current = null;
+    }
+    if (!apiBanner || apiBanner.type !== "ok") return;
+    apiBannerDismissRef.current = setTimeout(() => {
+      setApiBanner(null);
+      apiBannerDismissRef.current = null;
+    }, 4200);
+    return () => {
+      if (apiBannerDismissRef.current) {
+        clearTimeout(apiBannerDismissRef.current);
+        apiBannerDismissRef.current = null;
+      }
+    };
+  }, [apiBanner]);
+
   const syncSeededRegistrationProfile = async (user, profileOverride = null) => {
     const email = String(user?.email || "").trim().toLowerCase();
     const seededDelegateName = String(user?.user_metadata?.seededDelegateName || "").trim();
@@ -66,7 +85,13 @@ export default function App() {
     const seededRows = rows.filter((r) => {
       try {
         const meta = r.metadata_json ? JSON.parse(r.metadata_json) : {};
-        return String(meta.seedSource || "").trim() === "pamacon-seed";
+        const src = String(meta.seedSource || "").trim();
+        return (
+          src === "pamacon-seed" ||
+          src === "pamacon-seed-ocr" ||
+          src === "pamacon-seed-text" ||
+          src === "pamacon-seed-manual"
+        );
       } catch {
         return false;
       }

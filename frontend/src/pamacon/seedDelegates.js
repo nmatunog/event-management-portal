@@ -6,7 +6,7 @@
  * - ₱8,200–₱9,999 → SUM
  * - Below → UM
  */
-function inferSeedRole(paid) {
+export function inferSeedRole(paid) {
   const p = Number(paid) || 0;
   if (p >= 10000) return "AD";
   if (p >= 8200) return "SUM";

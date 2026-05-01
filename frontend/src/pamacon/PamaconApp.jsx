@@ -29,6 +29,9 @@ import {
   ChevronDown,
   Filter,
   Plus,
+  ListPlus,
+  FileText,
+  ClipboardPaste,
   LogOut,
   UserRound,
 } from "lucide-react";
@@ -65,7 +68,8 @@ import {
 import { buildRoomAssignments, isExcludedFromRoomAssignments } from "./rooming";
 import { formatPositionShort, positionBadgeClass, POSITION_CODES } from "./positionCodes";
 import { PAMACON_SEED_EXPENSES } from "./seedExpenses";
-import { modeToPaymentPlan, PAMACON_SEED_DELEGATES } from "./seedDelegates";
+import { inferSeedRole, modeToPaymentPlan, PAMACON_SEED_DELEGATES } from "./seedDelegates";
+import { parseSeedListOcrRows } from "./parseSeedListOcrRows";
 import ProfileModule from "../components/ProfileModule";
 
 /** Survives React Strict Mode remount (useRef resets); blocks a second full seed while the DB is still empty. */
@@ -87,7 +91,13 @@ const SEED_DELEGATE_NAME_SET = new Set(
 /** Seeded committee list rows (by metadata flag or known seed names). */
 function isSeededDelegateRow(r) {
   if (!r) return false;
-  if (r.seedSource === "pamacon-seed") return true;
+  if (
+    r.seedSource === "pamacon-seed" ||
+    r.seedSource === "pamacon-seed-ocr" ||
+    r.seedSource === "pamacon-seed-text" ||
+    r.seedSource === "pamacon-seed-manual"
+  )
+    return true;
   return SEED_DELEGATE_NAME_SET.has(String(r.name || "").trim().toLowerCase());
 }
 
@@ -393,6 +403,133 @@ export default function PamaconApp({ canEdit, authEmail, authRole, isSuperuser =
     [eventId, isSuperuser, config, onApiInfo, onApiError]
   );
 
+  const importSeedListParsedRows = useCallback(
+    async (parsed, seedSource) => {
+      if (!eventId || !isSuperuser || !parsed?.length) return { added: 0, skipped: 0, lineCount: 0 };
+      const { items } = await getRegistrations(eventId);
+      const existingNames = new Set(
+        (items || []).map((r) => String(r.full_name || "").trim().toLowerCase()).filter(Boolean)
+      );
+
+      let added = 0;
+      let skipped = 0;
+      for (const row of parsed) {
+        const fullName = String(row.fullName || "").trim();
+        if (!fullName) continue;
+        const key = fullName.toLowerCase();
+        if (existingNames.has(key)) {
+          skipped += 1;
+          continue;
+        }
+        const parts = fullName.split(/\s+/).filter(Boolean);
+        const firstName = parts[0] || "";
+        const lastName = String(row.lastName || parts[parts.length - 1] || "").trim();
+        const middleName = parts.length > 2 ? parts.slice(1, -1).join(" ") : "";
+        const role = inferSeedRole(row.paid);
+        const totalFee = row.mode === "Installment" ? 8550 : row.paid;
+
+        await createRegistration(eventId, {
+          fullName,
+          attendeeType: role,
+          status: "registered",
+          totalFee,
+          paidAmount: row.paid,
+          paymentPlan: modeToPaymentPlan(row.mode),
+          metadata: {
+            seedSource,
+            firstName,
+            middleName,
+            lastName,
+            gender: row.gender || "Unspecified",
+            solo: Boolean(row.solo),
+            manualPairId: null,
+            remarks: row.remarks ?? "",
+          },
+        });
+        existingNames.add(key);
+        added += 1;
+      }
+
+      await reloadAll();
+      return { added, skipped, lineCount: parsed.length };
+    },
+    [eventId, isSuperuser, reloadAll]
+  );
+
+  const importSeedListFromText = useCallback(
+    async (rawText) => {
+      if (!eventId || !isSuperuser) return;
+      try {
+        const normalized = String(rawText || "")
+          .replace(/^\uFEFF/, "")
+          .replace(/\r\n/g, "\n");
+        const parsed = parseSeedListOcrRows(normalized);
+        if (parsed.length === 0) {
+          onApiInfo?.(
+            "No participant lines were found in that text. Use one person per line (e.g. “49. Jane Doe - 2.85k (1/3)” or “Jane Doe 8.5k”).",
+            "warn"
+          );
+          return;
+        }
+        const { added, skipped, lineCount } = await importSeedListParsedRows(parsed, "pamacon-seed-text");
+        onApiInfo?.(
+          `List import: ${added} delegate(s) added, ${skipped} already on file (${lineCount} line(s) from text). Review the table for accuracy.`,
+          "ok"
+        );
+      } catch (e) {
+        onApiError?.(e, "Could not import delegates from pasted or uploaded text.");
+        await reloadAll();
+      }
+    },
+    [eventId, isSuperuser, importSeedListParsedRows, onApiInfo, onApiError, reloadAll]
+  );
+
+  const processReferenceScreenshot = useCallback(
+    async (file, dataUrl) => {
+      if (!eventId || !isSuperuser || !file) return;
+      const nextConfig = { ...config, seededListScreenshotDataUrl: String(dataUrl ?? "") };
+      try {
+        await patchEvent(eventId, {
+          attendeeGoal: config.targetRegistrants,
+          config: nextConfig,
+        });
+        setConfig(nextConfig);
+        onApiInfo?.("Image saved. Reading names from the screenshot (OCR)…", "ok");
+
+        const { createWorker } = await import("tesseract.js");
+        const worker = await createWorker("eng");
+        let text = "";
+        try {
+          await worker.setParameters({ tessedit_pageseg_mode: "6" });
+          const result = await worker.recognize(file);
+          text = result?.data?.text || "";
+        } finally {
+          await worker.terminate();
+        }
+
+        const parsed = parseSeedListOcrRows(text);
+        if (parsed.length === 0) {
+          onApiInfo?.(
+            "No participant lines were detected from the image. Try a clearer crop, paste the list as text instead, or add delegates manually.",
+            "warn"
+          );
+          await reloadAll();
+          return;
+        }
+
+        const { added, skipped, lineCount } = await importSeedListParsedRows(parsed, "pamacon-seed-ocr");
+        onApiInfo?.(
+          `List import: ${added} delegate(s) added, ${skipped} already on file (${lineCount} line(s) from image). OCR may misread names—please review the table.`,
+          "ok"
+        );
+      } catch (e) {
+        onApiError?.(e, "Could not save reference image or import delegates from the screenshot.");
+        await reloadAll();
+      }
+    },
+    [eventId, isSuperuser, config, onApiInfo, onApiError, reloadAll, importSeedListParsedRows]
+  );
+
   const toggleDelegateStaffClaim = useCallback(
     async (r) => {
       if (!canEdit || !isSeededDelegateRow(r)) return;
@@ -541,6 +678,47 @@ export default function PamaconApp({ canEdit, authEmail, authRole, isSuperuser =
     });
     await reloadAll();
   };
+
+  const addRegistrantToSeededList = useCallback(
+    async (r) => {
+      if (!canEdit || !r?.id || isSeededDelegateRow(r)) return;
+      const prev = r.metaBase && typeof r.metaBase === "object" ? { ...r.metaBase } : {};
+      const meta = {
+        ...prev,
+        firstName: r.firstName ?? "",
+        middleName: r.middleName ?? "",
+        lastName: r.lastName ?? "",
+        nickname: r.nickname ?? prev.nickname ?? "",
+        shirtSize: r.shirtSize ?? prev.shirtSize ?? "",
+        tshirtClaimed: Boolean(r.tshirtClaimed ?? prev.tshirtClaimed),
+        conferenceKitClaimed: Boolean(r.conferenceKitClaimed ?? prev.conferenceKitClaimed),
+        gender: r.gender ?? "Unspecified",
+        solo: r.solo,
+        manualPairId: r.manualPairId,
+        remarks: r.remarks ?? "",
+        seedSource: "pamacon-seed-manual",
+      };
+      try {
+        await patchRegistration(r.id, {
+          fullName: r.name,
+          attendeeType: r.role,
+          status: r.status,
+          totalFee: r.totalFee,
+          paidAmount: r.paid,
+          paymentPlan: modeToPaymentPlan(r.mode),
+          metadata: meta,
+        });
+        await reloadAll();
+        onApiInfo?.(
+          `${String(r.name || "Delegate").trim()} added to the seeded list. They now appear in the seed claim workflow.`,
+          "ok"
+        );
+      } catch (e) {
+        onApiError?.(e, "Could not add this delegate to the seeded list.");
+      }
+    },
+    [canEdit, reloadAll, onApiInfo, onApiError]
+  );
 
   const removeRegistrantRecord = async (id) => {
     await deleteRegistration(id);
@@ -911,12 +1089,15 @@ export default function PamaconApp({ canEdit, authEmail, authRole, isSuperuser =
                 isSuperuser={isSuperuser}
                 seededListScreenshotDataUrl={config?.seededListScreenshotDataUrl || ""}
                 onPersistSeededListScreenshot={persistSeededListScreenshot}
+                onProcessReferenceScreenshot={processReferenceScreenshot}
+                onImportSeedListFromText={importSeedListFromText}
                 authEmail={authEmail}
                 onToggleStaffClaim={toggleDelegateStaffClaim}
                 onUpdate={updateRegistrantRecord}
                 onCreate={createRegistrantRecord}
                 onDelete={removeRegistrantRecord}
                 onDeleteAll={removeAllRegistrantRecords}
+                onAddToSeededList={addRegistrantToSeededList}
                 onInfo={onApiInfo}
                 onApiError={onApiError}
               />
@@ -1014,12 +1195,15 @@ function RegistrantsLedger({
   isSuperuser,
   seededListScreenshotDataUrl = "",
   onPersistSeededListScreenshot,
+  onProcessReferenceScreenshot,
+  onImportSeedListFromText,
   authEmail,
   onToggleStaffClaim,
   onUpdate,
   onCreate,
   onDelete,
   onDeleteAll,
+  onAddToSeededList,
   onInfo,
   onApiError,
 }) {
@@ -1053,6 +1237,8 @@ function RegistrantsLedger({
   const [showDangerZone, setShowDangerZone] = useState(false);
   const [refScreenshotModalOpen, setRefScreenshotModalOpen] = useState(false);
   const [savingRefScreenshot, setSavingRefScreenshot] = useState(false);
+  const [seedListPasteText, setSeedListPasteText] = useState("");
+  const [importingSeedText, setImportingSeedText] = useState(false);
   const tableMinWidthClass = showMoreColumns ? "min-w-[1280px]" : isAdmin ? "min-w-[980px]" : "min-w-[860px]";
 
   useEffect(() => {
@@ -1317,13 +1503,19 @@ function RegistrantsLedger({
   const handleReferenceScreenshotFile = (event) => {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (!file || !isSuperuser || typeof onPersistSeededListScreenshot !== "function") return;
+    const canProcess = typeof onProcessReferenceScreenshot === "function";
+    const canPersistOnly = typeof onPersistSeededListScreenshot === "function";
+    if (!file || !isSuperuser || (!canProcess && !canPersistOnly)) return;
     setSavingRefScreenshot(true);
     const reader = new FileReader();
     reader.onload = () => {
       void (async () => {
         try {
-          if (typeof reader.result === "string") await onPersistSeededListScreenshot(reader.result);
+          if (typeof reader.result !== "string") return;
+          if (canProcess) await onProcessReferenceScreenshot(file, reader.result);
+          else await onPersistSeededListScreenshot(reader.result);
+        } catch (e) {
+          onApiError?.(e, "Reference screenshot upload failed.");
         } finally {
           setSavingRefScreenshot(false);
         }
@@ -1489,52 +1681,137 @@ function RegistrantsLedger({
       )}
       {isSuperuser ? (
         <div className="rounded-3xl border-2 border-dashed border-amber-300/90 bg-gradient-to-br from-amber-50/90 to-white p-6 sm:p-8 shadow-sm">
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-800">Superuser · Reference only</p>
-          <h3 className="mt-2 text-lg font-semibold text-slate-900">Upload screenshot of your seeded participant list</h3>
-          <p className="mt-2 text-sm text-slate-600 max-w-3xl leading-relaxed">
-            Use this like attaching a photo in chat: upload an image of your official paper list, spreadsheet, or PDF screenshot. It is stored for the committee as a visual
-            reference only. It does <strong>not</strong> import rows or change registrants in the table below.
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-800">Superuser · Bulk list import</p>
+          <h3 className="mt-2 text-lg font-semibold text-slate-900">Import seeded participant list</h3>
+          <p className="mt-2 text-sm text-slate-600 max-w-4xl leading-relaxed">
+            Add delegates in bulk from a <strong>screenshot</strong> (OCR), or paste / upload the same kind of <strong>text list</strong> (one person per line: optional line number, name, amounts like{" "}
+            <strong>2.85k</strong> or <strong>8.5k</strong>, optional <strong>(1/3)</strong> for installments). Names already on file are skipped. Always review the table afterward.
           </p>
-          <div className="mt-5 flex flex-col gap-4 lg:flex-row lg:items-stretch">
-            <label className="flex min-h-[140px] flex-1 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-white px-4 py-6 text-center transition-colors hover:border-amber-400 hover:bg-amber-50/30">
-              <span className="text-sm font-semibold text-slate-700">{savingRefScreenshot ? "Saving…" : "Click to choose image"}</span>
-              <span className="mt-1 text-xs text-slate-500">PNG, JPG, WebP — saved to event config</span>
-              <input
-                type="file"
-                accept="image/*"
-                disabled={savingRefScreenshot}
-                onChange={handleReferenceScreenshotFile}
-                className="sr-only"
+          <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-2 xl:items-stretch">
+            <div className="flex flex-col gap-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">From image (OCR)</p>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-stretch">
+                <label className="flex min-h-[140px] flex-1 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-white px-4 py-6 text-center transition-colors hover:border-amber-400 hover:bg-amber-50/30">
+                  <span className="text-sm font-semibold text-slate-700">
+                    {savingRefScreenshot ? "Saving & scanning (OCR may take a minute)…" : "Click to choose image"}
+                  </span>
+                  <span className="mt-1 text-xs text-slate-500">PNG, JPG, WebP — saved to event config and scanned for new delegates</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    disabled={savingRefScreenshot || importingSeedText}
+                    onChange={handleReferenceScreenshotFile}
+                    className="sr-only"
+                  />
+                </label>
+                <div className="flex w-full max-w-sm flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 sm:max-w-[220px] sm:shrink-0">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Current upload</p>
+                  {seededListScreenshotDataUrl ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setRefScreenshotModalOpen(true)}
+                        className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50 text-left"
+                      >
+                        <img
+                          src={seededListScreenshotDataUrl}
+                          alt="Reference list thumbnail"
+                          className="h-36 w-full object-contain"
+                        />
+                      </button>
+                      <p className="text-xs text-slate-500">Tap thumbnail to view full size.</p>
+                      <button
+                        type="button"
+                        disabled={savingRefScreenshot}
+                        onClick={handleRemoveReferenceScreenshot}
+                        className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-800 hover:bg-rose-100 disabled:opacity-50"
+                      >
+                        Remove image
+                      </button>
+                    </>
+                  ) : (
+                    <p className="text-sm text-slate-500">No image uploaded yet.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex items-center gap-2 text-slate-800">
+                <ClipboardPaste className="shrink-0 text-amber-800" size={20} aria-hidden />
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Paste or text file</p>
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Paste from Excel or a messenger thread, or choose a <strong>.txt</strong> / <strong>.csv</strong> export (UTF-8). Tab-separated columns are flattened to spaces before parsing.
+              </p>
+              <textarea
+                value={seedListPasteText}
+                onChange={(e) => setSeedListPasteText(e.target.value)}
+                rows={8}
+                placeholder={"e.g.\n49. Jane Doe - 2.85k (1/3)\n50. John Smith 8.5k"}
+                disabled={importingSeedText || savingRefScreenshot}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-200 disabled:opacity-50 resize-y min-h-[140px]"
               />
-            </label>
-            <div className="flex w-full max-w-sm flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Current upload</p>
-              {seededListScreenshotDataUrl ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setRefScreenshotModalOpen(true)}
-                    className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50 text-left"
-                  >
-                    <img
-                      src={seededListScreenshotDataUrl}
-                      alt="Reference list thumbnail"
-                      className="h-36 w-full object-contain"
-                    />
-                  </button>
-                  <p className="text-xs text-slate-500">Tap thumbnail to view full size.</p>
-                  <button
-                    type="button"
-                    disabled={savingRefScreenshot}
-                    onClick={handleRemoveReferenceScreenshot}
-                    className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-800 hover:bg-rose-100 disabled:opacity-50"
-                  >
-                    Remove image
-                  </button>
-                </>
-              ) : (
-                <p className="text-sm text-slate-500">No image uploaded yet.</p>
-              )}
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                <button
+                  type="button"
+                  disabled={
+                    importingSeedText ||
+                    savingRefScreenshot ||
+                    typeof onImportSeedListFromText !== "function" ||
+                    !String(seedListPasteText || "").trim()
+                  }
+                  onClick={() => {
+                    if (typeof onImportSeedListFromText !== "function") return;
+                    setImportingSeedText(true);
+                    void (async () => {
+                      try {
+                        await onImportSeedListFromText(seedListPasteText);
+                      } catch (err) {
+                        onApiError?.(err, "Could not import list from pasted text.");
+                      } finally {
+                        setImportingSeedText(false);
+                      }
+                    })();
+                  }}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-800 disabled:opacity-45 disabled:pointer-events-none"
+                >
+                  {importingSeedText ? "Importing…" : "Import from pasted text"}
+                </button>
+                <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-45">
+                  <FileText size={18} className="text-slate-500 shrink-0" aria-hidden />
+                  <span>{importingSeedText ? "Reading file…" : "Choose .txt / .csv"}</span>
+                  <input
+                    type="file"
+                    accept=".txt,.csv,text/plain"
+                    disabled={importingSeedText || savingRefScreenshot || typeof onImportSeedListFromText !== "function"}
+                    onChange={(ev) => {
+                      const file = ev.target.files?.[0];
+                      ev.target.value = "";
+                      if (!file || typeof onImportSeedListFromText !== "function") return;
+                      setImportingSeedText(true);
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        void (async () => {
+                          try {
+                            const t = typeof reader.result === "string" ? reader.result : "";
+                            await onImportSeedListFromText(t);
+                          } catch (err) {
+                            onApiError?.(err, "Could not read or import that file.");
+                          } finally {
+                            setImportingSeedText(false);
+                          }
+                        })();
+                      };
+                      reader.onerror = () => {
+                        setImportingSeedText(false);
+                        onApiError?.(new Error("File read failed"), "Could not read the selected file.");
+                      };
+                      reader.readAsText(file);
+                    }}
+                    className="sr-only"
+                  />
+                </label>
+              </div>
             </div>
           </div>
         </div>
@@ -1944,6 +2221,18 @@ function RegistrantsLedger({
                         >
                           <Edit3 size={18} />
                         </button>
+                        {!isSeededDelegateRow(r) && typeof onAddToSeededList === "function" ? (
+                          <button
+                            type="button"
+                            disabled={!canEdit}
+                            onClick={() => void onAddToSeededList(r)}
+                            className="p-2 text-slate-400 hover:text-amber-700 transition-colors disabled:opacity-30 rounded-lg hover:bg-amber-50"
+                            title="Add to seeded list (enables committee / attendee seed claim workflow)"
+                            aria-label="Add to seeded list"
+                          >
+                            <ListPlus size={18} />
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           disabled={!canEdit}
