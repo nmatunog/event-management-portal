@@ -283,6 +283,7 @@ const StatBox = ({ label, value, sub, icon: Icon, color }) => {
 const SECTION_COPY = {
   dashboard: { title: "Overview", subtitle: "Key metrics and shortcuts" },
   registration: { title: "Delegates", subtitle: "Convention registration list" },
+  "other-activities": { title: "Other activities", subtitle: "Post-event tour interests and requests" },
   accommodation: { title: "Room assignments", subtitle: "Pairing and solo occupancy" },
   program: { title: "Program modules", subtitle: "Agenda blocks, timings, and assignments" },
   sponsorship: { title: "Sponsorship", subtitle: "Partners and commitments" },
@@ -303,6 +304,7 @@ const NAV_GROUPS = [
     label: "People & rooms",
     items: [
       { id: "registration", label: "Delegates", icon: Users },
+      { id: "other-activities", label: "Other Activities", icon: Sparkles },
       { id: "accommodation", label: "Rooming", icon: Hotel },
     ],
   },
@@ -1154,6 +1156,7 @@ export default function PamaconApp({ canEdit, authEmail, authRole, isSuperuser =
                 onApiError={onApiError}
               />
             )}
+            {activeTab === "other-activities" && <OtherActivitiesHub registrants={registrants} />}
             {activeTab === "accommodation" && (
               <AccommodationView config={config} registrants={registrants} onPair={pairManualDelegates} onToggleSolo={toggleSoloOccupancy} canEdit={canEdit} />
             )}
@@ -3148,6 +3151,104 @@ function PaymentsHub({ config, realized, projection }) {
           Ask delegates to screenshot their payment confirmation right after transfer and upload it in their attendee portal under{" "}
           <strong>Payment proof screenshot</strong>. Staff/Admin can then open the proof link directly from the Delegates list during validation.
         </p>
+      </div>
+    </div>
+  );
+}
+
+function OtherActivitiesHub({ registrants }) {
+  const defs = [
+    { key: "extraIslandHopping", label: "Island hopping" },
+    { key: "extraCityTour", label: "City tour / heritage tour" },
+    { key: "extraMountainTour", label: "Cebu city — mountain tour" },
+    { key: "extraSafari", label: "Cebu Safari" },
+  ];
+  const rows = useMemo(() => {
+    const out = [];
+    for (const r of registrants || []) {
+      const meta = r?.metaBase && typeof r.metaBase === "object" ? r.metaBase : {};
+      const selected = defs.filter((d) => Boolean(meta[d.key])).map((d) => d.label);
+      const other = String(meta.extraOtherRequest || "").trim();
+      if (!selected.length && !other) continue;
+      out.push({
+        id: r.id,
+        name: r.name,
+        email: String(r.attendeeClaimEmail || "").trim(),
+        mobile: String(meta.mobileNumber || "").trim(),
+        arrival: String(meta.arrivalCebu || "").trim(),
+        departure: String(meta.departureCebu || "").trim(),
+        selected,
+        other,
+      });
+    }
+    out.sort((a, b) => a.name.localeCompare(b.name));
+    return out;
+  }, [registrants]);
+
+  const summary = useMemo(() => {
+    const counts = Object.fromEntries(defs.map((d) => [d.key, 0]));
+    let withOther = 0;
+    for (const row of rows) {
+      for (const d of defs) {
+        if (row.selected.includes(d.label)) counts[d.key] += 1;
+      }
+      if (row.other) withOther += 1;
+    }
+    return { counts, withOther };
+  }, [rows]);
+
+  return (
+    <div className="space-y-6 pb-20">
+      <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-sm space-y-4">
+        <h3 className="text-lg font-semibold text-slate-900">Other Activities Coordination Card</h3>
+        <p className="text-sm text-slate-500">Use this to prepare bookings, transport, and delegate coordination for optional Cebu activities.</p>
+        <div className="flex flex-wrap gap-2">
+          {defs.map((d) => (
+            <span key={d.key} className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700">
+              {d.label}: {summary.counts[d.key] || 0}
+            </span>
+          ))}
+          <span className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-800">With other request: {summary.withOther}</span>
+          <span className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-bold text-red-700">Total respondents: {rows.length}</span>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[980px] text-sm">
+            <thead>
+              <tr className="border-b border-slate-100 text-[11px] uppercase tracking-wide text-slate-500">
+                <th className="py-2 text-left">Delegate</th>
+                <th className="py-2 text-left">Email</th>
+                <th className="py-2 text-left">Mobile</th>
+                <th className="py-2 text-left">Arrival</th>
+                <th className="py-2 text-left">Departure</th>
+                <th className="py-2 text-left">Selected activities</th>
+                <th className="py-2 text-left">Other request</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {rows.map((row) => (
+                <tr key={`oa-${row.id}`}>
+                  <td className="py-2.5 pr-3 text-slate-800 font-medium">{row.name}</td>
+                  <td className="py-2.5 pr-3 text-slate-600">{row.email || "—"}</td>
+                  <td className="py-2.5 pr-3 text-slate-600">{row.mobile || "—"}</td>
+                  <td className="py-2.5 pr-3 text-slate-600">{row.arrival || "—"}</td>
+                  <td className="py-2.5 pr-3 text-slate-600">{row.departure || "—"}</td>
+                  <td className="py-2.5 pr-3 text-slate-700">{row.selected.length ? row.selected.join("; ") : "—"}</td>
+                  <td className="py-2.5 pr-3 text-slate-600">{row.other || "—"}</td>
+                </tr>
+              ))}
+              {rows.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-3 text-slate-500">
+                    No activity responses yet.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
