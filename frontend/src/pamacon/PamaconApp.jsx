@@ -1458,6 +1458,37 @@ function RegistrantsLedger({
     [registrants]
   );
 
+  const activitySurvey = useMemo(() => {
+    const defs = [
+      { key: "extraIslandHopping", label: "Island hopping" },
+      { key: "extraCityTour", label: "City tour / heritage tour" },
+      { key: "extraMountainTour", label: "Cebu city — mountain tour" },
+      { key: "extraSafari", label: "Cebu Safari" },
+    ];
+    const counts = Object.fromEntries(defs.map((d) => [d.key, 0]));
+    let withResponses = 0;
+    const respondents = [];
+    for (const r of registrants) {
+      const meta = r?.metaBase && typeof r.metaBase === "object" ? r.metaBase : {};
+      const selected = defs.filter((d) => Boolean(meta[d.key])).map((d) => d.label);
+      const other = String(meta.extraOtherRequest || "").trim();
+      if (!selected.length && !other) continue;
+      withResponses += 1;
+      for (const d of defs) {
+        if (meta[d.key]) counts[d.key] += 1;
+      }
+      respondents.push({
+        id: r.id,
+        name: r.name,
+        email: String(r.attendeeClaimEmail || "").trim(),
+        selected,
+        other,
+      });
+    }
+    respondents.sort((a, b) => a.name.localeCompare(b.name));
+    return { defs, counts, withResponses, respondents };
+  }, [registrants]);
+
   const downloadMasterlist = () => {
     const headers = [
       "Full Name",
@@ -2181,6 +2212,7 @@ function RegistrantsLedger({
                     <td className="px-4 py-4 text-slate-800">
                       <div className="font-semibold">{r.name}</div>
                       {r.nickname && <div className="text-xs text-slate-500 mt-1">Nickname: {r.nickname}</div>}
+                      {r.attendeeClaimEmail ? <div className="text-xs text-slate-500 mt-1">Email: {r.attendeeClaimEmail}</div> : null}
                       {r.paymentProofScreenshotDataUrl ? (
                         <div className="mt-1">
                           <a
@@ -2415,6 +2447,51 @@ function RegistrantsLedger({
               Total shirts: {shirtSummary.total}
             </span>
           </div>
+        </div>
+      </div>
+      <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-4">
+        <h4 className="text-base font-semibold text-slate-900">Activity survey responses</h4>
+        <p className="text-sm text-slate-500">
+          Responses from attendee profile form (post-conference activity interests).
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {activitySurvey.defs.map((d) => (
+            <span key={d.key} className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700">
+              {d.label}: {activitySurvey.counts[d.key] || 0}
+            </span>
+          ))}
+          <span className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-800">
+            Delegates with responses: {activitySurvey.withResponses}
+          </span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[620px] text-sm">
+            <thead>
+              <tr className="border-b border-slate-100 text-[11px] uppercase tracking-wide text-slate-500">
+                <th className="py-2 text-left">Delegate</th>
+                <th className="py-2 text-left">Email</th>
+                <th className="py-2 text-left">Selected activities</th>
+                <th className="py-2 text-left">Other request</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {activitySurvey.respondents.map((row) => (
+                <tr key={`activity-${row.id}`}>
+                  <td className="py-2.5 pr-3 text-slate-800 font-medium">{row.name}</td>
+                  <td className="py-2.5 pr-3 text-slate-600">{row.email || "—"}</td>
+                  <td className="py-2.5 pr-3 text-slate-700">{row.selected.length ? row.selected.join("; ") : "—"}</td>
+                  <td className="py-2.5 pr-3 text-slate-600">{row.other || "—"}</td>
+                </tr>
+              ))}
+              {activitySurvey.respondents.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="py-3 text-slate-500">
+                    No activity survey responses yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
       {isAdmin && canEdit && registrants.length > 0 && (
