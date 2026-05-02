@@ -76,6 +76,46 @@ import ProfileModule from "../components/ProfileModule";
 /** Survives React Strict Mode remount (useRef resets); blocks a second full seed while the DB is still empty. */
 const delegateSeedStartedForEventId = new Set();
 
+/** Re-encode raster image data URLs as JPEG so Setup posters / reference shots stay under D1 `config_json` limits. */
+function reencodeImageDataUrlAsJpeg(dataUrl, maxSide, quality) {
+  return new Promise((resolve) => {
+    const s = String(dataUrl || "");
+    if (!s.startsWith("data:image/") || s.startsWith("data:image/svg")) {
+      resolve(s);
+      return;
+    }
+    const img = new Image();
+    img.onload = () => {
+      try {
+        let w = img.naturalWidth;
+        let h = img.naturalHeight;
+        if (!w || !h) {
+          resolve(s);
+          return;
+        }
+        const scale = Math.min(1, maxSide / Math.max(w, h));
+        w = Math.round(w * scale);
+        h = Math.round(h * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(s);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, w, h);
+        const out = canvas.toDataURL("image/jpeg", quality);
+        resolve(out.length && out.length < s.length ? out : s);
+      } catch {
+        resolve(s);
+      }
+    };
+    img.onerror = () => resolve(s);
+    img.src = s;
+  });
+}
+
 function parseMeta(row) {
   if (!row?.metadata_json) return {};
   try {
@@ -395,7 +435,12 @@ export default function PamaconApp({ canEdit, authEmail, authRole, isSuperuser =
   const persistSeededListScreenshot = useCallback(
     async (dataUrl) => {
       if (!eventId || !isSuperuser) return;
-      const nextConfig = { ...config, seededListScreenshotDataUrl: String(dataUrl ?? "") };
+      const raw = String(dataUrl ?? "");
+      const shot =
+        raw && raw.startsWith("data:image/") && !raw.startsWith("data:image/svg")
+          ? await reencodeImageDataUrlAsJpeg(raw, 2200, 0.88)
+          : raw;
+      const nextConfig = { ...config, seededListScreenshotDataUrl: shot };
       try {
         await patchEvent(eventId, {
           attendeeGoal: config.targetRegistrants,
@@ -494,7 +539,12 @@ export default function PamaconApp({ canEdit, authEmail, authRole, isSuperuser =
   const processReferenceScreenshot = useCallback(
     async (file, dataUrl) => {
       if (!eventId || !isSuperuser || !file) return;
-      const nextConfig = { ...config, seededListScreenshotDataUrl: String(dataUrl ?? "") };
+      const raw = String(dataUrl ?? "");
+      const shot =
+        raw && raw.startsWith("data:image/") && !raw.startsWith("data:image/svg")
+          ? await reencodeImageDataUrlAsJpeg(raw, 2200, 0.88)
+          : raw;
+      const nextConfig = { ...config, seededListScreenshotDataUrl: shot };
       try {
         await patchEvent(eventId, {
           attendeeGoal: config.targetRegistrants,
@@ -3533,11 +3583,26 @@ function SetupView({ config, setConfig, eventId, canEdit, isAdmin, isSuperuser, 
   const handleSave = async () => {
     if (!eventId || !canEdit) return;
     try {
+      let outgoing = { ...local };
+      const shot = String(outgoing.seededListScreenshotDataUrl || "");
+      if (shot.startsWith("data:image/") && !shot.startsWith("data:image/svg")) {
+        outgoing.seededListScreenshotDataUrl = await reencodeImageDataUrlAsJpeg(shot, 2200, 0.88);
+      }
+      const portal = { ...(outgoing.attendeePortal || {}) };
+      const posterUrls = [...(Array.isArray(portal.posterImageUrls) ? portal.posterImageUrls : []), "", "", "", "", "", ""].slice(0, 6);
+      for (let i = 0; i < posterUrls.length; i++) {
+        const u = String(posterUrls[i] || "");
+        if (u.startsWith("data:image/") && !u.startsWith("data:image/svg") && u.length > 50000) {
+          posterUrls[i] = await reencodeImageDataUrlAsJpeg(u, 1280, 0.82);
+        }
+      }
+      outgoing.attendeePortal = { ...portal, posterImageUrls: posterUrls };
+
       await patchEvent(eventId, {
-        attendeeGoal: local.targetRegistrants,
-        config: local,
+        attendeeGoal: outgoing.targetRegistrants,
+        config: outgoing,
       });
-      setConfig(local);
+      setConfig(outgoing);
       setSaved(true);
       onInfo?.("Configuration saved.");
       setTimeout(() => setSaved(false), 2000);
@@ -3635,14 +3700,18 @@ function SetupView({ config, setConfig, eventId, canEdit, isAdmin, isSuperuser, 
   const handlePosterFileUpload = (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        updatePosterSlot(selectedPosterSlot, reader.result);
-      }
-    };
-    reader.readAsDataURL(file);
     event.target.value = "";
+    void (async () => {
+      const reader = new FileReader();
+      const dataUrl = await new Promise((resolve, reject) => {
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error("Could not read image file."));
+        reader.readAsDataURL(file);
+      });
+      if (typeof dataUrl !== "string") return;
+      const compact = await reencodeImageDataUrlAsJpeg(dataUrl, 1280, 0.82);
+      updatePosterSlot(selectedPosterSlot, compact);
+    })().catch((e) => onError?.(e, "Could not process poster image."));
   };
 
   return (

@@ -39,7 +39,12 @@ export default function App() {
       setApiBanner({ type: "warn", message: "You do not have permission to perform this action." });
       return;
     }
-    setApiBanner({ type: "error", message: fallbackMessage || error?.message || "Something went wrong while contacting the server." });
+    const raw = String(error?.message || "").trim();
+    const genericStatusOnly = /^Request failed: \d{3}$/.test(raw);
+    const detail = raw && !genericStatusOnly ? raw : "";
+    const message =
+      detail && fallbackMessage ? `${fallbackMessage} ${detail}` : detail || fallbackMessage || "Something went wrong while contacting the server.";
+    setApiBanner({ type: "error", message });
   };
 
   const showApiInfo = (message, type = "ok") => {

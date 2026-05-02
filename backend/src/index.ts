@@ -68,7 +68,12 @@ async function resolveAuthUser(c: Context<AppContext>): Promise<AuthUser | null>
     if (!jwksUrl) throw new HTTPException(500, { message: "SUPABASE_JWKS_URL is not configured." });
     const jwks = getOrCreateJwks(jwksUrl);
     const issuer = c.env.SUPABASE_ISSUER;
-    const verified = await jwtVerify(token, jwks, issuer ? { issuer } : undefined);
+    let verified: Awaited<ReturnType<typeof jwtVerify>>;
+    try {
+      verified = await jwtVerify(token, jwks, issuer ? { issuer } : undefined);
+    } catch {
+      return null;
+    }
     const claims = verified.payload as Record<string, unknown> & { app_metadata?: { role?: string } };
     const email = claims.email ? String(claims.email) : undefined;
     const superusers = parseCsvSet(c.env.SUPERUSER_EMAILS);
@@ -270,9 +275,35 @@ app.post("/api/events", requireRole(["admin", "staff"]), async (c) => {
 
 app.patch("/api/events/:id", requireRole(["admin", "staff"]), async (c) => {
   const id = c.req.param("id");
-  const body = await c.req.json();
-  await c.env.DB.prepare(
-    `UPDATE events
+  let body: Record<string, unknown>;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ message: "Invalid JSON body." }, 400);
+  }
+
+  let configJson: string | null = null;
+  if (body.config !== undefined && body.config !== null) {
+    try {
+      configJson = JSON.stringify(body.config);
+    } catch {
+      return c.json({ message: "Configuration contains values that cannot be serialized to JSON." }, 400);
+    }
+    const configBytes = new TextEncoder().encode(configJson).length;
+    if (configBytes > 1_950_000) {
+      return c.json(
+        {
+          message:
+            "Configuration is too large to store (over ~2MB). Remove large embedded images from posters or the reference list screenshot, or use hosted image URLs instead.",
+        },
+        413
+      );
+    }
+  }
+
+  try {
+    await c.env.DB.prepare(
+      `UPDATE events
      SET title = COALESCE(?, title),
          venue = COALESCE(?, venue),
          start_date = COALESCE(?, start_date),
@@ -283,19 +314,33 @@ app.patch("/api/events/:id", requireRole(["admin", "staff"]), async (c) => {
          config_json = COALESCE(?, config_json),
          updated_at = CURRENT_TIMESTAMP
      WHERE id = ?`
-  )
-    .bind(
-      body.title ?? null,
-      body.venue ?? null,
-      body.startDate ?? null,
-      body.endDate ?? null,
-      body.organizer ?? null,
-      body.attendeeGoal != null ? asNumber(body.attendeeGoal, 0) : null,
-      body.budgetGoal != null ? asNumber(body.budgetGoal, 0) : null,
-      body.config ? JSON.stringify(body.config) : null,
-      id
     )
-    .run();
+      .bind(
+        body.title ?? null,
+        body.venue ?? null,
+        body.startDate ?? null,
+        body.endDate ?? null,
+        body.organizer ?? null,
+        body.attendeeGoal != null ? asNumber(body.attendeeGoal, 0) : null,
+        body.budgetGoal != null ? asNumber(body.budgetGoal, 0) : null,
+        configJson,
+        id
+      )
+      .run();
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const tooLarge =
+      /too large|maximum|exceeds|100[,\s]?000|1,?000,?000|row size|statement/i.test(msg) || /D1_ERROR/i.test(msg);
+    return c.json(
+      {
+        message: tooLarge
+          ? `The database rejected this save (payload likely too large for D1 limits). Remove or shrink embedded images in Setup (posters) or the delegates reference screenshot, then try again. Detail: ${msg}`
+          : msg,
+      },
+      tooLarge ? 413 : 500
+    );
+  }
+
   const event = await c.env.DB.prepare("SELECT * FROM events WHERE id = ?").bind(id).first();
   return c.json({ item: event });
 });
@@ -974,6 +1019,15 @@ app.patch("/api/invitations/respond/:token", async (c) => {
       .run();
   }
   return c.json({ ok: true, status });
+});
+
+app.onError((err, c) => {
+  console.error(err);
+  if (err instanceof HTTPException) {
+    return err.getResponse();
+  }
+  const message = err instanceof Error ? err.message : String(err);
+  return c.json({ message: message || "Internal Server Error" }, 500);
 });
 
 export default app;
