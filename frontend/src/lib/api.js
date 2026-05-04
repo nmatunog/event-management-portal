@@ -147,6 +147,13 @@ export function deleteExpense(expenseId) {
   return request(`/api/expenses/${expenseId}`, { method: "DELETE" });
 }
 
+export function patchExpense(expenseId, payload) {
+  return request(`/api/expenses/${expenseId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function getSpeakers(eventId) {
   return request(`/api/events/${eventId}/speakers`);
 }

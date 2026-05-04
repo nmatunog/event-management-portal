@@ -34,6 +34,7 @@ import {
   ClipboardPaste,
   LogOut,
   UserRound,
+  Download,
 } from "lucide-react";
 import ParticipantPortal from "./ParticipantPortal";
 import {
@@ -44,6 +45,7 @@ import {
   createSponsor,
   deleteUserRole,
   deleteExpense,
+  patchExpense,
   deleteSpeaker,
   deleteSponsor,
   getEvents,
@@ -75,6 +77,19 @@ import ProfileModule from "../components/ProfileModule";
 
 /** Survives React Strict Mode remount (useRef resets); blocks a second full seed while the DB is still empty. */
 const delegateSeedStartedForEventId = new Set();
+
+const SUPPLIER_EXPENSE_CATEGORIES = [
+  "Accommodation & Banquets",
+  "Speakers & Talent",
+  "Lights and Sounds",
+  "Decor",
+  "Program Materials",
+  "Supplies",
+  "Miscellaneous",
+  "Band/Entertainment",
+  "LED Wall",
+  "Others",
+];
 
 /** Re-encode raster image data URLs as JPEG so Setup posters / reference shots stay under D1 `config_json` limits. */
 function reencodeImageDataUrlAsJpeg(dataUrl, maxSide, quality) {
@@ -114,6 +129,29 @@ function reencodeImageDataUrlAsJpeg(dataUrl, maxSide, quality) {
     img.onerror = () => resolve(s);
     img.src = s;
   });
+}
+
+function csvEscapeCell(value) {
+  const s = String(value ?? "");
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function downloadCsv(filename, header, rows) {
+  const lines = [
+    header.map(csvEscapeCell).join(","),
+    ...rows.map((r) => (Array.isArray(r) ? r : []).map(csvEscapeCell).join(",")),
+  ];
+  const blob = new Blob([`\uFEFF${lines.join("\n")}`], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 function parseMeta(row) {
@@ -2947,18 +2985,21 @@ function SponsorshipHub({ sponsors, totalRevenue, eventId, canEdit, onReload, on
 function SuppliersHub({ suppliers, totalSpend, eventId, canEdit, onReload, onError, onSeedExpenses }) {
   const [newV, setNewV] = useState({ company: "", category: "Decor", amount: 0 });
   const [isAdding, setIsAdding] = useState(false);
-  const categories = [
-    "Accommodation & Banquets",
-    "Speakers & Talent",
-    "Lights and Sounds",
-    "Decor",
-    "Program Materials",
-    "Supplies",
-    "Miscellaneous",
-    "Band/Entertainment",
-    "LED Wall",
-    "Others",
-  ];
+  const [editingId, setEditingId] = useState(null);
+  const [editDraft, setEditDraft] = useState({ company: "", category: "Decor", amount: 0 });
+
+  const categorySelectOptions = useMemo(() => {
+    const seen = new Set(SUPPLIER_EXPENSE_CATEGORIES);
+    const out = [...SUPPLIER_EXPENSE_CATEGORIES];
+    for (const row of suppliers) {
+      const c = String(row?.category || "").trim();
+      if (c && !seen.has(c)) {
+        seen.add(c);
+        out.push(c);
+      }
+    }
+    return out;
+  }, [suppliers]);
 
   const handleAdd = async () => {
     if (!newV.company || !eventId) return;
@@ -2987,9 +3028,48 @@ function SuppliersHub({ suppliers, totalSpend, eventId, canEdit, onReload, onErr
     }
   };
 
+  const downloadSuppliersCsv = () => {
+    const day = new Date().toISOString().slice(0, 10);
+    const header = ["id", "vendor_name", "category", "amount_php"];
+    const rows = suppliers.map((s) => [s.id, s.company, s.category, Number(s.amount) || 0]);
+    const total = suppliers.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
+    rows.push(["", "TOTAL", "", total]);
+    downloadCsv(`pamacon-contractors-suppliers-${day}.csv`, header, rows);
+  };
+
+  const startEdit = (s) => {
+    setEditingId(s.id);
+    setEditDraft({
+      company: String(s.company || "").trim(),
+      category: String(s.category || "Others"),
+      amount: Number(s.amount) || 0,
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+  };
+
+  const saveEdit = async () => {
+    if (!editingId || !String(editDraft.company || "").trim()) return;
+    try {
+      await patchExpense(editingId, {
+        supplier: String(editDraft.company || "").trim(),
+        category: editDraft.category,
+        amount: Number(editDraft.amount) || 0,
+        expenseType: "fixed",
+        approved: true,
+      });
+      setEditingId(null);
+      await onReload();
+    } catch (e) {
+      onError?.(e, "Failed to save supplier.");
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div className="bg-white p-8 rounded-[40px] border shadow-sm flex justify-between items-center">
+      <div className="bg-white p-8 rounded-[40px] border shadow-sm flex flex-col gap-4 lg:flex-row lg:justify-between lg:items-center">
         <div className="flex items-center gap-6">
           <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 shadow-inner">
             <Truck size={32} />
@@ -2999,7 +3079,16 @@ function SuppliersHub({ suppliers, totalSpend, eventId, canEdit, onReload, onErr
             <p className="text-2xl font-black text-blue-600">₱{(Number(totalSpend) || 0).toLocaleString()}</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            disabled={!eventId}
+            onClick={downloadSuppliersCsv}
+            className="inline-flex items-center justify-center gap-2 border border-slate-200 bg-white text-slate-800 px-6 py-3 rounded-2xl font-black text-xs uppercase hover:bg-slate-50 transition-all disabled:opacity-40"
+          >
+            <Download size={16} aria-hidden />
+            Download CSV
+          </button>
           <button
             type="button"
             disabled={!canEdit || !eventId}
@@ -3011,7 +3100,10 @@ function SuppliersHub({ suppliers, totalSpend, eventId, canEdit, onReload, onErr
           <button
             type="button"
             disabled={!canEdit}
-            onClick={() => setIsAdding(!isAdding)}
+            onClick={() => {
+              setEditingId(null);
+              setIsAdding(!isAdding);
+            }}
             className="bg-slate-900 text-white px-8 py-3 rounded-2xl font-black text-xs uppercase shadow-lg hover:bg-black transition-all disabled:opacity-40"
           >
             {isAdding ? "Cancel" : "Add Supplier"}
@@ -3028,7 +3120,7 @@ function SuppliersHub({ suppliers, totalSpend, eventId, canEdit, onReload, onErr
               value={newV.category}
               onChange={(e) => setNewV({ ...newV, category: e.target.value })}
             >
-              {categories.map((c) => (
+              {SUPPLIER_EXPENSE_CATEGORIES.map((c) => (
                 <option key={c}>{c}</option>
               ))}
             </select>
@@ -3044,19 +3136,84 @@ function SuppliersHub({ suppliers, totalSpend, eventId, canEdit, onReload, onErr
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-20">
         {suppliers.map((s) => (
           <div key={s.id} className="bg-white p-8 rounded-[40px] border shadow-sm group relative hover:border-blue-200 transition-all">
-            <button
-              type="button"
-              disabled={!canEdit}
-              className="absolute top-8 right-8 opacity-0 group-hover:opacity-100 text-slate-200 hover:text-red-500 transition-all disabled:opacity-0"
-              onClick={() => remove(s.id)}
-            >
-              <Trash2 size={18} />
-            </button>
-            <h4 className="text-xl font-black uppercase text-slate-800 tracking-tighter leading-tight min-h-[3rem]">{s.company}</h4>
-            <span className="text-[9px] font-black uppercase px-2 py-1 bg-slate-50 border border-slate-100 rounded-md text-slate-500 mt-2 inline-block">{s.category}</span>
-            <div className="pt-6 mt-6 border-t border-slate-50 flex justify-between items-center">
-              <span className="text-2xl font-black text-slate-800">₱{(Number(s.amount) || 0).toLocaleString()}</span>
+            <div className="absolute top-8 right-8 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+              <button
+                type="button"
+                disabled={!canEdit}
+                title="Edit supplier"
+                className="rounded-xl p-2 text-slate-300 hover:bg-blue-50 hover:text-blue-600 transition-colors disabled:opacity-0"
+                onClick={() => (editingId === s.id ? cancelEdit() : startEdit(s))}
+              >
+                <Edit3 size={18} />
+              </button>
+              <button
+                type="button"
+                disabled={!canEdit}
+                title="Remove supplier"
+                className="rounded-xl p-2 text-slate-300 hover:bg-rose-50 hover:text-rose-600 transition-colors disabled:opacity-0"
+                onClick={() => remove(s.id)}
+              >
+                <Trash2 size={18} />
+              </button>
             </div>
+            {editingId === s.id ? (
+              <div className="space-y-4 pr-10">
+                <SetupInput
+                  label="Supplier / vendor name"
+                  value={editDraft.company}
+                  onChange={(e) => setEditDraft({ ...editDraft, company: e.target.value })}
+                  disabled={!canEdit}
+                />
+                <div className="space-y-2">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase">Category</label>
+                  <select
+                    className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-3.5 text-sm font-black appearance-none disabled:opacity-50"
+                    value={editDraft.category}
+                    disabled={!canEdit}
+                    onChange={(e) => setEditDraft({ ...editDraft, category: e.target.value })}
+                  >
+                    {categorySelectOptions.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <SetupInput
+                  label="Amount (₱)"
+                  type="number"
+                  value={editDraft.amount}
+                  disabled={!canEdit}
+                  onChange={(e) => setEditDraft({ ...editDraft, amount: Number(e.target.value) })}
+                />
+                <div className="flex flex-wrap gap-2 pt-2">
+                  <button
+                    type="button"
+                    disabled={!canEdit || !String(editDraft.company || "").trim()}
+                    onClick={() => void saveEdit()}
+                    className="inline-flex flex-1 min-w-[120px] items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-2.5 text-xs font-black uppercase text-white hover:bg-blue-700 disabled:opacity-40"
+                  >
+                    <Save size={16} aria-hidden />
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cancelEdit}
+                    className="rounded-2xl border border-slate-200 px-4 py-2.5 text-xs font-black uppercase text-slate-600 hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <h4 className="text-xl font-black uppercase text-slate-800 tracking-tighter leading-tight min-h-[3rem] pr-10">{s.company}</h4>
+                <span className="text-[9px] font-black uppercase px-2 py-1 bg-slate-50 border border-slate-100 rounded-md text-slate-500 mt-2 inline-block">{s.category}</span>
+                <div className="pt-6 mt-6 border-t border-slate-50 flex justify-between items-center">
+                  <span className="text-2xl font-black text-slate-800">₱{(Number(s.amount) || 0).toLocaleString()}</span>
+                </div>
+              </>
+            )}
           </div>
         ))}
       </div>
@@ -3400,11 +3557,43 @@ function ExpenseDashboard({ config, suppliers }) {
       </div>
     );
   };
+
+  const downloadBudgetVsActualCsv = () => {
+    const day = new Date().toISOString().slice(0, 10);
+    const header = [
+      "module_label",
+      "budget_limit_php",
+      "spent_php",
+      "remaining_php",
+      "utilization_pct",
+      "mapped_expense_categories",
+    ];
+    const rows = modules.map((m) => {
+      const b = Number(m.budget) || 0;
+      const s = sumByCategories(m.categories);
+      const rem = Math.max(0, b - s);
+      const util = b > 0 ? Math.round((s / b) * 10000) / 100 : "";
+      const cats = (m.categories || []).map((x) => String(x || "").trim()).filter(Boolean).join("; ");
+      return [m.label, b, s, rem, util, cats];
+    });
+    downloadCsv(`pamacon-expense-budget-vs-actual-${day}.csv`, header, rows);
+  };
+
   return (
     <div className="bg-white rounded-[50px] border p-12 space-y-12 shadow-sm relative overflow-hidden pb-20">
-      <div className="relative z-10">
-        <h3 className="text-3xl font-black uppercase tracking-tight text-slate-800">Expense Dashboard</h3>
-        <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1 italic">Budget modules from editable array mapping</p>
+      <div className="relative z-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h3 className="text-3xl font-black uppercase tracking-tight text-slate-800">Expense Dashboard</h3>
+          <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1 italic">Budget modules from editable array mapping</p>
+        </div>
+        <button
+          type="button"
+          onClick={downloadBudgetVsActualCsv}
+          className="inline-flex shrink-0 items-center justify-center gap-2 self-start rounded-2xl border border-slate-200 bg-white px-6 py-3 text-xs font-black uppercase tracking-wide text-slate-800 shadow-sm hover:bg-slate-50 sm:self-auto"
+        >
+          <Download size={16} aria-hidden />
+          Download CSV
+        </button>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-24 gap-y-12 relative z-10">
         {modules.map((m, idx) => (
@@ -3647,6 +3836,13 @@ function SetupView({ config, setConfig, eventId, canEdit, isAdmin, isSuperuser, 
     });
   };
 
+  const downloadBudgetModulesCsv = () => {
+    const day = new Date().toISOString().slice(0, 10);
+    const header = ["module_label", "budget_php", "expense_categories_csv"];
+    const rows = expenseModules.map((m) => [m.label, Number(m.budget) || 0, (m.categories || []).join(", ")]);
+    downloadCsv(`pamacon-expense-budget-modules-${day}.csv`, header, rows);
+  };
+
   const handleSaveRole = async () => {
     if (!canEdit || !isSuperuser) return;
     const email = String(roleForm.email || "").trim().toLowerCase();
@@ -3879,18 +4075,28 @@ function SetupView({ config, setConfig, eventId, canEdit, isAdmin, isSuperuser, 
         </div>
       )}
       {setupTab === "budget" && <div className="mt-2 relative z-10 space-y-5">
-        <div className="flex items-center justify-between gap-4">
-          <h4 className="text-[10px] font-black uppercase text-slate-600 border-b pb-3 tracking-[0.2em] leading-none flex-1">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <h4 className="text-[10px] font-black uppercase text-slate-600 border-b pb-3 tracking-[0.2em] leading-none flex-1 min-w-[200px]">
             Expense Budget Modules (Editable Array)
           </h4>
-          <button
-            type="button"
-            disabled={!canEdit}
-            onClick={addExpenseModule}
-            className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40"
-          >
-            + Add module
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={downloadBudgetModulesCsv}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+            >
+              <Download size={16} aria-hidden />
+              Download CSV
+            </button>
+            <button
+              type="button"
+              disabled={!canEdit}
+              onClick={addExpenseModule}
+              className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+            >
+              + Add module
+            </button>
+          </div>
         </div>
         <div className="overflow-x-auto border border-slate-200 rounded-2xl">
           <table className="w-full min-w-[880px]">

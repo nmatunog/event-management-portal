@@ -900,6 +900,32 @@ app.delete("/api/expenses/:id", requireRole(["admin", "staff"]), async (c) => {
   return c.json({ ok: true });
 });
 
+app.patch("/api/expenses/:id", requireRole(["admin", "staff"]), async (c) => {
+  const id = c.req.param("id");
+  const body = await c.req.json();
+  const approvedBind = body.approved === undefined ? null : body.approved ? 1 : 0;
+  await c.env.DB.prepare(
+    `UPDATE expenses SET
+      supplier = COALESCE(?, supplier),
+      category = COALESCE(?, category),
+      amount = COALESCE(?, amount),
+      expense_type = COALESCE(?, expense_type),
+      approved = COALESCE(?, approved)
+    WHERE id = ?`
+  )
+    .bind(
+      body.supplier !== undefined ? String(body.supplier) : null,
+      body.category !== undefined ? String(body.category) : null,
+      body.amount !== undefined ? asNumber(body.amount, 0) : null,
+      body.expenseType !== undefined ? String(body.expenseType) : null,
+      approvedBind,
+      id
+    )
+    .run();
+  const item = await c.env.DB.prepare("SELECT * FROM expenses WHERE id = ?").bind(id).first();
+  return c.json({ item });
+});
+
 app.get("/api/events/:eventId/speakers", async (c) => {
   const eventId = c.req.param("eventId");
   const res = await c.env.DB.prepare("SELECT * FROM speakers WHERE event_id = ? ORDER BY created_at ASC").bind(eventId).all();
