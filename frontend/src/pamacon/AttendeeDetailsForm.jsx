@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronRight, Save } from "lucide-react";
+import { isParticipantShirtEditOpenNow, participantShirtDeadlineLabel } from "./shirtOrderingPolicy";
 
 const POSITION_OPTIONS = [
   { value: "DD", label: "DD — District Director" },
@@ -102,6 +103,7 @@ export default function AttendeeDetailsForm({ profile, authEmail, onSaveProfile,
   const [draft, setDraft] = useState(() => draftFromProfile(profile));
   const [savedFlash, setSavedFlash] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const shirtFieldsLocked = !isParticipantShirtEditOpenNow();
 
   useEffect(() => {
     setDraft(() => {
@@ -148,13 +150,15 @@ export default function AttendeeDetailsForm({ profile, authEmail, onSaveProfile,
   );
 
   const handleSave = async () => {
-    if (!String(draft.shirtSize || "").trim()) {
-      setSaveError("T-shirt size is required before saving.");
-      return;
-    }
-    if (draft.shirtSize === "others" && !String(draft.shirtSizeOther || "").trim()) {
-      setSaveError("Please specify your T-shirt size.");
-      return;
+    if (!shirtFieldsLocked) {
+      if (!String(draft.shirtSize || "").trim()) {
+        setSaveError("T-shirt size is required before saving.");
+        return;
+      }
+      if (draft.shirtSize === "others" && !String(draft.shirtSizeOther || "").trim()) {
+        setSaveError("Please specify your T-shirt size.");
+        return;
+      }
     }
     setSaveError("");
     const middleName = String(draft.middleName || "").trim();
@@ -278,14 +282,26 @@ export default function AttendeeDetailsForm({ profile, authEmail, onSaveProfile,
             ))}
           </select>
         </Field>
-        <div className="space-y-2 rounded-2xl border border-red-200 bg-red-50/60 p-3 sm:p-4">
-          <span className="text-xs font-bold uppercase tracking-wide text-red-700">T-shirt size (required)</span>
+        <div
+          className={`space-y-2 rounded-2xl border p-3 sm:p-4 ${
+            shirtFieldsLocked ? "border-slate-200 bg-slate-50" : "border-red-200 bg-red-50/60"
+          }`}
+        >
+          <span className={`text-xs font-bold uppercase tracking-wide ${shirtFieldsLocked ? "text-slate-600" : "text-red-700"}`}>
+            T-shirt size {shirtFieldsLocked ? "(locked — committee / admin)" : "(required)"}
+          </span>
+          {shirtFieldsLocked ? (
+            <p className="text-xs text-slate-600 leading-relaxed">
+              The committee cut-off for self-service shirt changes has passed ({participantShirtDeadlineLabel()}). Your saved size below is kept on file; contact an admin if it must be corrected.
+            </p>
+          ) : null}
           <select
             id="ad-shirt"
-            className={`${inputClass} bg-white`}
+            className={`${inputClass} bg-white disabled:bg-slate-100 disabled:text-slate-600`}
             value={draft.shirtSize}
             onChange={(e) => setDraft((s) => ({ ...s, shirtSize: e.target.value }))}
-            required
+            required={!shirtFieldsLocked}
+            disabled={shirtFieldsLocked}
           >
             <option value="">Select your size…</option>
             {SHIRT_OPTIONS.map((o) => (
@@ -296,11 +312,12 @@ export default function AttendeeDetailsForm({ profile, authEmail, onSaveProfile,
           </select>
           {draft.shirtSize === "others" && (
             <input
-              className={`${inputClass} mt-2`}
+              className={`${inputClass} mt-2 disabled:bg-slate-100`}
               placeholder="Shirt size details"
               value={draft.shirtSizeOther}
               onChange={(e) => setDraft((s) => ({ ...s, shirtSizeOther: e.target.value }))}
               aria-label="Shirt size — other details"
+              disabled={shirtFieldsLocked}
             />
           )}
         </div>

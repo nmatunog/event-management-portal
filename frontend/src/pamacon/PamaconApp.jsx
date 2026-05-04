@@ -74,6 +74,13 @@ import { PAMACON_SEED_EXPENSES } from "./seedExpenses";
 import { inferSeedRole, modeToPaymentPlan, PAMACON_SEED_DELEGATES } from "./seedDelegates";
 import { parseSeedListOcrRows } from "./parseSeedListOcrRows";
 import ProfileModule from "../components/ProfileModule";
+import {
+  DELEGATE_SHIRT_SIZE_SELECT,
+  effectiveShirtOrderBucket,
+  formatShirtSizeCell,
+  isParticipantShirtEditOpenNow,
+  participantShirtDeadlineLabel,
+} from "./shirtOrderingPolicy";
 
 /** Survives React Strict Mode remount (useRef resets); blocks a second full seed while the DB is still empty. */
 const delegateSeedStartedForEventId = new Set();
@@ -226,6 +233,9 @@ function delegateFromApi(row) {
     attendeeClaimedAt: meta.attendeeClaimedAt || "",
     nickname: meta.nickname || "",
     shirtSize: meta.shirtSize || "",
+    shirtSizeOther: meta.shirtSizeOther || "",
+    committeeShirtSize: meta.committeeShirtSize || "",
+    committeeShirtSizeOther: meta.committeeShirtSizeOther || "",
     tshirtClaimed: Boolean(meta.tshirtClaimed),
     conferenceKitClaimed: Boolean(meta.conferenceKitClaimed),
     paymentProofScreenshotDataUrl: meta.paymentProofScreenshotDataUrl || "",
@@ -766,6 +776,9 @@ export default function PamaconApp({ canEdit, authEmail, authRole, isSuperuser =
       lastName: u.lastName ?? "",
       nickname: u.nickname ?? prev.nickname ?? "",
       shirtSize: u.shirtSize ?? prev.shirtSize ?? "",
+      shirtSizeOther: u.shirtSizeOther ?? prev.shirtSizeOther ?? "",
+      committeeShirtSize: u.committeeShirtSize ?? prev.committeeShirtSize ?? "",
+      committeeShirtSizeOther: u.committeeShirtSizeOther ?? prev.committeeShirtSizeOther ?? "",
       tshirtClaimed: Boolean(u.tshirtClaimed ?? prev.tshirtClaimed),
       conferenceKitClaimed: Boolean(u.conferenceKitClaimed ?? prev.conferenceKitClaimed),
       paymentProofScreenshotDataUrl: u.paymentProofScreenshotDataUrl ?? prev.paymentProofScreenshotDataUrl ?? "",
@@ -802,6 +815,9 @@ export default function PamaconApp({ canEdit, authEmail, authRole, isSuperuser =
         lastName: u.lastName ?? "",
         nickname: u.nickname ?? "",
         shirtSize: u.shirtSize ?? "",
+        shirtSizeOther: u.shirtSizeOther ?? "",
+        committeeShirtSize: u.committeeShirtSize ?? "",
+        committeeShirtSizeOther: u.committeeShirtSizeOther ?? "",
         tshirtClaimed: Boolean(u.tshirtClaimed),
         conferenceKitClaimed: Boolean(u.conferenceKitClaimed),
         paymentProofScreenshotDataUrl: u.paymentProofScreenshotDataUrl ?? "",
@@ -826,6 +842,9 @@ export default function PamaconApp({ canEdit, authEmail, authRole, isSuperuser =
         lastName: r.lastName ?? "",
         nickname: r.nickname ?? prev.nickname ?? "",
         shirtSize: r.shirtSize ?? prev.shirtSize ?? "",
+        shirtSizeOther: r.shirtSizeOther ?? prev.shirtSizeOther ?? "",
+        committeeShirtSize: r.committeeShirtSize ?? prev.committeeShirtSize ?? "",
+        committeeShirtSizeOther: r.committeeShirtSizeOther ?? prev.committeeShirtSizeOther ?? "",
         tshirtClaimed: Boolean(r.tshirtClaimed ?? prev.tshirtClaimed),
         conferenceKitClaimed: Boolean(r.conferenceKitClaimed ?? prev.conferenceKitClaimed),
         paymentProofScreenshotDataUrl: r.paymentProofScreenshotDataUrl ?? prev.paymentProofScreenshotDataUrl ?? "",
@@ -1326,6 +1345,10 @@ function emptyDelegateDraft() {
     remarks: "",
     solo: false,
     manualPairId: null,
+    shirtSize: "",
+    shirtSizeOther: "",
+    committeeShirtSize: "",
+    committeeShirtSizeOther: "",
     metaBase: {},
   };
 }
@@ -1384,7 +1407,29 @@ function RegistrantsLedger({
   const [seedListPasteText, setSeedListPasteText] = useState("");
   const [importingSeedText, setImportingSeedText] = useState(false);
   const [harmonizingSeedRows, setHarmonizingSeedRows] = useState(false);
-  const tableMinWidthClass = showMoreColumns ? "min-w-[1280px]" : isAdmin ? "min-w-[980px]" : "min-w-[860px]";
+  const tableMinWidthClass = showMoreColumns ? "min-w-[1380px]" : isAdmin ? "min-w-[1080px]" : "min-w-[960px]";
+  const canEditCommitteeShirt = canEdit && (isParticipantShirtEditOpenNow() || isAdmin);
+
+  const persistCommitteeShirt = async (row, size, otherOverride) => {
+    if (!canEditCommitteeShirt) return;
+    const nextSize = size !== undefined && size !== null ? String(size) : String(row.committeeShirtSize || "");
+    let nextOther = String(row.committeeShirtSizeOther ?? "");
+    if (nextSize.toLowerCase() !== "others") {
+      nextOther = "";
+    } else if (otherOverride !== undefined) {
+      nextOther = String(otherOverride);
+    }
+    try {
+      await onUpdate({
+        ...row,
+        committeeShirtSize: nextSize,
+        committeeShirtSizeOther: nextOther,
+      });
+      onInfo?.("Committee shirt size saved.");
+    } catch (e) {
+      onApiError?.(e, "Could not save committee shirt size.");
+    }
+  };
 
   useEffect(() => {
     if (!isAdmin) return undefined;
@@ -1535,9 +1580,9 @@ function RegistrantsLedger({
     const counts = {};
     let total = 0;
     for (const r of registrants) {
-      const size = String(r.shirtSize || "").trim().toUpperCase();
-      if (!size) continue;
-      counts[size] = (counts[size] || 0) + 1;
+      const bucket = effectiveShirtOrderBucket(r);
+      if (!bucket) continue;
+      counts[bucket] = (counts[bucket] || 0) + 1;
       total += 1;
     }
     const ordered = Object.entries(counts).sort((a, b) => a[0].localeCompare(b[0]));
@@ -1545,7 +1590,10 @@ function RegistrantsLedger({
   }, [registrants]);
 
   const claimTrackerRows = useMemo(
-    () => registrants.filter((r) => r.tshirtClaimed || r.conferenceKitClaimed || r.shirtSize),
+    () =>
+      registrants.filter(
+        (r) => r.tshirtClaimed || r.conferenceKitClaimed || r.shirtSize || r.committeeShirtSize
+      ),
     [registrants]
   );
 
@@ -1586,7 +1634,9 @@ function RegistrantsLedger({
       "Nickname",
       "Position",
       "Gender",
-      "Shirt Size",
+      "Participant Shirt",
+      "Committee Shirt (default order)",
+      "Effective For Ordering",
       "Tshirt Claimed",
       "Conference Kit Claimed",
       "Payment Mode",
@@ -1600,7 +1650,12 @@ function RegistrantsLedger({
         r.nickname || "",
         formatPositionShort(r.role),
         r.gender || "",
-        r.shirtSize || "",
+        formatShirtSizeCell(r.shirtSize, r.shirtSizeOther),
+        formatShirtSizeCell(r.committeeShirtSize, r.committeeShirtSizeOther),
+        formatShirtSizeCell(
+          String(r.shirtSize || "").trim() ? r.shirtSize : r.committeeShirtSize,
+          String(r.shirtSize || "").trim() ? r.shirtSizeOther : r.committeeShirtSizeOther
+        ),
         r.tshirtClaimed ? "Yes" : "No",
         r.conferenceKitClaimed ? "Yes" : "No",
         r.mode || "",
@@ -2018,6 +2073,15 @@ function RegistrantsLedger({
               <p className="text-sm text-slate-500 mt-1 max-w-xl">
                 <strong>Registration fees</strong> is the sum of each row’s listed fee. <strong>Collected</strong> is the sum of amounts actually paid—they differ when someone is on partial or installment plans.
               </p>
+              <p className="mt-3 text-xs text-slate-600 rounded-lg border border-slate-200 bg-white px-3 py-2 max-w-3xl leading-relaxed">
+                <strong className="text-slate-800">Committee shirt (default order)</strong> — use the column in the table so logistics can pre-order sizes. Delegates may set or change their own shirt in the attendee portal until{" "}
+                <span className="font-semibold text-slate-900">{participantShirtDeadlineLabel()}</span>.
+                {!isParticipantShirtEditOpenNow() ? (
+                  <span className="block mt-1.5 font-semibold text-amber-800">
+                    Self-service shirt changes are closed. Only admins can edit the committee default column; ordering totals use each delegate’s saved shirt if present, otherwise the committee default.
+                  </span>
+                ) : null}
+              </p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Claim workflow</span>
                 <button
@@ -2111,6 +2175,7 @@ function RegistrantsLedger({
               <col className="w-[130px]" />
               <col className="w-[130px]" />
               <col className="w-[100px]" />
+              <col className="w-[150px]" />
               <col className="w-[140px]" />
               {showMoreColumns && (
                 <>
@@ -2147,6 +2212,12 @@ function RegistrantsLedger({
                 </th>
                 <th className="px-4 py-3.5 align-bottom">
                   <SortBtn col="mode" label="Mode" />
+                </th>
+                <th className="px-4 py-3.5 align-bottom w-[150px]">
+                  <span className="inline-flex flex-col gap-0.5">
+                    <span className="font-semibold uppercase tracking-wide text-slate-500">Committee shirt</span>
+                    <span className="normal-case font-normal text-[9px] text-slate-400 leading-tight">Default order</span>
+                  </span>
                 </th>
                 <th className="px-4 py-3.5 align-bottom">
                   T-shirt claim
@@ -2253,6 +2324,9 @@ function RegistrantsLedger({
                   ) : (
                     <span className="text-slate-300">—</span>
                   )}
+                </th>
+                <th className="px-4 py-2.5 font-normal">
+                  <span className="text-slate-300">—</span>
                 </th>
                 <th className="px-4 py-2.5 font-normal">
                   <span className="text-slate-300">—</span>
@@ -2390,6 +2464,34 @@ function RegistrantsLedger({
                     <td className="px-4 py-4">
                       <span className="text-xs font-medium text-slate-700">{r.mode}</span>
                     </td>
+                    <td className="px-4 py-4 align-top min-w-[140px]">
+                      <div className="space-y-1.5 max-w-[10rem]">
+                        <select
+                          className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-800 disabled:opacity-40"
+                          disabled={!canEditCommitteeShirt}
+                          value={String(r.committeeShirtSize ?? "")}
+                          onChange={(e) => void persistCommitteeShirt(r, e.target.value, undefined)}
+                          aria-label={`Committee shirt default for ${r.name}`}
+                        >
+                          {DELEGATE_SHIRT_SIZE_SELECT.map((o) => (
+                            <option key={o.value || "unset"} value={o.value}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </select>
+                        {String(r.committeeShirtSize || "").toLowerCase() === "others" ? (
+                          <input
+                            type="text"
+                            className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs disabled:opacity-40"
+                            disabled={!canEditCommitteeShirt}
+                            placeholder="Specify size"
+                            value={r.committeeShirtSizeOther || ""}
+                            onChange={(e) => void persistCommitteeShirt(r, "others", e.target.value)}
+                            aria-label={`Committee shirt other for ${r.name}`}
+                          />
+                        ) : null}
+                      </div>
+                    </td>
                     <td className="px-4 py-4">
                       <button
                         type="button"
@@ -2462,7 +2564,7 @@ function RegistrantsLedger({
                 </td>
                 <td className="px-4 py-3.5 text-right tabular-nums">₱{feesTotalFiltered.toLocaleString()}</td>
                 <td className="px-4 py-3.5 text-right tabular-nums text-emerald-800">₱{collectedTotalFiltered.toLocaleString()}</td>
-                <td colSpan={showMoreColumns ? 5 : 2} className="px-4 py-3.5 text-xs text-slate-500 font-normal">
+                <td colSpan={showMoreColumns ? 7 : 4} className="px-4 py-3.5 text-xs text-slate-500 font-normal">
                   Running collected accumulates paid amounts in the current row order. It equals the collected total when sorted so rows match that sequence.
                 </td>
               </tr>
@@ -2473,11 +2575,13 @@ function RegistrantsLedger({
       <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-4">
         <h4 className="text-base font-semibold text-slate-900">T-shirt and Conference Kit Claim</h4>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-sm">
+          <table className="w-full min-w-[880px] text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-[11px] uppercase tracking-wide text-slate-500">
                 <th className="py-2 text-left">Delegate</th>
-                <th className="py-2 text-left">Shirt size</th>
+                <th className="py-2 text-left">Participant shirt</th>
+                <th className="py-2 text-left">Committee default</th>
+                <th className="py-2 text-left">For ordering</th>
                 <th className="py-2 text-left">T-shirt</th>
                 <th className="py-2 text-left">Conference kit</th>
               </tr>
@@ -2489,7 +2593,14 @@ function RegistrantsLedger({
                     <span className="font-medium">{r.name}</span>
                     {r.nickname ? <span className="ml-2 text-xs text-slate-500">({r.nickname})</span> : null}
                   </td>
-                  <td className="py-2.5 pr-3 text-slate-600">{r.shirtSize || "—"}</td>
+                  <td className="py-2.5 pr-3 text-slate-600">{formatShirtSizeCell(r.shirtSize, r.shirtSizeOther)}</td>
+                  <td className="py-2.5 pr-3 text-slate-600">{formatShirtSizeCell(r.committeeShirtSize, r.committeeShirtSizeOther)}</td>
+                  <td className="py-2.5 pr-3 text-slate-800 font-medium">
+                    {formatShirtSizeCell(
+                      String(r.shirtSize || "").trim() ? r.shirtSize : r.committeeShirtSize,
+                      String(r.shirtSize || "").trim() ? r.shirtSizeOther : r.committeeShirtSizeOther
+                    )}
+                  </td>
                   <td className="py-2.5 pr-3">
                     <button
                       type="button"
@@ -2518,7 +2629,7 @@ function RegistrantsLedger({
               ))}
               {claimTrackerRows.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="py-3 text-slate-500">
+                  <td colSpan={6} className="py-3 text-slate-500">
                     No claimable delegate data yet.
                   </td>
                 </tr>
@@ -2528,6 +2639,9 @@ function RegistrantsLedger({
         </div>
         <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">T-shirt size summary (ordering)</p>
+          <p className="text-[11px] text-slate-500 mb-2 leading-snug">
+            Counts use each delegate’s <strong>participant shirt</strong> when set; otherwise the <strong>committee default</strong>. Participants may update their shirt in the portal until {participantShirtDeadlineLabel()}.
+          </p>
           <div className="flex flex-wrap gap-2">
             {shirtSummary.ordered.map(([size, count]) => (
               <span key={size} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700">

@@ -120,6 +120,12 @@ function asNumber(value: unknown, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+/** Philippines: attendees may change shirt on portal until start of 5 May 2026 (UTC+8). */
+const PARTICIPANT_SHIRT_EDIT_DEADLINE_MS = Date.parse("2026-05-05T00:00:00+08:00");
+function participantShirtEditOpen(now = Date.now()) {
+  return now < PARTICIPANT_SHIRT_EDIT_DEADLINE_MS;
+}
+
 function parseMetadataJson(raw: unknown): Record<string, unknown> {
   if (!raw) return {};
   if (typeof raw === "object") return raw as Record<string, unknown>;
@@ -416,8 +422,10 @@ app.post("/api/registrations/:id/claim-seeded", async (c) => {
     applyText("positionCode");
     applyText("positionOther");
     applyText("gender");
-    applyText("shirtSize");
-    applyText("shirtSizeOther");
+    if (participantShirtEditOpen()) {
+      applyText("shirtSize");
+      applyText("shirtSizeOther");
+    }
     applyText("arrivalCebu");
     applyText("departureCebu");
     applyText("extraOtherRequest");
@@ -506,8 +514,11 @@ app.post("/api/events/:eventId/registrations/sync-my-profile", requireRole(["adm
   copyText("positionOther");
   copyText("aiaAgentCode");
   copyText("gender");
-  copyText("shirtSize");
-  copyText("shirtSizeOther");
+  const allowShirtSync = getRole(c) !== "attendee" || participantShirtEditOpen();
+  if (allowShirtSync) {
+    copyText("shirtSize");
+    copyText("shirtSizeOther");
+  }
   copyText("arrivalCebu");
   copyText("departureCebu");
   copyText("extraOtherRequest");
