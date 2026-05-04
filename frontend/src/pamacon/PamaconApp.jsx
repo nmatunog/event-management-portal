@@ -240,6 +240,9 @@ function delegateFromApi(row) {
     conferenceKitClaimed: Boolean(meta.conferenceKitClaimed),
     paymentProofScreenshotDataUrl: meta.paymentProofScreenshotDataUrl || "",
     paymentProofUploadedAt: meta.paymentProofUploadedAt || "",
+    paymentValidationStatus: String(meta.paymentValidationStatus || "pending"),
+    paymentValidatedAt: meta.paymentValidatedAt || "",
+    paymentValidatedBy: meta.paymentValidatedBy || "",
   };
 }
 
@@ -783,6 +786,9 @@ export default function PamaconApp({ canEdit, authEmail, authRole, isSuperuser =
       conferenceKitClaimed: Boolean(u.conferenceKitClaimed ?? prev.conferenceKitClaimed),
       paymentProofScreenshotDataUrl: u.paymentProofScreenshotDataUrl ?? prev.paymentProofScreenshotDataUrl ?? "",
       paymentProofUploadedAt: u.paymentProofUploadedAt ?? prev.paymentProofUploadedAt ?? "",
+      paymentValidationStatus: u.paymentValidationStatus ?? prev.paymentValidationStatus ?? "pending",
+      paymentValidatedAt: u.paymentValidatedAt ?? prev.paymentValidatedAt ?? "",
+      paymentValidatedBy: u.paymentValidatedBy ?? prev.paymentValidatedBy ?? "",
       gender: u.gender ?? "Unspecified",
       solo: u.solo,
       manualPairId: u.manualPairId,
@@ -822,6 +828,9 @@ export default function PamaconApp({ canEdit, authEmail, authRole, isSuperuser =
         conferenceKitClaimed: Boolean(u.conferenceKitClaimed),
         paymentProofScreenshotDataUrl: u.paymentProofScreenshotDataUrl ?? "",
         paymentProofUploadedAt: u.paymentProofUploadedAt ?? "",
+        paymentValidationStatus: u.paymentValidationStatus ?? "pending",
+        paymentValidatedAt: u.paymentValidatedAt ?? "",
+        paymentValidatedBy: u.paymentValidatedBy ?? "",
         gender: u.gender ?? "Unspecified",
         solo: Boolean(u.solo),
         manualPairId: null,
@@ -849,6 +858,9 @@ export default function PamaconApp({ canEdit, authEmail, authRole, isSuperuser =
         conferenceKitClaimed: Boolean(r.conferenceKitClaimed ?? prev.conferenceKitClaimed),
         paymentProofScreenshotDataUrl: r.paymentProofScreenshotDataUrl ?? prev.paymentProofScreenshotDataUrl ?? "",
         paymentProofUploadedAt: r.paymentProofUploadedAt ?? prev.paymentProofUploadedAt ?? "",
+        paymentValidationStatus: r.paymentValidationStatus ?? prev.paymentValidationStatus ?? "pending",
+        paymentValidatedAt: r.paymentValidatedAt ?? prev.paymentValidatedAt ?? "",
+        paymentValidatedBy: r.paymentValidatedBy ?? prev.paymentValidatedBy ?? "",
         gender: r.gender ?? "Unspecified",
         solo: r.solo,
         manualPairId: r.manualPairId,
@@ -1403,15 +1415,37 @@ function RegistrantsLedger({
   const [showMoreColumns, setShowMoreColumns] = useState(false);
   const [showDangerZone, setShowDangerZone] = useState(false);
   const [refScreenshotModalOpen, setRefScreenshotModalOpen] = useState(false);
+  const [paymentProofModal, setPaymentProofModal] = useState(null);
   const [savingRefScreenshot, setSavingRefScreenshot] = useState(false);
   const [seedListPasteText, setSeedListPasteText] = useState("");
   const [importingSeedText, setImportingSeedText] = useState(false);
   const [harmonizingSeedRows, setHarmonizingSeedRows] = useState(false);
-  const tableMinWidthClass = showMoreColumns ? "min-w-[1380px]" : isAdmin ? "min-w-[1080px]" : "min-w-[960px]";
-  const canEditCommitteeShirt = canEdit && (isParticipantShirtEditOpenNow() || isAdmin);
+  const tableMinWidthClass = showMoreColumns ? "min-w-[1640px]" : isAdmin ? "min-w-[1260px]" : "min-w-[1140px]";
+  const canEditDelegateShirtFields = canEdit && (isParticipantShirtEditOpenNow() || isAdmin);
+
+  const persistParticipantShirt = async (row, size, otherOverride) => {
+    if (!canEditDelegateShirtFields) return;
+    const nextSize = size !== undefined && size !== null ? String(size) : String(row.shirtSize || "");
+    let nextOther = String(row.shirtSizeOther ?? "");
+    if (nextSize.toLowerCase() !== "others") {
+      nextOther = "";
+    } else if (otherOverride !== undefined) {
+      nextOther = String(otherOverride);
+    }
+    try {
+      await onUpdate({
+        ...row,
+        shirtSize: nextSize,
+        shirtSizeOther: nextOther,
+      });
+      onInfo?.("Participant shirt size saved.");
+    } catch (e) {
+      onApiError?.(e, "Could not save participant shirt size.");
+    }
+  };
 
   const persistCommitteeShirt = async (row, size, otherOverride) => {
-    if (!canEditCommitteeShirt) return;
+    if (!canEditDelegateShirtFields) return;
     const nextSize = size !== undefined && size !== null ? String(size) : String(row.committeeShirtSize || "");
     let nextOther = String(row.committeeShirtSizeOther ?? "");
     if (nextSize.toLowerCase() !== "others") {
@@ -1428,6 +1462,22 @@ function RegistrantsLedger({
       onInfo?.("Committee shirt size saved.");
     } catch (e) {
       onApiError?.(e, "Could not save committee shirt size.");
+    }
+  };
+
+  const markPaymentValidation = async (row, validated) => {
+    if (!canEdit) return;
+    const email = String(authEmail || "").trim();
+    try {
+      await onUpdate({
+        ...row,
+        paymentValidationStatus: validated ? "validated" : "pending",
+        paymentValidatedAt: validated ? new Date().toISOString() : "",
+        paymentValidatedBy: validated ? email : "",
+      });
+      onInfo?.(validated ? "Payment proof marked as validated." : "Payment validation cleared (pending).");
+    } catch (e) {
+      onApiError?.(e, "Could not update payment validation.");
     }
   };
 
@@ -1641,6 +1691,9 @@ function RegistrantsLedger({
       "Conference Kit Claimed",
       "Payment Mode",
       "Paid Amount",
+      "Payment validation",
+      "Payment validated at",
+      "Payment validated by",
       "Status",
     ];
     const esc = (v) => `"${String(v ?? "").replaceAll("\"", "\"\"")}"`;
@@ -1660,6 +1713,9 @@ function RegistrantsLedger({
         r.conferenceKitClaimed ? "Yes" : "No",
         r.mode || "",
         Number(r.paid || 0),
+        String(r.paymentValidationStatus || "pending"),
+        r.paymentValidatedAt || "",
+        r.paymentValidatedBy || "",
         r.status || "",
       ].map(esc).join(",")
     );
@@ -1765,6 +1821,38 @@ function RegistrantsLedger({
 
   return (
     <div className="space-y-6 pb-20">
+      {paymentProofModal?.src ? (
+        <div
+          className="fixed inset-0 z-[145] flex items-center justify-center bg-slate-900/70 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Payment proof screenshot"
+          onClick={() => setPaymentProofModal(null)}
+        >
+          <div
+            className="relative max-h-[92vh] w-full max-w-4xl overflow-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setPaymentProofModal(null)}
+              className="absolute right-3 top-3 z-10 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              Close
+            </button>
+            {paymentProofModal.delegateName ? (
+              <p className="mt-10 mb-3 text-sm font-semibold text-slate-900">Payment proof — {paymentProofModal.delegateName}</p>
+            ) : (
+              <p className="mt-10 mb-3 text-sm font-semibold text-slate-900">Payment proof</p>
+            )}
+            <img
+              src={paymentProofModal.src}
+              alt="Uploaded payment proof"
+              className="mx-auto max-h-[78vh] w-auto max-w-full rounded-lg border border-slate-100 object-contain"
+            />
+          </div>
+        </div>
+      ) : null}
       {refScreenshotModalOpen && isSuperuser && seededListScreenshotDataUrl ? (
         <div
           className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-900/70 p-4"
@@ -2074,11 +2162,13 @@ function RegistrantsLedger({
                 <strong>Registration fees</strong> is the sum of each row’s listed fee. <strong>Collected</strong> is the sum of amounts actually paid—they differ when someone is on partial or installment plans.
               </p>
               <p className="mt-3 text-xs text-slate-600 rounded-lg border border-slate-200 bg-white px-3 py-2 max-w-3xl leading-relaxed">
-                <strong className="text-slate-800">Committee shirt (default order)</strong> — use the column in the table so logistics can pre-order sizes. Delegates may set or change their own shirt in the attendee portal until{" "}
-                <span className="font-semibold text-slate-900">{participantShirtDeadlineLabel()}</span>.
+                <strong className="text-slate-800">Participant shirt</strong> — staff set the delegate’s conference shirt in the table (same sizes as the portal). Attendees can also set it until{" "}
+                <span className="font-semibold text-slate-900">{participantShirtDeadlineLabel()}</span>.{" "}
+                <strong className="text-slate-800">Committee shirt (default order)</strong> — logistics pre-order default when no participant shirt is saved.{" "}
+                <strong className="text-slate-800">Payment</strong> — open the proof image and use <em>Mark validated</em> when you have confirmed the transfer (scroll horizontally if columns are off-screen).
                 {!isParticipantShirtEditOpenNow() ? (
                   <span className="block mt-1.5 font-semibold text-amber-800">
-                    Self-service shirt changes are closed. Only admins can edit the committee default column; ordering totals use each delegate’s saved shirt if present, otherwise the committee default.
+                    Self-service shirt changes are closed. Staff and admins can still edit both shirt columns here; ordering uses participant shirt if set, otherwise the committee default.
                   </span>
                 ) : null}
               </p>
@@ -2176,6 +2266,8 @@ function RegistrantsLedger({
               <col className="w-[130px]" />
               <col className="w-[100px]" />
               <col className="w-[150px]" />
+              <col className="w-[170px]" />
+              <col className="w-[150px]" />
               <col className="w-[140px]" />
               {showMoreColumns && (
                 <>
@@ -2212,6 +2304,18 @@ function RegistrantsLedger({
                 </th>
                 <th className="px-4 py-3.5 align-bottom">
                   <SortBtn col="mode" label="Mode" />
+                </th>
+                <th className="px-4 py-3.5 align-bottom w-[150px]">
+                  <span className="inline-flex flex-col gap-0.5">
+                    <span className="font-semibold uppercase tracking-wide text-slate-500">Participant shirt</span>
+                    <span className="normal-case font-normal text-[9px] text-slate-400 leading-tight">Conference tee</span>
+                  </span>
+                </th>
+                <th className="px-4 py-3.5 align-bottom min-w-[10rem]">
+                  <span className="inline-flex flex-col gap-0.5">
+                    <span className="font-semibold uppercase tracking-wide text-slate-500">Payment</span>
+                    <span className="normal-case font-normal text-[9px] text-slate-400 leading-tight">Proof &amp; validate</span>
+                  </span>
                 </th>
                 <th className="px-4 py-3.5 align-bottom w-[150px]">
                   <span className="inline-flex flex-col gap-0.5">
@@ -2331,6 +2435,12 @@ function RegistrantsLedger({
                 <th className="px-4 py-2.5 font-normal">
                   <span className="text-slate-300">—</span>
                 </th>
+                <th className="px-4 py-2.5 font-normal">
+                  <span className="text-slate-300">—</span>
+                </th>
+                <th className="px-4 py-2.5 font-normal">
+                  <span className="text-slate-300">—</span>
+                </th>
                 {showMoreColumns && (
                   <>
                     <th className="px-4 py-2.5 font-normal">
@@ -2378,18 +2488,6 @@ function RegistrantsLedger({
                       <div className="font-semibold">{r.name}</div>
                       {r.nickname && <div className="text-xs text-slate-500 mt-1">Nickname: {r.nickname}</div>}
                       {r.attendeeClaimEmail ? <div className="text-xs text-slate-500 mt-1">Email: {r.attendeeClaimEmail}</div> : null}
-                      {r.paymentProofScreenshotDataUrl ? (
-                        <div className="mt-1">
-                          <a
-                            href={r.paymentProofScreenshotDataUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-[11px] font-semibold text-amber-700 hover:underline"
-                          >
-                            View payment proof screenshot
-                          </a>
-                        </div>
-                      ) : null}
                       {isSeededDelegateRow(r) && (
                         <div className="mt-2 flex flex-col gap-1.5">
                           {r.attendeeClaimEmail ? (
@@ -2468,7 +2566,91 @@ function RegistrantsLedger({
                       <div className="space-y-1.5 max-w-[10rem]">
                         <select
                           className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-800 disabled:opacity-40"
-                          disabled={!canEditCommitteeShirt}
+                          disabled={!canEditDelegateShirtFields}
+                          value={String(r.shirtSize ?? "")}
+                          onChange={(e) => void persistParticipantShirt(r, e.target.value, undefined)}
+                          aria-label={`Participant shirt for ${r.name}`}
+                        >
+                          {DELEGATE_SHIRT_SIZE_SELECT.map((o) => (
+                            <option key={o.value || "unset"} value={o.value}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </select>
+                        {String(r.shirtSize || "").toLowerCase() === "others" ? (
+                          <input
+                            type="text"
+                            className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs disabled:opacity-40"
+                            disabled={!canEditDelegateShirtFields}
+                            placeholder="Specify size"
+                            value={r.shirtSizeOther || ""}
+                            onChange={(e) => void persistParticipantShirt(r, "others", e.target.value)}
+                            aria-label={`Participant shirt other for ${r.name}`}
+                          />
+                        ) : null}
+                      </div>
+                    </td>
+                    <td className="px-4 py-4 align-top min-w-[10rem]">
+                      <div className="flex flex-col gap-1.5">
+                        {r.paymentProofScreenshotDataUrl ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPaymentProofModal({
+                                src: r.paymentProofScreenshotDataUrl,
+                                delegateName: r.name,
+                              })
+                            }
+                            className="text-left text-[11px] font-semibold text-amber-700 hover:underline"
+                          >
+                            View proof
+                          </button>
+                        ) : (
+                          <span className="text-xs text-slate-400">No proof</span>
+                        )}
+                        {(() => {
+                          const validated = String(r.paymentValidationStatus || "").toLowerCase() === "validated";
+                          return (
+                            <>
+                              <span
+                                className={`inline-flex w-fit rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                                  validated ? "bg-emerald-100 text-emerald-800 border border-emerald-200/80" : "bg-amber-50 text-amber-900 border border-amber-100"
+                                }`}
+                              >
+                                {validated ? "Validated" : "Pending"}
+                              </span>
+                              {validated && r.paymentValidatedBy ? (
+                                <span className="text-[10px] text-slate-500 leading-snug">By {r.paymentValidatedBy}</span>
+                              ) : null}
+                              {canEdit && r.paymentProofScreenshotDataUrl ? (
+                                validated ? (
+                                  <button
+                                    type="button"
+                                    className="text-left w-fit text-[11px] font-semibold text-slate-600 hover:underline"
+                                    onClick={() => void markPaymentValidation(r, false)}
+                                  >
+                                    Clear validation
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="text-left w-fit text-[11px] font-semibold text-emerald-700 hover:underline"
+                                    onClick={() => void markPaymentValidation(r, true)}
+                                  >
+                                    Mark validated
+                                  </button>
+                                )
+                              ) : null}
+                            </>
+                          );
+                        })()}
+                      </div>
+                    </td>
+                    <td className="px-4 py-4 align-top min-w-[140px]">
+                      <div className="space-y-1.5 max-w-[10rem]">
+                        <select
+                          className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-800 disabled:opacity-40"
+                          disabled={!canEditDelegateShirtFields}
                           value={String(r.committeeShirtSize ?? "")}
                           onChange={(e) => void persistCommitteeShirt(r, e.target.value, undefined)}
                           aria-label={`Committee shirt default for ${r.name}`}
@@ -2483,7 +2665,7 @@ function RegistrantsLedger({
                           <input
                             type="text"
                             className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs disabled:opacity-40"
-                            disabled={!canEditCommitteeShirt}
+                            disabled={!canEditDelegateShirtFields}
                             placeholder="Specify size"
                             value={r.committeeShirtSizeOther || ""}
                             onChange={(e) => void persistCommitteeShirt(r, "others", e.target.value)}
@@ -2564,7 +2746,7 @@ function RegistrantsLedger({
                 </td>
                 <td className="px-4 py-3.5 text-right tabular-nums">₱{feesTotalFiltered.toLocaleString()}</td>
                 <td className="px-4 py-3.5 text-right tabular-nums text-emerald-800">₱{collectedTotalFiltered.toLocaleString()}</td>
-                <td colSpan={showMoreColumns ? 7 : 4} className="px-4 py-3.5 text-xs text-slate-500 font-normal">
+                <td colSpan={showMoreColumns ? 9 : 6} className="px-4 py-3.5 text-xs text-slate-500 font-normal">
                   Running collected accumulates paid amounts in the current row order. It equals the collected total when sorted so rows match that sequence.
                 </td>
               </tr>
