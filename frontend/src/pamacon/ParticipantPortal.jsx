@@ -20,7 +20,16 @@ function youtubeEmbedSrc(url) {
  * Participant-facing portal: marketing placeholders, promo video, and travel / shirt / tour form.
  * Layout is tuned for phones, tablets, and desktop (fluid max-width, touch-friendly controls).
  */
-export default function ParticipantPortal({ config = DEFAULT_PAMACON_CONFIG, eventRow, authEmail, profile, onSaveProfile, profileSaving, onLogout }) {
+export default function ParticipantPortal({
+  config = DEFAULT_PAMACON_CONFIG,
+  eventRow,
+  authEmail,
+  profile,
+  registrationRowSummary,
+  onSaveProfile,
+  profileSaving,
+  onLogout,
+}) {
   const title = eventRow?.title || PAMACON_TITLE;
   const theme = config?.theme || DEFAULT_PAMACON_CONFIG.theme;
   const venue = eventRow?.venue || "Waterfront Cebu Hotel and Casino";
@@ -304,6 +313,7 @@ export default function ParticipantPortal({ config = DEFAULT_PAMACON_CONFIG, eve
         <AttendeeDetailsForm
           profile={profile}
           authEmail={authEmail}
+          registrationRowSummary={registrationRowSummary}
           onSaveProfile={onSaveProfile}
           profileSaving={profileSaving}
           quoteEmail={portal.quoteRequestEmail}

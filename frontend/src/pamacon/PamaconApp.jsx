@@ -50,6 +50,7 @@ import {
   deleteSponsor,
   getEvents,
   getExpenses,
+  getMyRegistrationRowSummary,
   getRegistrations,
   deleteRegistration,
   getUserRoles,
@@ -424,7 +425,19 @@ const NAV_GROUPS = [
   },
 ];
 
-export default function PamaconApp({ canEdit, authEmail, authRole, isSuperuser = false, profile, onSaveProfile, profileSaving, onApiInfo, onApiError, onLogout }) {
+export default function PamaconApp({
+  canEdit,
+  authEmail,
+  authRole,
+  isSuperuser = false,
+  profile,
+  attendeeSyncHints = {},
+  onSaveProfile,
+  profileSaving,
+  onApiInfo,
+  onApiError,
+  onLogout,
+}) {
   const [activeTab, setActiveTab] = useState("dashboard");
   /** When `attendee`, committee users preview the same portal delegates see. */
   const [committeePortalView, setCommitteePortalView] = useState("admin");
@@ -439,6 +452,35 @@ export default function PamaconApp({ canEdit, authEmail, authRole, isSuperuser =
   const [eventRecord, setEventRecord] = useState(null);
   const [lastSyncAt, setLastSyncAt] = useState("");
   const isAdmin = authRole === "admin";
+
+  const [registrationRowSummary, setRegistrationRowSummary] = useState(undefined);
+
+  const loadRegistrationRowSummary = useCallback(async () => {
+    if (!eventId) return;
+    try {
+      const s = await getMyRegistrationRowSummary(eventId, {
+        firstName: profile?.firstName,
+        lastName: profile?.lastName,
+        nickname: profile?.nickname,
+        ...attendeeSyncHints,
+      });
+      setRegistrationRowSummary(s);
+    } catch {
+      setRegistrationRowSummary(null);
+    }
+  }, [eventId, profile?.firstName, profile?.lastName, profile?.nickname, attendeeSyncHints]);
+
+  useEffect(() => {
+    void loadRegistrationRowSummary();
+  }, [loadRegistrationRowSummary]);
+
+  const handlePortalSaveProfile = useCallback(
+    async (nextProfile) => {
+      await onSaveProfile?.(nextProfile);
+      await loadRegistrationRowSummary();
+    },
+    [onSaveProfile, loadRegistrationRowSummary]
+  );
 
   const reloadAll = useCallback(async () => {
     if (!eventId) return;
@@ -1085,7 +1127,8 @@ export default function PamaconApp({ canEdit, authEmail, authRole, isSuperuser =
         eventRow={eventRecord}
         authEmail={authEmail}
         profile={profile}
-        onSaveProfile={onSaveProfile}
+        registrationRowSummary={registrationRowSummary}
+        onSaveProfile={handlePortalSaveProfile}
         profileSaving={profileSaving}
         onLogout={onLogout}
       />
@@ -1117,7 +1160,8 @@ export default function PamaconApp({ canEdit, authEmail, authRole, isSuperuser =
             eventRow={eventRecord}
             authEmail={authEmail}
             profile={profile}
-            onSaveProfile={onSaveProfile}
+            registrationRowSummary={registrationRowSummary}
+            onSaveProfile={handlePortalSaveProfile}
             profileSaving={profileSaving}
             onLogout={onLogout}
           />
@@ -1402,6 +1446,7 @@ function RegistrantsLedger({
   const [committeeRoles, setCommitteeRoles] = useState([]);
   const [committeeRolesLoading, setCommitteeRolesLoading] = useState(false);
   const [claimFilter, setClaimFilter] = useState("all");
+  const [paymentProofReviewFilter, setPaymentProofReviewFilter] = useState("all");
   const [fName, setFName] = useState("");
   const [fRole, setFRole] = useState("");
   const [fFeeMin, setFFeeMin] = useState("");
@@ -1548,6 +1593,14 @@ function RegistrantsLedger({
     );
   };
 
+  const paymentsAwaitingConfirmationCount = useMemo(() => {
+    return registrants.filter((r) => {
+      if (isSeededDelegateRow(r)) return false;
+      if (!String(r.paymentProofScreenshotDataUrl || "").trim()) return false;
+      return String(r.paymentValidationStatus || "").toLowerCase() !== "validated";
+    }).length;
+  }, [registrants]);
+
   const filtered = useMemo(() => {
     return registrants.filter((r) => {
       const seeded = isSeededDelegateRow(r);
@@ -1557,6 +1610,11 @@ function RegistrantsLedger({
       if (claimFilter === "seed-unclaimed" && (!seeded || hasAnyClaim)) return false;
       if (claimFilter === "seed-claimed-by-me" && (!seeded || !claimEmail || claimEmail !== myEmail)) return false;
       if (claimFilter === "seed-claimed-any" && (!seeded || !hasAnyClaim)) return false;
+      if (paymentProofReviewFilter === "awaiting") {
+        const hasProof = Boolean(String(r.paymentProofScreenshotDataUrl || "").trim());
+        const validated = String(r.paymentValidationStatus || "").toLowerCase() === "validated";
+        if (seeded || !hasProof || validated) return false;
+      }
       if (fName && !r.name.toLowerCase().includes(fName.toLowerCase())) return false;
       if (fRole && !r.role.toLowerCase().includes(fRole.toLowerCase())) return false;
       const fee = Number(r.totalFee) || 0;
@@ -1570,7 +1628,7 @@ function RegistrantsLedger({
       if (fRemarks && !(r.remarks || "").toLowerCase().includes(fRemarks.toLowerCase())) return false;
       return true;
     });
-  }, [registrants, claimFilter, myEmail, fName, fRole, fFeeMin, fFeeMax, fPaidMin, fPaidMax, fMode, fStatus, fRemarks]);
+  }, [registrants, claimFilter, paymentProofReviewFilter, myEmail, fName, fRole, fFeeMin, fFeeMax, fPaidMin, fPaidMax, fMode, fStatus, fRemarks]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
@@ -1603,6 +1661,7 @@ function RegistrantsLedger({
 
   const clearFilters = () => {
     setClaimFilter("all");
+    setPaymentProofReviewFilter("all");
     setFName("");
     setFRole("");
     setFFeeMin("");
@@ -2166,17 +2225,33 @@ function RegistrantsLedger({
                 <span className="font-semibold text-slate-900">{participantShirtDeadlineLabel()}</span>.{" "}
                 <strong className="text-slate-800">Committee shirt (default order)</strong> — logistics pre-order default when no participant shirt is saved.{" "}
                 <strong className="text-slate-800">Payment</strong> — open the proof image and use <em>Mark validated</em> when you have confirmed the transfer (scroll horizontally if columns are off-screen).
+                <span className="block mt-1.5 text-slate-600">
+                  <strong className="text-slate-800">Non-seeded</strong> delegates must upload payment proof in the attendee portal; new uploads appear here for your team to confirm.
+                </span>
                 {!isParticipantShirtEditOpenNow() ? (
                   <span className="block mt-1.5 font-semibold text-amber-800">
                     Self-service shirt changes are closed. Staff and admins can still edit both shirt columns here; ordering uses participant shirt if set, otherwise the committee default.
                   </span>
                 ) : null}
               </p>
+              {canEdit && paymentsAwaitingConfirmationCount > 0 ? (
+                <div
+                  className="mt-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm text-amber-950 max-w-3xl"
+                  role="status"
+                >
+                  <span className="font-bold tabular-nums">{paymentsAwaitingConfirmationCount}</span> non-seeded delegate
+                  {paymentsAwaitingConfirmationCount === 1 ? "" : "s"} uploaded a payment proof — use the <strong>Payment</strong> column to view the screenshot and{" "}
+                  <strong>Mark validated</strong> when the bank or e-wallet transfer is confirmed.
+                </div>
+              ) : null}
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Claim workflow</span>
                 <button
                   type="button"
-                  onClick={() => setClaimFilter("seed-unclaimed")}
+                  onClick={() => {
+                    setClaimFilter("seed-unclaimed");
+                    setPaymentProofReviewFilter("all");
+                  }}
                   className={`rounded-lg px-2.5 py-1 text-xs font-semibold border ${
                     claimFilter === "seed-unclaimed" ? "border-red-300 bg-red-50 text-red-700" : "border-slate-200 text-slate-600 hover:bg-slate-50"
                   }`}
@@ -2185,7 +2260,10 @@ function RegistrantsLedger({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setClaimFilter("seed-claimed-by-me")}
+                  onClick={() => {
+                    setClaimFilter("seed-claimed-by-me");
+                    setPaymentProofReviewFilter("all");
+                  }}
                   className={`rounded-lg px-2.5 py-1 text-xs font-semibold border ${
                     claimFilter === "seed-claimed-by-me" ? "border-violet-300 bg-violet-50 text-violet-700" : "border-slate-200 text-slate-600 hover:bg-slate-50"
                   }`}
@@ -2194,13 +2272,45 @@ function RegistrantsLedger({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setClaimFilter("all")}
+                  onClick={() => {
+                    setClaimFilter("all");
+                    setPaymentProofReviewFilter("all");
+                  }}
                   className={`rounded-lg px-2.5 py-1 text-xs font-semibold border ${
                     claimFilter === "all" ? "border-slate-300 bg-slate-100 text-slate-800" : "border-slate-200 text-slate-600 hover:bg-slate-50"
                   }`}
                 >
                   Show all delegates
                 </button>
+                {canEdit && paymentsAwaitingConfirmationCount > 0 ? (
+                  <>
+                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide ml-1">Payment review</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setClaimFilter("all");
+                        setPaymentProofReviewFilter("awaiting");
+                      }}
+                      className={`rounded-lg px-2.5 py-1 text-xs font-semibold border ${
+                        paymentProofReviewFilter === "awaiting"
+                          ? "border-amber-400 bg-amber-100 text-amber-950"
+                          : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      Proofs to confirm: {paymentsAwaitingConfirmationCount}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentProofReviewFilter("all")}
+                      className={`rounded-lg px-2 py-1 text-[11px] font-semibold border border-slate-200 text-slate-500 hover:bg-slate-50 ${
+                        paymentProofReviewFilter === "all" ? "opacity-40 pointer-events-none" : ""
+                      }`}
+                      disabled={paymentProofReviewFilter === "all"}
+                    >
+                      Clear payment filter
+                    </button>
+                  </>
+                ) : null}
               </div>
             </div>
             <div className="flex flex-wrap items-stretch gap-3">
@@ -2482,8 +2592,17 @@ function RegistrantsLedger({
             <tbody className="divide-y divide-slate-100 text-sm">
               {sorted.map((r) => {
                 cumulative += Number(r.paid) || 0;
+                const awaitingPaymentReview =
+                  !isSeededDelegateRow(r) &&
+                  Boolean(String(r.paymentProofScreenshotDataUrl || "").trim()) &&
+                  String(r.paymentValidationStatus || "").toLowerCase() !== "validated";
                 return (
-                  <tr key={r.id} className="group hover:bg-slate-50/80">
+                  <tr
+                    key={r.id}
+                    className={`group hover:bg-slate-50/80 ${
+                      awaitingPaymentReview ? "bg-amber-50/90 ring-1 ring-inset ring-amber-200/80" : ""
+                    }`}
+                  >
                     <td className="px-4 py-4 text-slate-800">
                       <div className="font-semibold">{r.name}</div>
                       {r.nickname && <div className="text-xs text-slate-500 mt-1">Nickname: {r.nickname}</div>}

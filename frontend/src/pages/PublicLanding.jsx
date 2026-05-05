@@ -244,10 +244,10 @@ export default function PublicLanding() {
                 <p className="font-bold uppercase tracking-wide text-zinc-900">GCash</p>
                 <p className="font-semibold">RE*E ED****O J** D.</p>
                 <div className="mt-1 flex items-center gap-2">
-                  <p className="font-mono font-bold text-zinc-900">0915 423 5799</p>
+                  <p className="font-mono font-bold text-zinc-900">0915 423 3799</p>
                   <button
                     type="button"
-                    onClick={() => copyValue("gcash", "09154235799")}
+                    onClick={() => copyValue("gcash", "09154233799")}
                     className="rounded-lg border border-zinc-200 px-2 py-1 text-[11px] font-bold text-zinc-700 hover:bg-zinc-50"
                   >
                     {copiedField === "gcash" ? "Copied" : "Copy"}

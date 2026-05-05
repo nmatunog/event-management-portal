@@ -175,6 +175,37 @@ function isSeedSource(source: unknown) {
   return src === "pamacon-seed" || src === "pamacon-seed-ocr" || src === "pamacon-seed-text" || src === "pamacon-seed-manual";
 }
 
+function findSyncCandidate(
+  rows: any[],
+  email: string,
+  opts: { seededRegistrationId?: string; seededDelegateName?: string; profile?: Record<string, unknown> }
+) {
+  const seededRegistrationId = String(opts.seededRegistrationId ?? "").trim();
+  const seededDelegateName = String(opts.seededDelegateName ?? "").trim();
+  const profile = opts.profile || {};
+  const normalizedSeededName = normalizeName(seededDelegateName);
+  const normalizedFirst = normalizeName(profile.firstName);
+  const normalizedLast = normalizeName(profile.lastName);
+  const normalizedNick = normalizeName(profile.nickname);
+  return (
+    rows.find((r) => String(r.id || "") === seededRegistrationId) ||
+    rows.find((r) => {
+      const meta = parseMetadataJson(r.metadata_json);
+      return normalizeName(meta.attendeeClaimEmail) === email;
+    }) ||
+    rows.find((r) => normalizeName(r.full_name) === normalizedSeededName) ||
+    rows.find((r) => {
+      const full = normalizeName(r.full_name);
+      if (!full || !normalizedLast) return false;
+      const hasLast = full.endsWith(` ${normalizedLast}`) || full.includes(` ${normalizedLast} `);
+      const hasFirst = normalizedFirst && (full.startsWith(`${normalizedFirst} `) || full.includes(` ${normalizedFirst} `));
+      const hasNick = normalizedNick && (full.startsWith(`${normalizedNick} `) || full.includes(` ${normalizedNick} `));
+      return hasLast && Boolean(hasFirst || hasNick);
+    }) ||
+    null
+  );
+}
+
 function statusRank(value: unknown) {
   const s = String(value || "").trim().toLowerCase();
   if (s === "checked-in") return 3;
@@ -457,6 +488,35 @@ app.post("/api/registrations/:id/claim-seeded", async (c) => {
   return c.json({ item });
 });
 
+app.get("/api/events/:eventId/registrations/my-row-summary", requireRole(["admin", "staff", "attendee"]), async (c) => {
+  const eventId = c.req.param("eventId");
+  const actor = c.get("authUser");
+  const email = String(actor?.email || "").trim().toLowerCase();
+  if (!email) throw new HTTPException(400, { message: "Signed-in email is required." });
+  const qs = c.req.query();
+  const seededRegistrationId = String(qs.seededRegistrationId ?? "").trim();
+  const seededDelegateName = String(qs.seededDelegateName ?? "").trim();
+  const profile = {
+    firstName: String(qs.firstName ?? "").trim(),
+    lastName: String(qs.lastName ?? "").trim(),
+    nickname: String(qs.nickname ?? "").trim(),
+  };
+  const rowsRes = await c.env.DB.prepare("SELECT * FROM registrations WHERE event_id = ? ORDER BY created_at ASC").bind(eventId).all<any>();
+  const rows = (rowsRes.results || []) as any[];
+  const candidate = findSyncCandidate(rows, email, { seededRegistrationId, seededDelegateName, profile });
+  const meta = candidate ? parseMetadataJson(candidate.metadata_json) : {};
+  const isSeededRegistration = candidate ? isSeedSource(meta.seedSource) : false;
+  const proof = String(meta.paymentProofScreenshotDataUrl ?? "").trim();
+  const paymentValidated = String(meta.paymentValidationStatus ?? "").toLowerCase() === "validated";
+  return c.json({
+    hasRegistration: Boolean(candidate?.id),
+    isSeededRegistration,
+    paymentValidated,
+    hasPaymentProof: Boolean(proof),
+    requiresPaymentProofUpload: !isSeededRegistration && !paymentValidated && !proof,
+  });
+});
+
 app.post("/api/events/:eventId/registrations/sync-my-profile", requireRole(["admin", "staff", "attendee"]), async (c) => {
   const eventId = c.req.param("eventId");
   const actor = c.get("authUser");
@@ -469,25 +529,8 @@ app.post("/api/events/:eventId/registrations/sync-my-profile", requireRole(["adm
 
   const rowsRes = await c.env.DB.prepare("SELECT * FROM registrations WHERE event_id = ? ORDER BY created_at ASC").bind(eventId).all<any>();
   const rows = (rowsRes.results || []) as any[];
-  const normalizedSeededName = normalizeName(seededDelegateName);
-  const normalizedFirst = normalizeName(profile.firstName);
-  const normalizedLast = normalizeName(profile.lastName);
-  const normalizedNick = normalizeName(profile.nickname);
 
-  const candidate = rows.find((r) => String(r.id || "") === seededRegistrationId) ||
-    rows.find((r) => {
-      const meta = parseMetadataJson(r.metadata_json);
-      return normalizeName(meta.attendeeClaimEmail) === email;
-    }) ||
-    rows.find((r) => normalizeName(r.full_name) === normalizedSeededName) ||
-    rows.find((r) => {
-      const full = normalizeName(r.full_name);
-      if (!full || !normalizedLast) return false;
-      const hasLast = full.endsWith(` ${normalizedLast}`) || full.includes(` ${normalizedLast} `);
-      const hasFirst = normalizedFirst && (full.startsWith(`${normalizedFirst} `) || full.includes(` ${normalizedFirst} `));
-      const hasNick = normalizedNick && (full.startsWith(`${normalizedNick} `) || full.includes(` ${normalizedNick} `));
-      return hasLast && Boolean(hasFirst || hasNick);
-    });
+  const candidate = findSyncCandidate(rows, email, { seededRegistrationId, seededDelegateName, profile });
 
   const nextMetaBase = candidate ? parseMetadataJson(candidate.metadata_json) : {};
   const nextMeta: Record<string, unknown> = {
@@ -537,6 +580,21 @@ app.post("/api/events/:eventId/registrations/sync-my-profile", requireRole(["adm
     .join(" ")
     .trim() || String(candidate?.full_name || seededDelegateName || email.split("@")[0] || "Unnamed").trim();
   const normalizedNextName = toNameCase(nextName);
+
+  const registrationIsSeeded = candidate ? isSeedSource(parseMetadataJson(candidate.metadata_json).seedSource) : false;
+  const proofAfterMerge = String(nextMeta.paymentProofScreenshotDataUrl ?? "").trim();
+  const alreadyValidated = String(nextMeta.paymentValidationStatus ?? "").toLowerCase() === "validated";
+  if (
+    getRole(c) === "attendee" &&
+    !registrationIsSeeded &&
+    !alreadyValidated &&
+    !proofAfterMerge
+  ) {
+    throw new HTTPException(400, {
+      message:
+        "Payment proof is required for your registration. Upload a screenshot of your payment confirmation (bank or e-wallet), then click Save to my account again.",
+    });
+  }
 
   if (candidate?.id) {
     await c.env.DB.prepare(

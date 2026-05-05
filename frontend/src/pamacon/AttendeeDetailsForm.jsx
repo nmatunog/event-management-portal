@@ -99,11 +99,16 @@ function buildQuoteBody(draft, quoteKind) {
   return lines.join("\n");
 }
 
-export default function AttendeeDetailsForm({ profile, authEmail, onSaveProfile, profileSaving, quoteEmail }) {
+export default function AttendeeDetailsForm({ profile, authEmail, registrationRowSummary, onSaveProfile, profileSaving, quoteEmail }) {
   const [draft, setDraft] = useState(() => draftFromProfile(profile));
   const [savedFlash, setSavedFlash] = useState(false);
   const [saveError, setSaveError] = useState("");
   const shirtFieldsLocked = !isParticipantShirtEditOpenNow();
+  const requiresPaymentProofUpload =
+    registrationRowSummary !== undefined &&
+    registrationRowSummary !== null &&
+    Boolean(registrationRowSummary.requiresPaymentProofUpload);
+  const registrationSummaryLoading = registrationRowSummary === undefined;
 
   useEffect(() => {
     setDraft(() => {
@@ -150,6 +155,14 @@ export default function AttendeeDetailsForm({ profile, authEmail, onSaveProfile,
   );
 
   const handleSave = async () => {
+    if (registrationSummaryLoading) {
+      setSaveError("Please wait a moment while we load your registration status, then try again.");
+      return;
+    }
+    if (requiresPaymentProofUpload && !String(draft.paymentProofScreenshotDataUrl || "").trim()) {
+      setSaveError("A payment proof screenshot is required. Upload a bank or e-wallet confirmation image, then save again.");
+      return;
+    }
     if (!shirtFieldsLocked) {
       if (!String(draft.shirtSize || "").trim()) {
         setSaveError("T-shirt size is required before saving.");
@@ -378,10 +391,33 @@ export default function AttendeeDetailsForm({ profile, authEmail, onSaveProfile,
         </label>
       </fieldset>
 
-      <section className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 sm:p-6 space-y-3">
-        <h3 className="text-base font-semibold text-slate-900">Payment proof screenshot</h3>
+      <section
+        className={`rounded-2xl border p-4 sm:p-6 space-y-3 ${
+          requiresPaymentProofUpload ? "border-rose-300 bg-rose-50/90 ring-1 ring-rose-200/80" : "border-amber-200 bg-amber-50/70"
+        }`}
+      >
+        <h3 className="text-base font-semibold text-slate-900">
+          Payment proof screenshot
+          {requiresPaymentProofUpload ? (
+            <span className="ml-2 text-sm font-bold text-rose-700 normal-case">Required for your registration</span>
+          ) : registrationRowSummary?.isSeededRegistration ? (
+            <span className="ml-2 text-sm font-medium text-slate-500 normal-case">Optional (seeded delegate)</span>
+          ) : null}
+        </h3>
+        {registrationSummaryLoading ? (
+          <p className="text-sm text-slate-600">Checking payment requirements…</p>
+        ) : null}
         <p className="text-sm text-slate-700 leading-relaxed">
-          After you pay, screenshot your bank / GCash confirmation and upload it here. Staff/Admin will use this for payment validation.
+          After you pay, screenshot your bank / GCash confirmation and upload it here. Committee staff are notified to review it in the Delegates module.
+          {requiresPaymentProofUpload ? (
+            <span className="block mt-2 font-semibold text-rose-900">
+              You are not on the pre-approved seeded list—upload proof of payment before you can save your details to your account.
+            </span>
+          ) : (
+            <span className="block mt-1 text-slate-600">
+              Staff/Admin will confirm your screenshot from the Conference Delegates list (Payment column).
+            </span>
+          )}
         </p>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <label className="inline-flex cursor-pointer items-center justify-center rounded-xl bg-amber-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-800">

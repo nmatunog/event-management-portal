@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { claimSeededRegistration, getAuthMe, getEvents, setAccessToken, syncMyRegistrationProfile } from "./lib/api";
 import { supabase } from "./lib/supabaseClient";
@@ -281,6 +281,13 @@ export default function App() {
   };
 
   const userMetadata = session?.user?.user_metadata || {};
+  const attendeeSyncHints = useMemo(
+    () => ({
+      seededRegistrationId: String(userMetadata.seededRegistrationId || "").trim(),
+      seededDelegateName: String(userMetadata.seededDelegateName || "").trim(),
+    }),
+    [userMetadata.seededRegistrationId, userMetadata.seededDelegateName]
+  );
   const profile = {
     lastName: userMetadata.lastName || "",
     firstName: userMetadata.firstName || "",
@@ -383,6 +390,7 @@ export default function App() {
           authRole={authRole}
           isSuperuser={isSuperuser}
           profile={profile}
+          attendeeSyncHints={attendeeSyncHints}
           onSaveProfile={handleSaveProfile}
           profileSaving={profileSaving}
           onApiInfo={showApiInfo}

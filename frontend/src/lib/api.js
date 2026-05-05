@@ -97,6 +97,18 @@ export function syncMyRegistrationProfile(eventId, payload) {
   });
 }
 
+/** Attendee: server resolves seeded vs public registration and payment-proof rules. */
+export function getMyRegistrationRowSummary(eventId, params = {}) {
+  const q = new URLSearchParams();
+  if (params.seededRegistrationId) q.set("seededRegistrationId", String(params.seededRegistrationId));
+  if (params.seededDelegateName) q.set("seededDelegateName", String(params.seededDelegateName));
+  if (params.firstName) q.set("firstName", String(params.firstName));
+  if (params.lastName) q.set("lastName", String(params.lastName));
+  if (params.nickname) q.set("nickname", String(params.nickname));
+  const qs = q.toString();
+  return request(`/api/events/${eventId}/registrations/my-row-summary${qs ? `?${qs}` : ""}`);
+}
+
 export function harmonizeRegistrations(eventId) {
   return request(`/api/events/${eventId}/registrations/harmonize`, {
     method: "POST",
