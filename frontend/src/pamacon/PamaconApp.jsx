@@ -834,7 +834,7 @@ export default function PamaconApp({
       manualPairId: u.manualPairId,
       remarks: u.remarks ?? "",
     };
-    await patchRegistration(u.id, {
+    const res = await patchRegistration(u.id, {
       fullName: u.name,
       attendeeType: u.role,
       status: u.status,
@@ -843,7 +843,13 @@ export default function PamaconApp({
       paymentPlan: modeToPaymentPlan(u.mode),
       metadata: meta,
     });
-    await reloadAll();
+    if (res?.item) {
+      const next = delegateFromApi(res.item);
+      setRegistrants((prevRows) => prevRows.map((row) => (row.id === next.id ? next : row)));
+      setLastSyncAt(new Date().toISOString());
+    } else {
+      await reloadAll();
+    }
   };
 
   const createRegistrantRecord = async (u) => {
@@ -1320,7 +1326,14 @@ export default function PamaconApp({
               <AccommodationView config={config} registrants={registrants} onPair={pairManualDelegates} onToggleSolo={toggleSoloOccupancy} canEdit={canEdit} />
             )}
             {activeTab === "program" && (
-              <ProgramModulesView config={config} setConfig={setConfig} eventId={eventId} canEdit={canEdit} onError={onApiError} />
+              <ProgramModulesView
+                config={config}
+                setConfig={setConfig}
+                eventId={eventId}
+                canEdit={canEdit}
+                isAdmin={isAdmin}
+                onError={onApiError}
+              />
             )}
             {activeTab === "sponsorship" && (
               <SponsorshipHub
@@ -1785,6 +1798,48 @@ function RegistrantsLedger({
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
     link.download = `pamacon-masterlist-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+  };
+
+  const downloadTshirtList = () => {
+    const headers = [
+      "Full Name",
+      "Position",
+      "Attendee Email",
+      "Participant Shirt",
+      "Committee Shirt (default)",
+      "Effective Shirt For Order",
+      "Tshirt Claimed",
+      "Status",
+      "Seed Source",
+    ];
+    const esc = (v) => `"${String(v ?? "").replaceAll("\"", "\"\"")}"`;
+    const rows = [...registrants]
+      .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")))
+      .map((r) =>
+        [
+          r.name || "",
+          formatPositionShort(r.role),
+          String(r.attendeeClaimEmail || "").trim(),
+          formatShirtSizeCell(r.shirtSize, r.shirtSizeOther),
+          formatShirtSizeCell(r.committeeShirtSize, r.committeeShirtSizeOther),
+          formatShirtSizeCell(
+            String(r.shirtSize || "").trim() ? r.shirtSize : r.committeeShirtSize,
+            String(r.shirtSize || "").trim() ? r.shirtSizeOther : r.committeeShirtSizeOther
+          ),
+          r.tshirtClaimed ? "Yes" : "No",
+          r.status || "",
+          r.seedSource || "",
+        ].map(esc).join(",")
+      );
+    const csv = [headers.map(esc).join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `pamacon-tshirt-list-${new Date().toISOString().slice(0, 10)}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -2377,6 +2432,16 @@ function RegistrantsLedger({
               >
                 Download masterlist
               </button>
+              {isAdmin ? (
+                <button
+                  type="button"
+                  onClick={downloadTshirtList}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  <Download size={16} />
+                  Download T-shirt list
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => setShowAdvancedFilters((s) => !s)}
@@ -4066,26 +4131,31 @@ function emptyProgramRow(day = "Day 2 - May 14") {
   return { day, time: "", program: "", assigned: "" };
 }
 
-function ProgramModulesView({ config, setConfig, eventId, canEdit, onError }) {
+function ProgramModulesView({ config, setConfig, eventId, canEdit, isAdmin, onError }) {
   const [rows, setRows] = useState(() =>
     Array.isArray(config.programModules) && config.programModules.length > 0 ? config.programModules : DEFAULT_PROGRAM_MODULES
   );
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
+    if (dirty) return;
     setRows(Array.isArray(config.programModules) && config.programModules.length > 0 ? config.programModules : DEFAULT_PROGRAM_MODULES);
-  }, [config.programModules]);
+  }, [config.programModules, dirty]);
 
   const updateRow = (idx, key, value) => {
+    setDirty(true);
     setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, [key]: value } : r)));
   };
 
   const removeRow = (idx) => {
+    setDirty(true);
     setRows((prev) => prev.filter((_, i) => i !== idx));
   };
 
   const addRow = (day) => {
+    setDirty(true);
     setRows((prev) => [...prev, emptyProgramRow(day)]);
   };
 
@@ -4107,6 +4177,7 @@ function ProgramModulesView({ config, setConfig, eventId, canEdit, onError }) {
         config: nextConfig,
       });
       setConfig(nextConfig);
+      setDirty(false);
       setSaved(true);
       setTimeout(() => setSaved(false), 1600);
     } catch (e) {
@@ -4114,6 +4185,90 @@ function ProgramModulesView({ config, setConfig, eventId, canEdit, onError }) {
     } finally {
       setSaving(false);
     }
+  };
+
+  const downloadProgramPdf = () => {
+    const cleaned = rows
+      .map((r) => ({
+        day: String(r.day || "").trim(),
+        time: String(r.time || "").trim(),
+        program: String(r.program || "").trim(),
+        assigned: String(r.assigned || "").trim(),
+      }))
+      .filter((r) => r.day || r.time || r.program || r.assigned);
+    const grouped = cleaned.reduce((acc, row) => {
+      const key = row.day || "Program";
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(row);
+      return acc;
+    }, {});
+    const esc = (v) =>
+      String(v || "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
+    const sections = Object.entries(grouped)
+      .map(
+        ([day, entries]) => `
+          <section class="day-section">
+            <h2>${esc(day)}</h2>
+            <table>
+              <thead>
+                <tr><th>Time</th><th>Program</th><th>Assigned</th></tr>
+              </thead>
+              <tbody>
+                ${entries
+                  .map(
+                    (r) => `
+                  <tr>
+                    <td>${esc(r.time)}</td>
+                    <td>${esc(r.program)}</td>
+                    <td>${esc(r.assigned)}</td>
+                  </tr>
+                `
+                  )
+                  .join("")}
+              </tbody>
+            </table>
+          </section>
+        `
+      )
+      .join("");
+    const now = new Date();
+    const printable = `
+      <!doctype html>
+      <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>PAMACON Program</title>
+        <style>
+          @page { size: A4 portrait; margin: 16mm; }
+          body { font-family: Arial, Helvetica, sans-serif; color: #0f172a; }
+          h1 { margin: 0 0 4px; font-size: 24px; }
+          .meta { margin: 0 0 16px; color: #475569; font-size: 12px; }
+          .day-section { margin: 14px 0 18px; break-inside: avoid; }
+          h2 { margin: 0 0 8px; font-size: 16px; color: #b91c1c; }
+          table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+          th, td { border: 1px solid #e2e8f0; padding: 8px; font-size: 12px; vertical-align: top; }
+          th { background: #f8fafc; text-align: left; font-weight: 700; }
+          th:nth-child(1), td:nth-child(1) { width: 22%; }
+          th:nth-child(3), td:nth-child(3) { width: 28%; }
+        </style>
+      </head>
+      <body>
+        <h1>PAMACON 2026 Program</h1>
+        <p class="meta">Generated ${esc(now.toLocaleString())}</p>
+        ${sections || "<p>No program rows available.</p>"}
+      </body>
+      </html>
+    `;
+    const w = window.open("", "_blank", "noopener,noreferrer");
+    if (!w) return;
+    w.document.open();
+    w.document.write(printable);
+    w.document.close();
+    w.focus();
+    w.print();
   };
 
   return (
@@ -4138,6 +4293,15 @@ function ProgramModulesView({ config, setConfig, eventId, canEdit, onError }) {
           >
             {saving ? "Saving..." : saved ? "Saved" : "Save program"}
           </button>
+          {isAdmin ? (
+            <button
+              type="button"
+              onClick={downloadProgramPdf}
+              className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Download program PDF
+            </button>
+          ) : null}
         </div>
       </div>
 
