@@ -826,8 +826,6 @@ export default function PamaconApp({
       committeeShirtSizeOther: u.committeeShirtSizeOther ?? prev.committeeShirtSizeOther ?? "",
       tshirtClaimed: Boolean(u.tshirtClaimed ?? prev.tshirtClaimed),
       conferenceKitClaimed: Boolean(u.conferenceKitClaimed ?? prev.conferenceKitClaimed),
-      paymentProofScreenshotDataUrl: u.paymentProofScreenshotDataUrl ?? prev.paymentProofScreenshotDataUrl ?? "",
-      paymentProofUploadedAt: u.paymentProofUploadedAt ?? prev.paymentProofUploadedAt ?? "",
       paymentValidationStatus: u.paymentValidationStatus ?? prev.paymentValidationStatus ?? "pending",
       paymentValidatedAt: u.paymentValidatedAt ?? prev.paymentValidatedAt ?? "",
       paymentValidatedBy: u.paymentValidatedBy ?? prev.paymentValidatedBy ?? "",
@@ -898,8 +896,6 @@ export default function PamaconApp({
         committeeShirtSizeOther: r.committeeShirtSizeOther ?? prev.committeeShirtSizeOther ?? "",
         tshirtClaimed: Boolean(r.tshirtClaimed ?? prev.tshirtClaimed),
         conferenceKitClaimed: Boolean(r.conferenceKitClaimed ?? prev.conferenceKitClaimed),
-        paymentProofScreenshotDataUrl: r.paymentProofScreenshotDataUrl ?? prev.paymentProofScreenshotDataUrl ?? "",
-        paymentProofUploadedAt: r.paymentProofUploadedAt ?? prev.paymentProofUploadedAt ?? "",
         paymentValidationStatus: r.paymentValidationStatus ?? prev.paymentValidationStatus ?? "pending",
         paymentValidatedAt: r.paymentValidatedAt ?? prev.paymentValidatedAt ?? "",
         paymentValidatedBy: r.paymentValidatedBy ?? prev.paymentValidatedBy ?? "",
@@ -1447,6 +1443,7 @@ function RegistrantsLedger({
   const [committeeRolesLoading, setCommitteeRolesLoading] = useState(false);
   const [claimFilter, setClaimFilter] = useState("all");
   const [paymentProofReviewFilter, setPaymentProofReviewFilter] = useState("all");
+  const [superuserRegistrantFilter, setSuperuserRegistrantFilter] = useState("all");
   const [fName, setFName] = useState("");
   const [fRole, setFRole] = useState("");
   const [fFeeMin, setFFeeMin] = useState("");
@@ -1615,6 +1612,10 @@ function RegistrantsLedger({
         const validated = String(r.paymentValidationStatus || "").toLowerCase() === "validated";
         if (seeded || !hasProof || validated) return false;
       }
+      if (isSuperuser && superuserRegistrantFilter === "non-seeded-registered") {
+        const status = String(r.status || "").trim().toLowerCase();
+        if (seeded || status !== "registered") return false;
+      }
       if (fName && !r.name.toLowerCase().includes(fName.toLowerCase())) return false;
       if (fRole && !r.role.toLowerCase().includes(fRole.toLowerCase())) return false;
       const fee = Number(r.totalFee) || 0;
@@ -1628,7 +1629,7 @@ function RegistrantsLedger({
       if (fRemarks && !(r.remarks || "").toLowerCase().includes(fRemarks.toLowerCase())) return false;
       return true;
     });
-  }, [registrants, claimFilter, paymentProofReviewFilter, myEmail, fName, fRole, fFeeMin, fFeeMax, fPaidMin, fPaidMax, fMode, fStatus, fRemarks]);
+  }, [registrants, claimFilter, paymentProofReviewFilter, superuserRegistrantFilter, isSuperuser, myEmail, fName, fRole, fFeeMin, fFeeMax, fPaidMin, fPaidMax, fMode, fStatus, fRemarks]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
@@ -1662,6 +1663,7 @@ function RegistrantsLedger({
   const clearFilters = () => {
     setClaimFilter("all");
     setPaymentProofReviewFilter("all");
+    setSuperuserRegistrantFilter("all");
     setFName("");
     setFRole("");
     setFFeeMin("");
@@ -2251,6 +2253,7 @@ function RegistrantsLedger({
                   onClick={() => {
                     setClaimFilter("seed-unclaimed");
                     setPaymentProofReviewFilter("all");
+                    setSuperuserRegistrantFilter("all");
                   }}
                   className={`rounded-lg px-2.5 py-1 text-xs font-semibold border ${
                     claimFilter === "seed-unclaimed" ? "border-red-300 bg-red-50 text-red-700" : "border-slate-200 text-slate-600 hover:bg-slate-50"
@@ -2263,6 +2266,7 @@ function RegistrantsLedger({
                   onClick={() => {
                     setClaimFilter("seed-claimed-by-me");
                     setPaymentProofReviewFilter("all");
+                    setSuperuserRegistrantFilter("all");
                   }}
                   className={`rounded-lg px-2.5 py-1 text-xs font-semibold border ${
                     claimFilter === "seed-claimed-by-me" ? "border-violet-300 bg-violet-50 text-violet-700" : "border-slate-200 text-slate-600 hover:bg-slate-50"
@@ -2275,6 +2279,7 @@ function RegistrantsLedger({
                   onClick={() => {
                     setClaimFilter("all");
                     setPaymentProofReviewFilter("all");
+                    setSuperuserRegistrantFilter("all");
                   }}
                   className={`rounded-lg px-2.5 py-1 text-xs font-semibold border ${
                     claimFilter === "all" ? "border-slate-300 bg-slate-100 text-slate-800" : "border-slate-200 text-slate-600 hover:bg-slate-50"
@@ -2282,6 +2287,37 @@ function RegistrantsLedger({
                 >
                   Show all delegates
                 </button>
+
+                {isSuperuser ? (
+                  <>
+                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide ml-1">Superuser</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setClaimFilter("all");
+                        setPaymentProofReviewFilter("all");
+                        setSuperuserRegistrantFilter("non-seeded-registered");
+                      }}
+                      className={`rounded-lg px-2.5 py-1 text-xs font-semibold border ${
+                        superuserRegistrantFilter === "non-seeded-registered"
+                          ? "border-sky-400 bg-sky-100 text-sky-900"
+                          : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      Non-seeded + registered
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSuperuserRegistrantFilter("all")}
+                      className={`rounded-lg px-2 py-1 text-[11px] font-semibold border border-slate-200 text-slate-500 hover:bg-slate-50 ${
+                        superuserRegistrantFilter === "all" ? "opacity-40 pointer-events-none" : ""
+                      }`}
+                      disabled={superuserRegistrantFilter === "all"}
+                    >
+                      Clear superuser filter
+                    </button>
+                  </>
+                ) : null}
                 {canEdit && paymentsAwaitingConfirmationCount > 0 ? (
                   <>
                     <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide ml-1">Payment review</span>
@@ -2290,6 +2326,7 @@ function RegistrantsLedger({
                       onClick={() => {
                         setClaimFilter("all");
                         setPaymentProofReviewFilter("awaiting");
+                        setSuperuserRegistrantFilter("all");
                       }}
                       className={`rounded-lg px-2.5 py-1 text-xs font-semibold border ${
                         paymentProofReviewFilter === "awaiting"
