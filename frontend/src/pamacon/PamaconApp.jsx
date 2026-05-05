@@ -4262,13 +4262,29 @@ function ProgramModulesView({ config, setConfig, eventId, canEdit, isAdmin, onEr
       </body>
       </html>
     `;
-    const w = window.open("", "_blank", "noopener,noreferrer");
-    if (!w) return;
-    w.document.open();
-    w.document.write(printable);
-    w.document.close();
-    w.focus();
-    w.print();
+    const blob = new Blob([printable], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const w = window.open(url, "_blank");
+    if (!w) {
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `pamacon-program-${new Date().toISOString().slice(0, 10)}.html`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      return;
+    }
+    const triggerPrint = () => {
+      try {
+        w.focus();
+        w.print();
+      } finally {
+        setTimeout(() => URL.revokeObjectURL(url), 15000);
+      }
+    };
+    w.onload = triggerPrint;
+    setTimeout(triggerPrint, 700);
   };
 
   return (
