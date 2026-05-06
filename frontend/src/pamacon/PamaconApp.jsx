@@ -3162,6 +3162,44 @@ function AccommodationView({ config, registrants, onPair, onToggleSolo, canEdit 
     }),
     [list]
   );
+  const downloadRoomListCsv = () => {
+    const headers = [
+      "Room Number",
+      "Status",
+      "Pairing Type",
+      "Occupant A Name",
+      "Occupant A Position",
+      "Occupant A Gender",
+      "Occupant B Name",
+      "Occupant B Position",
+      "Occupant B Gender",
+      "Room Cost",
+    ];
+    const esc = (v) => `"${String(v ?? "").replaceAll("\"", "\"\"")}"`;
+    const rows = list.map((room, idx) =>
+      [
+        `Room ${idx + 1}`,
+        room.status || "",
+        room.pairType || "",
+        room.a?.name || "",
+        formatPositionShort(room.a?.role || ""),
+        room.a?.gender || "",
+        room.b?.name || "",
+        formatPositionShort(room.b?.role || ""),
+        room.b?.gender || "",
+        Number(room.price || 0),
+      ].map(esc).join(",")
+    );
+    const csv = [headers.map(esc).join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `pamacon-room-list-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+  };
   const suggestedMovements = useMemo(() => {
     const unpaired = list.filter((x) => x.status === "Needs Pairing").map((x) => x.a);
     return unpaired.map((u) => {
@@ -3277,6 +3315,14 @@ function AccommodationView({ config, registrants, onPair, onToggleSolo, canEdit 
               {opt.label}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={downloadRoomListCsv}
+            className="ml-auto inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+          >
+            <Download size={15} />
+            Download room list
+          </button>
         </div>
       </div>
       {randomized && roomSummary.needsPairing > 0 && (
