@@ -434,21 +434,21 @@ export default function ParticipantPortal({
                               </p>
                               {variant.icon}
                             </div>
-                            {item.assigned ? (
+                            {isRockOfAgesFellowship(item) ? (
                               <div className="mt-1.5">
-                                {isRockOfAgesFellowship(item) ? (
-                                  <img
-                                    src="/landing/fellowship-rock-of-ages.png"
-                                    alt="Rock of Ages fellowship theme"
-                                    className="h-10 w-auto rounded-md border border-slate-200 bg-white object-contain"
-                                    loading="lazy"
-                                  />
-                                ) : (
-                                  <p className={`inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider ${variant.kind === "keynote" ? "text-[#002F5D]" : "text-slate-500"}`}>
-                                    <User size={11} />
-                                    {item.assigned}
-                                  </p>
-                                )}
+                                <img
+                                  src="/landing/fellowship-rock-of-ages.png"
+                                  alt="Rock of Ages fellowship theme"
+                                  className="h-10 w-auto rounded-md border border-slate-200 bg-white object-contain"
+                                  loading="lazy"
+                                />
+                              </div>
+                            ) : item.assigned ? (
+                              <div className="mt-1.5">
+                                <p className={`inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider ${variant.kind === "keynote" ? "text-[#002F5D]" : "text-slate-500"}`}>
+                                  <User size={11} />
+                                  {item.assigned}
+                                </p>
                               </div>
                             ) : null}
                           </div>
