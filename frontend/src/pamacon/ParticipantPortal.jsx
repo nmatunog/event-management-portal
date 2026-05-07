@@ -59,7 +59,7 @@ export default function ParticipantPortal({
   const photosSearchUrl = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${venue} photos`)}`;
   const programRows = useMemo(() => {
     const rows = Array.isArray(config?.programModules) ? config.programModules : [];
-    return rows
+    const normalized = rows
       .map((row, idx) => ({
         id: `${idx}-${String(row?.day || "")}-${String(row?.time || "")}`,
         day: String(row?.day || "").trim() || "Program",
@@ -68,6 +68,27 @@ export default function ParticipantPortal({
         assigned: String(row?.assigned || "").trim(),
       }))
       .filter((row) => row.day || row.time || row.program || row.assigned);
+    const hasWelcomeDinner = normalized.some((row) => String(row.program || "").toLowerCase().includes("welcome dinner"));
+    const hasRockFellowship = normalized.some((row) => isRockOfAgesFellowship(row));
+    if (!hasWelcomeDinner) {
+      normalized.push({
+        id: "fallback-welcome-dinner",
+        day: "Day 1 - May 13",
+        time: "6:00 PM",
+        program: "Welcome Dinner",
+        assigned: "Arctic Hall",
+      });
+    }
+    if (!hasRockFellowship) {
+      normalized.push({
+        id: "fallback-rock-of-ages",
+        day: "Day 2 - May 14",
+        time: "6:30 PM",
+        program: "Fellowship Dinner",
+        assigned: "Rock of Ages",
+      });
+    }
+    return normalized;
   }, [config?.programModules]);
   const groupedProgram = useMemo(() => {
     const order = [];
