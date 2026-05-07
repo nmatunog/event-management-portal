@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Calendar, ChevronDown, ClipboardCheck, Film, ImageIcon, LogOut, MapPin, Sparkles } from "lucide-react";
+import { Calendar, ChevronDown, ClipboardCheck, Clock3, Film, ImageIcon, LogOut, MapPin, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { DEFAULT_PAMACON_CONFIG, DEFAULT_ATTENDEE_PORTAL, PAMACON_TITLE } from "./defaultConfig";
 import AttendeeDetailsForm from "./AttendeeDetailsForm";
@@ -14,6 +14,12 @@ function youtubeEmbedSrc(url) {
   const embed = trimmed.match(/youtube\.com\/embed\/([^?&\s#]+)/);
   if (embed?.[1]) return `https://www.youtube.com/embed/${embed[1]}`;
   return null;
+}
+
+function isRockOfAgesFellowship(item) {
+  const assigned = String(item?.assigned || "").trim().toLowerCase();
+  const program = String(item?.program || "").trim().toLowerCase();
+  return assigned.includes("rock of ages") || program.includes("fellowship");
 }
 
 /**
@@ -51,6 +57,40 @@ export default function ParticipantPortal({
   const mapsOpenUrl = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`;
   const mapsDirectionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${mapsQuery}`;
   const photosSearchUrl = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${venue} photos`)}`;
+  const programRows = useMemo(() => {
+    const rows = Array.isArray(config?.programModules) ? config.programModules : [];
+    return rows
+      .map((row, idx) => ({
+        id: `${idx}-${String(row?.day || "")}-${String(row?.time || "")}`,
+        day: String(row?.day || "").trim() || "Program",
+        time: String(row?.time || "").trim(),
+        program: String(row?.program || "").trim(),
+        assigned: String(row?.assigned || "").trim(),
+      }))
+      .filter((row) => row.day || row.time || row.program || row.assigned);
+  }, [config?.programModules]);
+  const groupedProgram = useMemo(() => {
+    const order = [];
+    const map = new Map();
+    for (const row of programRows) {
+      if (!map.has(row.day)) {
+        map.set(row.day, []);
+        order.push(row.day);
+      }
+      map.get(row.day).push(row);
+    }
+    return { order, map };
+  }, [programRows]);
+  const [activeProgramDay, setActiveProgramDay] = useState("");
+  useEffect(() => {
+    if (!groupedProgram.order.length) {
+      setActiveProgramDay("");
+      return;
+    }
+    if (!activeProgramDay || !groupedProgram.map.has(activeProgramDay)) {
+      setActiveProgramDay(groupedProgram.order[0]);
+    }
+  }, [groupedProgram, activeProgramDay]);
 
   useEffect(() => {
     if (!zoomPoster) return undefined;
@@ -307,6 +347,66 @@ export default function ParticipantPortal({
                 </a>
               </p>
             )}
+          </div>
+        </section>
+
+        <section aria-labelledby="program-heading" className="space-y-4">
+          <h2 id="program-heading" className="text-lg sm:text-xl font-semibold text-slate-900 flex items-center gap-2">
+            <Clock3 className="text-red-600 shrink-0" size={22} aria-hidden />
+            Program placeholder
+          </h2>
+          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+            <div className="px-4 sm:px-5 py-4 border-b border-slate-100 bg-gradient-to-r from-red-50/70 to-white">
+              <p className="text-sm text-slate-700 leading-relaxed">
+                Preview schedule for attendees. Admin can keep updating this in <strong>Program Modules</strong> and this block reflects it.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {groupedProgram.order.map((day) => (
+                  <button
+                    key={day}
+                    type="button"
+                    onClick={() => setActiveProgramDay(day)}
+                    className={`rounded-full px-3.5 py-1.5 text-xs font-bold uppercase tracking-wide border transition ${
+                      activeProgramDay === day
+                        ? "bg-red-600 border-red-600 text-white"
+                        : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    {day}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="p-4 sm:p-5">
+              {activeProgramDay && groupedProgram.map.has(activeProgramDay) ? (
+                <div className="space-y-2.5">
+                  {groupedProgram.map.get(activeProgramDay).map((item) => (
+                    <div key={item.id} className="rounded-xl border border-slate-200 bg-slate-50/60 px-3.5 py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-xs font-black uppercase tracking-[0.16em] text-red-700">{item.time || "TBD"}</p>
+                        {item.assigned ? (
+                          isRockOfAgesFellowship(item) ? (
+                            <img
+                              src="/landing/fellowship-rock-of-ages.png"
+                              alt="Rock of Ages fellowship theme"
+                              className="h-10 w-auto rounded-md border border-slate-200 bg-white object-contain"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <p className="text-[11px] font-semibold text-slate-500 truncate">{item.assigned}</p>
+                          )
+                        ) : null}
+                      </div>
+                      <p className="mt-1.5 text-sm font-semibold text-slate-900 leading-snug">{item.program || "Program item"}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                  Program details will appear here once modules are configured.
+                </div>
+              )}
+            </div>
           </div>
         </section>
 
