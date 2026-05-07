@@ -498,6 +498,7 @@ export default function PamaconApp({
           company: s.company,
           tier: s.tier,
           amount: Number(s.amount || 0),
+          paid: Boolean(s.paid) || String(s.remarks || "").trim().toLowerCase() === "collected",
           remarks: s.remarks || "Uncollected",
         }))
       );
@@ -792,14 +793,18 @@ export default function PamaconApp({
   }, [eventId, reloadAll]);
 
   const sponsorRevenueTotal = useMemo(() => sponsors.reduce((s, x) => s + (Number(x.amount) || 0), 0), [sponsors]);
+  const sponsorRevenueCollected = useMemo(
+    () => sponsors.filter((s) => Boolean(s.paid)).reduce((sum, row) => sum + (Number(row.amount) || 0), 0),
+    [sponsors]
+  );
   const delegateRevenueActual = useMemo(() => registrants.reduce((s, x) => s + (Number(x.paid) || 0), 0), [registrants]);
   const totalRevenueProjection = useMemo(
-    () => Number(config.targetRegistrants) * 8000 + sponsorRevenueTotal,
-    [config.targetRegistrants, sponsorRevenueTotal]
+    () => Number(config.targetRegistrants) * 8000 + sponsorRevenueCollected,
+    [config.targetRegistrants, sponsorRevenueCollected]
   );
   const totalRealizedRevenueValue = useMemo(
-    () => sponsorRevenueTotal + delegateRevenueActual,
-    [sponsorRevenueTotal, delegateRevenueActual]
+    () => sponsorRevenueCollected + delegateRevenueActual,
+    [sponsorRevenueCollected, delegateRevenueActual]
   );
   const totalSupplierSpend = useMemo(() => suppliers.reduce((s, x) => s + (Number(x.amount) || 0), 0), [suppliers]);
   const totalSpeakerHonorarium = useMemo(() => speakers.reduce((s, x) => s + (Number(x.honorarium) || 0), 0), [speakers]);
