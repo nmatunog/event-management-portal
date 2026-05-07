@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, Calendar, MapPin, Sparkles } from "lucide-react";
 import { getEvents } from "../lib/api";
-import { PAMACON_TITLE } from "../pamacon/defaultConfig";
+import { DEFAULT_ATTENDEE_PORTAL, PAMACON_TITLE } from "../pamacon/defaultConfig";
 
 /**
  * Public marketing page — layout, palette, and type pegged to PAMACON 2026 print posters:
@@ -14,6 +14,7 @@ export default function PublicLanding() {
   const [loadError, setLoadError] = useState("");
   const [copiedField, setCopiedField] = useState("");
   const [copyToast, setCopyToast] = useState("");
+  const [posterIdx, setPosterIdx] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -39,6 +40,20 @@ export default function PublicLanding() {
   const start = heroEvent?.start_date || "2026-05-13";
   const end = heroEvent?.end_date || "2026-05-15";
   const dateLabel = formatDateRange(start, end);
+  const eventPosterSlides = getPosterSlidesFromEvent(heroEvent);
+  const activePoster = eventPosterSlides[posterIdx] || eventPosterSlides[0] || null;
+
+  useEffect(() => {
+    setPosterIdx(0);
+  }, [eventPosterSlides.length]);
+
+  useEffect(() => {
+    if (eventPosterSlides.length <= 1) return undefined;
+    const timer = window.setInterval(() => {
+      setPosterIdx((i) => (i + 1) % eventPosterSlides.length);
+    }, 3800);
+    return () => window.clearInterval(timer);
+  }, [eventPosterSlides.length]);
   const copyValue = async (label, value) => {
     try {
       await navigator.clipboard.writeText(String(value));
@@ -208,6 +223,78 @@ export default function PublicLanding() {
           </article>
         </section>
 
+        <section className="mt-14 sm:mt-16 rounded-3xl border border-zinc-200 bg-white p-6 sm:p-8 shadow-lg shadow-zinc-900/5">
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Poster ad space</p>
+              <h3 className="mt-1 text-xl font-extrabold text-zinc-900">Event highlights carousel</h3>
+              <p className="mt-2 text-sm text-zinc-600">
+                Portrait posters auto-rotate for Speaker Highlights, Cebu Activities, Fellowship Night Theme, Program Flow, and more.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={eventPosterSlides.length <= 1}
+                onClick={() => setPosterIdx((i) => (i - 1 + eventPosterSlides.length) % eventPosterSlides.length)}
+                className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-zinc-700 hover:bg-zinc-50 disabled:opacity-40"
+              >
+                Prev
+              </button>
+              <button
+                type="button"
+                disabled={eventPosterSlides.length <= 1}
+                onClick={() => setPosterIdx((i) => (i + 1) % eventPosterSlides.length)}
+                className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-zinc-700 hover:bg-zinc-50 disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+          <div className="mt-5 grid md:grid-cols-[minmax(0,340px)_1fr] gap-6 items-start">
+            <figure className="mx-auto w-full max-w-[340px]">
+              <div className="relative overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50 shadow-md aspect-[3/4]">
+                {activePoster?.url ? (
+                  <img
+                    src={activePoster.url}
+                    alt={activePoster.title || "Event poster"}
+                    className="absolute inset-0 h-full w-full object-cover"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-zinc-500">
+                    No poster uploaded yet
+                  </div>
+                )}
+              </div>
+              <figcaption className="mt-2 text-xs text-zinc-500">
+                {eventPosterSlides.length > 0 ? `Slide ${posterIdx + 1} of ${eventPosterSlides.length}` : "No slides configured"}
+              </figcaption>
+            </figure>
+            <div className="space-y-3">
+              <p className="text-sm font-bold text-zinc-900">{activePoster?.title || "Event poster"}</p>
+              <p className="text-sm text-zinc-600">
+                Update these slides in admin: <strong>Setup</strong> → <strong>Attendee Portal Posters</strong>. The homepage carousel mirrors those poster URLs automatically.
+              </p>
+              <div className="flex flex-wrap gap-2 pt-1">
+                {eventPosterSlides.map((slide, idx) => (
+                  <button
+                    key={`${slide.url}-${idx}`}
+                    type="button"
+                    onClick={() => setPosterIdx(idx)}
+                    className={`h-2.5 w-8 rounded-full transition-colors ${
+                      idx === posterIdx ? "bg-[#e11d74]" : "bg-zinc-300 hover:bg-zinc-400"
+                    }`}
+                    aria-label={`Show poster ${idx + 1}`}
+                    title={slide.title || `Poster ${idx + 1}`}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* Rates + payment details */}
         <section id="rates" className="mt-14 sm:mt-16 scroll-mt-28 grid md:grid-cols-2 gap-5">
           <div className="rounded-3xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-lg shadow-zinc-900/5">
@@ -327,4 +414,22 @@ function formatDateRange(startIso, endIso) {
   }
   if (a && !Number.isNaN(a.getTime())) return a.toLocaleDateString("en-PH", { month: "long", day: "numeric", year: "numeric" });
   return String(startIso || endIso);
+}
+
+function getPosterSlidesFromEvent(eventRow) {
+  const fallback = DEFAULT_ATTENDEE_PORTAL.posterImageUrls
+    .filter((url) => String(url || "").trim())
+    .map((url, idx) => ({ url: String(url), title: `Event Poster ${idx + 1}` }));
+  if (!eventRow?.config_json) return fallback;
+  try {
+    const parsed = JSON.parse(eventRow.config_json);
+    const raw = Array.isArray(parsed?.attendeePortal?.posterImageUrls) ? parsed.attendeePortal.posterImageUrls : [];
+    const cleaned = raw
+      .map((url) => String(url || "").trim())
+      .filter(Boolean)
+      .map((url, idx) => ({ url, title: `Event Poster ${idx + 1}` }));
+    return cleaned.length > 0 ? cleaned : fallback;
+  } catch {
+    return fallback;
+  }
 }
