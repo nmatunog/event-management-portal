@@ -172,13 +172,58 @@ export default function PublicLanding() {
           <div className="order-1 lg:order-2 flex justify-center lg:justify-end">
             <figure className="relative w-full max-w-[460px]">
               <div className="absolute -inset-3 rounded-[2rem] bg-gradient-to-br from-[#1d4ed8]/15 via-[#e11d74]/10 to-amber-400/25 blur-2xl" aria-hidden />
-              <img
-                src="/landing/photowall-light.png"
-                alt="PAMACON photowall art reference"
-                className="relative w-full rounded-3xl border border-white shadow-2xl shadow-zinc-900/15 ring-1 ring-black/5 object-cover"
-                loading="eager"
-                decoding="async"
-              />
+              <div className="relative overflow-hidden rounded-3xl border border-white shadow-2xl shadow-zinc-900/15 ring-1 ring-black/5 bg-zinc-50 aspect-[3/4]">
+                {activePoster?.url ? (
+                  <img
+                    src={activePoster.url}
+                    alt={activePoster.title || "Event poster"}
+                    className="absolute inset-0 h-full w-full object-cover"
+                    loading="eager"
+                    decoding="async"
+                  />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-zinc-500">
+                    No poster uploaded yet
+                  </div>
+                )}
+              </div>
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <p className="text-xs text-zinc-500">
+                  {eventPosterSlides.length > 0 ? `Slide ${posterIdx + 1} of ${eventPosterSlides.length}` : "No slides configured"}
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={eventPosterSlides.length <= 1}
+                    onClick={() => setPosterIdx((i) => (i - 1 + eventPosterSlides.length) % eventPosterSlides.length)}
+                    className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-zinc-700 hover:bg-zinc-50 disabled:opacity-40"
+                  >
+                    Prev
+                  </button>
+                  <button
+                    type="button"
+                    disabled={eventPosterSlides.length <= 1}
+                    onClick={() => setPosterIdx((i) => (i + 1) % eventPosterSlides.length)}
+                    className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-zinc-700 hover:bg-zinc-50 disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {eventPosterSlides.map((slide, idx) => (
+                  <button
+                    key={`${slide.url}-${idx}`}
+                    type="button"
+                    onClick={() => setPosterIdx(idx)}
+                    className={`h-2.5 w-8 rounded-full transition-colors ${
+                      idx === posterIdx ? "bg-[#e11d74]" : "bg-zinc-300 hover:bg-zinc-400"
+                    }`}
+                    aria-label={`Show poster ${idx + 1}`}
+                    title={slide.title || `Poster ${idx + 1}`}
+                  />
+                ))}
+              </div>
             </figure>
           </div>
         </section>
@@ -221,78 +266,6 @@ export default function PublicLanding() {
               Open sign-in
             </Link>
           </article>
-        </section>
-
-        <section className="mt-14 sm:mt-16 rounded-3xl border border-zinc-200 bg-white p-6 sm:p-8 shadow-lg shadow-zinc-900/5">
-          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Poster ad space</p>
-              <h3 className="mt-1 text-xl font-extrabold text-zinc-900">Event highlights carousel</h3>
-              <p className="mt-2 text-sm text-zinc-600">
-                Portrait posters auto-rotate for Speaker Highlights, Cebu Activities, Fellowship Night Theme, Program Flow, and more.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                disabled={eventPosterSlides.length <= 1}
-                onClick={() => setPosterIdx((i) => (i - 1 + eventPosterSlides.length) % eventPosterSlides.length)}
-                className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-zinc-700 hover:bg-zinc-50 disabled:opacity-40"
-              >
-                Prev
-              </button>
-              <button
-                type="button"
-                disabled={eventPosterSlides.length <= 1}
-                onClick={() => setPosterIdx((i) => (i + 1) % eventPosterSlides.length)}
-                className="rounded-full border border-zinc-200 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-zinc-700 hover:bg-zinc-50 disabled:opacity-40"
-              >
-                Next
-              </button>
-            </div>
-          </div>
-          <div className="mt-5 grid md:grid-cols-[minmax(0,340px)_1fr] gap-6 items-start">
-            <figure className="mx-auto w-full max-w-[340px]">
-              <div className="relative overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50 shadow-md aspect-[3/4]">
-                {activePoster?.url ? (
-                  <img
-                    src={activePoster.url}
-                    alt={activePoster.title || "Event poster"}
-                    className="absolute inset-0 h-full w-full object-cover"
-                    loading="lazy"
-                    decoding="async"
-                  />
-                ) : (
-                  <div className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-zinc-500">
-                    No poster uploaded yet
-                  </div>
-                )}
-              </div>
-              <figcaption className="mt-2 text-xs text-zinc-500">
-                {eventPosterSlides.length > 0 ? `Slide ${posterIdx + 1} of ${eventPosterSlides.length}` : "No slides configured"}
-              </figcaption>
-            </figure>
-            <div className="space-y-3">
-              <p className="text-sm font-bold text-zinc-900">{activePoster?.title || "Event poster"}</p>
-              <p className="text-sm text-zinc-600">
-                Update these slides in admin: <strong>Setup</strong> → <strong>Attendee Portal Posters</strong>. The homepage carousel mirrors those poster URLs automatically.
-              </p>
-              <div className="flex flex-wrap gap-2 pt-1">
-                {eventPosterSlides.map((slide, idx) => (
-                  <button
-                    key={`${slide.url}-${idx}`}
-                    type="button"
-                    onClick={() => setPosterIdx(idx)}
-                    className={`h-2.5 w-8 rounded-full transition-colors ${
-                      idx === posterIdx ? "bg-[#e11d74]" : "bg-zinc-300 hover:bg-zinc-400"
-                    }`}
-                    aria-label={`Show poster ${idx + 1}`}
-                    title={slide.title || `Poster ${idx + 1}`}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
         </section>
 
         {/* Rates + payment details */}
