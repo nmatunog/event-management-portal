@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Calendar, ChevronDown, ClipboardCheck, Clock3, Film, ImageIcon, LogOut, MapPin, Sparkles } from "lucide-react";
+import { Award, Calendar, Camera, ChevronDown, ClipboardCheck, Clock3, Film, ImageIcon, LogOut, MapPin, Music, Sparkles, Star, User, Utensils } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { DEFAULT_PAMACON_CONFIG, DEFAULT_ATTENDEE_PORTAL, PAMACON_TITLE } from "./defaultConfig";
 import AttendeeDetailsForm from "./AttendeeDetailsForm";
@@ -351,55 +351,112 @@ export default function ParticipantPortal({
         </section>
 
         <section aria-labelledby="program-heading" className="space-y-4">
-          <h2 id="program-heading" className="text-lg sm:text-xl font-semibold text-slate-900 flex items-center gap-2">
-            <Clock3 className="text-red-600 shrink-0" size={22} aria-hidden />
-            Program placeholder
-          </h2>
-          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-            <div className="px-4 sm:px-5 py-4 border-b border-slate-100 bg-gradient-to-r from-red-50/70 to-white">
-              <p className="text-sm text-slate-700 leading-relaxed">
-                Preview schedule for attendees. Admin can keep updating this in <strong>Program Modules</strong> and this block reflects it.
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {groupedProgram.order.map((day) => (
-                  <button
-                    key={day}
-                    type="button"
-                    onClick={() => setActiveProgramDay(day)}
-                    className={`rounded-full px-3.5 py-1.5 text-xs font-bold uppercase tracking-wide border transition ${
-                      activeProgramDay === day
-                        ? "bg-red-600 border-red-600 text-white"
-                        : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
-                    }`}
-                  >
-                    {day}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="p-4 sm:p-5">
-              {activeProgramDay && groupedProgram.map.has(activeProgramDay) ? (
-                <div className="space-y-2.5">
-                  {groupedProgram.map.get(activeProgramDay).map((item) => (
-                    <div key={item.id} className="rounded-xl border border-slate-200 bg-slate-50/60 px-3.5 py-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-xs font-black uppercase tracking-[0.16em] text-red-700">{item.time || "TBD"}</p>
-                        {item.assigned ? (
-                          isRockOfAgesFellowship(item) ? (
-                            <img
-                              src="/landing/fellowship-rock-of-ages.png"
-                              alt="Rock of Ages fellowship theme"
-                              className="h-10 w-auto rounded-md border border-slate-200 bg-white object-contain"
-                              loading="lazy"
-                            />
-                          ) : (
-                            <p className="text-[11px] font-semibold text-slate-500 truncate">{item.assigned}</p>
-                          )
-                        ) : null}
-                      </div>
-                      <p className="mt-1.5 text-sm font-semibold text-slate-900 leading-snug">{item.program || "Program item"}</p>
-                    </div>
+          <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+            <div className="relative border-b border-slate-100 bg-gradient-to-r from-red-50 via-white to-blue-50 px-4 sm:px-6 py-5">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <h2 id="program-heading" className="text-lg sm:text-xl font-black tracking-tight text-slate-900 flex items-center gap-2">
+                  <Clock3 className="text-red-600 shrink-0" size={22} aria-hidden />
+                  Conference Program Placeholder
+                </h2>
+                <div className="flex gap-1 bg-white/95 p-1 rounded-full border border-slate-200 shadow-sm">
+                  {groupedProgram.order.map((day) => (
+                    <button
+                      key={day}
+                      type="button"
+                      onClick={() => setActiveProgramDay(day)}
+                      className={`px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-[0.2em] transition-all ${
+                        activeProgramDay === day ? "bg-[#E31E24] text-white shadow" : "text-slate-500 hover:bg-slate-100"
+                      }`}
+                    >
+                      {programDayLabel(day)}
+                    </button>
                   ))}
+                </div>
+              </div>
+              <p className="mt-2 text-sm text-slate-600">
+                Styled attendee-facing schedule based on admin-maintained <strong>Program Modules</strong>.
+              </p>
+            </div>
+
+            <div className="p-4 sm:p-6">
+              {activeProgramDay && groupedProgram.map.has(activeProgramDay) ? (
+                <div className="space-y-3">
+                  {groupedProgram.map.get(activeProgramDay).map((item, idx) => {
+                    const variant = classifyProgramItem(item);
+                    return (
+                      <div
+                        key={item.id}
+                        className={`rounded-2xl border px-4 py-3.5 transition-all ${
+                          variant.kind === "keynote"
+                            ? "bg-gradient-to-r from-[#E31E24]/5 to-white border-[#E31E24]/25 shadow-sm"
+                            : variant.kind === "special"
+                            ? "bg-[#002F5D]/5 border-[#002F5D]/20"
+                            : idx % 2 === 0
+                            ? "bg-white border-slate-200"
+                            : "bg-slate-50/70 border-slate-200/80"
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="min-w-[4.5rem]">
+                            <p className={`text-[11px] font-black tracking-wide ${variant.kind === "keynote" ? "text-[#E31E24]" : "text-slate-600"}`}>
+                              {item.time || "TBD"}
+                            </p>
+                            <div className={`mt-1 h-2.5 w-2.5 rounded-full ${variant.kind === "keynote" ? "bg-[#E31E24]" : "bg-slate-300"}`} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {variant.kind === "keynote" ? (
+                                <span className="bg-[#E31E24] text-white text-[9px] font-black px-2 py-0.5 rounded-sm uppercase tracking-wide">Keynote</span>
+                              ) : null}
+                              <p className="text-sm sm:text-base font-black uppercase tracking-tight text-slate-900 leading-tight">
+                                {item.program || "Program item"}
+                              </p>
+                              {variant.icon}
+                            </div>
+                            {item.assigned ? (
+                              <div className="mt-1.5">
+                                {isRockOfAgesFellowship(item) ? (
+                                  <img
+                                    src="/landing/fellowship-rock-of-ages.png"
+                                    alt="Rock of Ages fellowship theme"
+                                    className="h-10 w-auto rounded-md border border-slate-200 bg-white object-contain"
+                                    loading="lazy"
+                                  />
+                                ) : (
+                                  <p className={`inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider ${variant.kind === "keynote" ? "text-[#002F5D]" : "text-slate-500"}`}>
+                                    <User size={11} />
+                                    {item.assigned}
+                                  </p>
+                                )}
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {groupedProgram
+                    .map
+                    .get(activeProgramDay)
+                    .some((item) => isRockOfAgesFellowship(item)) ? (
+                    <div className="mt-5 rounded-[2rem] bg-black p-7 text-center border-b-4 border-yellow-400 shadow-xl relative overflow-hidden">
+                      <div className="absolute inset-0 opacity-25 bg-[radial-gradient(circle_at_50%_50%,_#E31E24_0%,_transparent_70%)]" />
+                      <div className="relative z-10 flex flex-col items-center gap-3">
+                        <p className="text-[#E31E24] font-black text-[11px] tracking-[0.45em] uppercase">Fellowship Night</p>
+                        <img
+                          src="/landing/fellowship-rock-of-ages.png"
+                          alt="Rock of Ages fellowship night theme"
+                          className="max-w-[320px] w-full h-auto object-contain"
+                          loading="lazy"
+                        />
+                        <p className="text-[#FFD700] font-black uppercase text-[10px] tracking-[0.25em] inline-flex items-center gap-1.5">
+                          <Award size={12} />
+                          Unleash your inner rockstar
+                        </p>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               ) : (
                 <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
@@ -518,6 +575,23 @@ function formatDateRange(start, end) {
     return `${s.toLocaleDateString("en-US", { month: "short" })} ${s.getDate()}-${e.getDate()}, ${e.getFullYear()}`;
   }
   return `${s.toLocaleDateString("en-US", { month: "short", day: "numeric" })} - ${e.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
+}
+
+function programDayLabel(day) {
+  const src = String(day || "").toLowerCase();
+  if (src.includes("day 1")) return "Day One";
+  if (src.includes("day 2")) return "Day Two";
+  return String(day || "Program");
+}
+
+function classifyProgramItem(item) {
+  const title = String(item?.program || "").toLowerCase();
+  if (title.includes("keynote")) return { kind: "keynote", icon: <Star size={14} className="text-[#E31E24]" /> };
+  if (title.includes("photo")) return { kind: "normal", icon: <Camera size={14} className="text-slate-400" /> };
+  if (title.includes("lunch") || title.includes("dinner")) return { kind: "normal", icon: <Utensils size={14} className="text-slate-400" /> };
+  if (title.includes("fellowship")) return { kind: "special", icon: <Music size={14} className="text-slate-400" /> };
+  if (title.includes("opening") || title.includes("closing")) return { kind: "special", icon: <Sparkles size={14} className="text-slate-400" /> };
+  return { kind: "normal", icon: null };
 }
 
 function InfoCard({ icon, title, body, chip, onClick, actionLabel, accent = "bg-slate-100 text-slate-600" }) {
