@@ -141,22 +141,21 @@ export default function PublicLanding() {
         {/* Hero — white-poster peg: magenta title, gold year, gold subline, CTA; Sulog poster as visual */}
         <section className="pt-10 sm:pt-14 lg:pt-16 grid lg:grid-cols-[1fr_min(48%,460px)] gap-10 lg:gap-12 items-center">
           <div className="order-2 lg:order-1 space-y-6">
-            <div className="space-y-2 max-w-[520px]">
+            <div className="relative w-full max-w-[520px]">
               <img
                 src="/branding/sulog-logo.jpg"
                 alt="SULOG — Rise with the current"
-                className="h-9 sm:h-11 w-auto object-contain object-left"
+                className="absolute left-0 top-0 h-8 sm:h-9 w-auto object-contain object-left"
                 loading="eager"
                 decoding="async"
               />
               <img
                 src="/branding/pamacon-2026-logo.jpg"
                 alt="PAMACON 2026 in Cebu, May 13–15"
-                className="w-full max-w-[430px] h-auto object-contain object-left"
+                className="w-full max-w-[460px] h-auto object-contain object-left pt-10 sm:pt-11"
                 loading="eager"
                 decoding="async"
               />
-              <p className="text-lg sm:text-xl font-bold uppercase tracking-widest text-gold-gradient-soft">{dateLabel}</p>
             </div>
 
             <p className="text-zinc-600 text-base sm:text-lg leading-relaxed max-w-xl font-medium">
