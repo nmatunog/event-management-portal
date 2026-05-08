@@ -137,14 +137,14 @@ export default function PublicLanding() {
               <img
                 src="/branding/sulog-logo.jpg"
                 alt="SULOG — Rise with the current"
-                className="absolute left-0 top-0 h-8 sm:h-9 w-auto object-contain object-left"
+                className="absolute left-0 top-0 h-12 sm:h-14 w-auto object-contain object-left"
                 loading="eager"
                 decoding="async"
               />
               <img
                 src="/branding/pamacon-2026-logo.jpg"
                 alt="PAMACON 2026 in Cebu, May 13–15"
-                className="w-full max-w-[460px] h-auto object-contain object-left pt-10 sm:pt-11"
+                className="w-full max-w-[460px] h-auto object-contain object-left pt-14 sm:pt-16"
                 loading="eager"
                 decoding="async"
               />
