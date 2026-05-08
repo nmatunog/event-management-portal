@@ -491,6 +491,9 @@ export default function AttendeeDetailsForm({ profile, authEmail, registrationRo
         <p className="text-sm text-slate-700 leading-relaxed">
           If you plan to join optional activities, confirm your registration intent here and upload your GCash / QR payment proof so the committee can include you in the activity list.
         </p>
+        <p className="rounded-xl border border-emerald-300 bg-emerald-100 px-3 py-2 text-xs font-semibold text-emerald-900">
+          This payment section is for <strong>Cebu City Tours &amp; Activities only</strong> (not for conference registration payments).
+        </p>
         <div className="rounded-xl border border-emerald-200 bg-white p-3 sm:p-4 flex flex-col sm:flex-row gap-3 sm:items-center">
           <img
             src={activityGcashQrUrl}
@@ -638,7 +641,7 @@ export default function AttendeeDetailsForm({ profile, authEmail, registrationRo
         }`}
       >
         <h3 className="text-base font-semibold text-slate-900">
-          Payment proof screenshot
+          Conference registration payment proof screenshot
           {requiresPaymentProofUpload ? (
             <span className="ml-2 text-sm font-bold text-rose-700 normal-case">Required for your registration</span>
           ) : registrationRowSummary?.isSeededRegistration ? (
@@ -650,6 +653,7 @@ export default function AttendeeDetailsForm({ profile, authEmail, registrationRo
         ) : null}
         <p className="text-sm text-slate-700 leading-relaxed">
           After you pay, screenshot your bank / GCash confirmation and upload it here. Committee staff are notified to review it in the Delegates module.
+          <span className="block mt-1 font-semibold text-slate-800">This section is for conference registration payment only.</span>
           {requiresPaymentProofUpload ? (
             <span className="block mt-2 font-semibold text-rose-900">
               You are not on the pre-approved seeded list—upload proof of payment before you can save your details to your account.
