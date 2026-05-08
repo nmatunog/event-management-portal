@@ -133,21 +133,23 @@ export default function PublicLanding() {
         {/* Hero — white-poster peg: magenta title, gold year, gold subline, CTA; Sulog poster as visual */}
         <section className="pt-10 sm:pt-14 lg:pt-16 grid lg:grid-cols-[1fr_min(48%,460px)] gap-10 lg:gap-12 items-center">
           <div className="order-2 lg:order-1 space-y-6">
-            <div className="w-full max-w-[520px] flex flex-col items-start gap-2">
-              <img
-                src="/branding/sulog-logo.jpg"
-                alt="SULOG — Rise with the current"
-                className="h-10 sm:h-12 w-auto object-contain object-left"
-                loading="eager"
-                decoding="async"
-              />
-              <img
-                src="/branding/pamacon-2026-logo.jpg"
-                alt="PAMACON 2026 in Cebu, May 13–15"
-                className="w-full max-w-[460px] h-auto object-contain object-left"
-                loading="eager"
-                decoding="async"
-              />
+            <div className="w-full max-w-[460px]">
+              <div className="relative overflow-hidden rounded-3xl border border-white shadow-2xl shadow-zinc-900/10 ring-1 ring-black/5 bg-white aspect-[3/4] p-6 sm:p-8 flex flex-col items-start justify-start">
+                <img
+                  src="/branding/sulog-logo.jpg"
+                  alt="SULOG — Rise with the current"
+                  className="h-14 sm:h-16 w-auto object-contain object-left"
+                  loading="eager"
+                  decoding="async"
+                />
+                <img
+                  src="/branding/pamacon-2026-logo.jpg"
+                  alt="PAMACON 2026 in Cebu, May 13–15"
+                  className="mt-5 w-full max-w-[360px] h-auto object-contain object-left"
+                  loading="eager"
+                  decoding="async"
+                />
+              </div>
             </div>
 
             <p className="text-zinc-600 text-base sm:text-lg leading-relaxed max-w-xl font-medium">
