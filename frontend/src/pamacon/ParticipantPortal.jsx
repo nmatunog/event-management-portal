@@ -131,12 +131,12 @@ export default function ParticipantPortal({
           <div className="flex items-center gap-3 min-w-0">
             <div className="rounded-2xl overflow-hidden bg-white border border-slate-200 flex flex-col items-center justify-center gap-1 px-2 py-1.5 shadow-sm shrink-0 max-w-[min(240px,52vw)]">
               <img
-                src="/branding/sulog-logo.png"
+                src="/branding/sulog-logo.jpg"
                 alt="SULOG — Rise with the current"
                 className="h-4 sm:h-4 w-auto max-w-full object-contain object-center"
               />
               <img
-                src="/branding/pamacon-2026-logo.png"
+                src="/branding/pamacon-2026-logo.jpg"
                 alt="PAMACON 2026 in Cebu, May 13–15"
                 className="h-7 sm:h-8 w-auto max-w-full object-contain object-center"
               />

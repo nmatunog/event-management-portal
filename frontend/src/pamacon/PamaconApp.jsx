@@ -1177,12 +1177,12 @@ export default function PamaconApp({
           <div className="flex items-center gap-3 min-w-0">
             <div className="max-w-[168px] rounded-xl overflow-hidden bg-white border border-slate-200 flex flex-col items-center justify-center gap-0.5 px-1.5 py-1 shrink-0 shadow-sm">
               <img
-                src="/branding/sulog-logo.png"
+                src="/branding/sulog-logo.jpg"
                 alt="SULOG — Rise with the current"
                 className="h-3.5 w-auto max-w-full object-contain object-center"
               />
               <img
-                src="/branding/pamacon-2026-logo.png"
+                src="/branding/pamacon-2026-logo.jpg"
                 alt="PAMACON 2026 in Cebu, May 13–15"
                 className="h-7 w-auto max-w-full object-contain object-center"
               />
