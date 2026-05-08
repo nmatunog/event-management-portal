@@ -150,6 +150,7 @@ function buildQuoteBody(draft, quoteKind) {
 export default function AttendeeDetailsForm({ profile, authEmail, registrationRowSummary, onSaveProfile, profileSaving, quoteEmail }) {
   const [draft, setDraft] = useState(() => draftFromProfile(profile));
   const [expandedTourCard, setExpandedTourCard] = useState("");
+  const [activityQrLoadFailed, setActivityQrLoadFailed] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const [saveError, setSaveError] = useState("");
   const shirtFieldsLocked = !isParticipantShirtEditOpenNow();
@@ -188,7 +189,7 @@ export default function AttendeeDetailsForm({ profile, authEmail, registrationRo
     return String(quoteEmail || "").trim() || fromEnv || "";
   }, [quoteEmail]);
   const activityGcashQrUrl =
-    String(import.meta.env.VITE_ACTIVITY_GCASH_QR_URL || "").trim() || "/payments/gcash-qr.png";
+    String(import.meta.env.VITE_ACTIVITY_GCASH_QR_URL || "").trim() || "/payments/gcash-qr.jpg";
   const hasSelectedActivities = useMemo(
     () =>
       ACTIVITY_KEYS.some(({ key }) => Boolean(draft[key])) ||
@@ -495,11 +496,22 @@ export default function AttendeeDetailsForm({ profile, authEmail, registrationRo
           This payment section is for <strong>Cebu City Tours &amp; Activities only</strong> (not for conference registration payments).
         </p>
         <div className="rounded-xl border border-emerald-200 bg-white p-3 sm:p-4 flex flex-col sm:flex-row gap-3 sm:items-center">
-          <img
-            src={activityGcashQrUrl}
-            alt="GCash QR code for activities payment"
-            className="h-36 w-36 rounded-lg border border-slate-200 bg-white object-contain"
-          />
+          {!activityQrLoadFailed ? (
+            <img
+              src={activityGcashQrUrl}
+              alt="GCash QR code for activities payment"
+              className="h-36 w-36 rounded-lg border border-slate-200 bg-white object-contain"
+              onError={() => setActivityQrLoadFailed(true)}
+            />
+          ) : (
+            <div className="h-36 w-36 rounded-lg border border-amber-300 bg-amber-50 p-2 text-[11px] font-semibold text-amber-900 leading-tight">
+              QR image not found.
+              <span className="block mt-1 font-normal">
+                Add <code className="rounded bg-amber-100 px-1">frontend/public/payments/gcash-qr.jpg</code> or set{" "}
+                <code className="rounded bg-amber-100 px-1">VITE_ACTIVITY_GCASH_QR_URL</code>.
+              </span>
+            </div>
+          )}
           <p className="text-sm text-slate-600 leading-relaxed">
             Scan this QR with GCash to pay for optional activities, then upload the confirmation screenshot below.
           </p>
