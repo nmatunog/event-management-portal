@@ -460,6 +460,14 @@ app.post("/api/registrations/:id/claim-seeded", async (c) => {
     applyText("arrivalCebu");
     applyText("departureCebu");
     applyText("extraOtherRequest");
+    applyText("activityPaymentMethod");
+    applyText("activityPaymentReference");
+    applyText("activityPaymentAmount");
+    applyText("activityPaymentSenderNumber");
+    applyText("activityPaymentProofScreenshotDataUrl");
+    applyText("activityPaymentProofUploadedAt");
+    applyText("activityPaymentConfirmedAt");
+    applyText("activityPaymentStatus");
     applyText("paymentProofScreenshotDataUrl");
     applyText("paymentProofUploadedAt");
     if (p.age !== undefined && p.age !== null) nextMeta.age = String(p.age).trim();
@@ -467,6 +475,7 @@ app.post("/api/registrations/:id/claim-seeded", async (c) => {
     if (p.extraCityTour !== undefined) nextMeta.extraCityTour = Boolean(p.extraCityTour);
     if (p.extraMountainTour !== undefined) nextMeta.extraMountainTour = Boolean(p.extraMountainTour);
     if (p.extraSafari !== undefined) nextMeta.extraSafari = Boolean(p.extraSafari);
+    if (p.activityRegistrationConfirmed !== undefined) nextMeta.activityRegistrationConfirmed = Boolean(p.activityRegistrationConfirmed);
     if (p.mobileNumber !== undefined && p.mobileNumber !== null) {
       const mobile = String(p.mobileNumber).trim();
       nextMeta.mobileNumber = mobile;
@@ -565,6 +574,14 @@ app.post("/api/events/:eventId/registrations/sync-my-profile", requireRole(["adm
   copyText("arrivalCebu");
   copyText("departureCebu");
   copyText("extraOtherRequest");
+  copyText("activityPaymentMethod");
+  copyText("activityPaymentReference");
+  copyText("activityPaymentAmount");
+  copyText("activityPaymentSenderNumber");
+  copyText("activityPaymentProofScreenshotDataUrl");
+  copyText("activityPaymentProofUploadedAt");
+  copyText("activityPaymentConfirmedAt");
+  copyText("activityPaymentStatus");
   copyText("paymentProofScreenshotDataUrl");
   copyText("paymentProofUploadedAt");
   if (profile.age !== undefined && profile.age !== null) nextMeta.age = String(profile.age).trim();
@@ -572,6 +589,7 @@ app.post("/api/events/:eventId/registrations/sync-my-profile", requireRole(["adm
   if (profile.extraCityTour !== undefined) nextMeta.extraCityTour = Boolean(profile.extraCityTour);
   if (profile.extraMountainTour !== undefined) nextMeta.extraMountainTour = Boolean(profile.extraMountainTour);
   if (profile.extraSafari !== undefined) nextMeta.extraSafari = Boolean(profile.extraSafari);
+  if (profile.activityRegistrationConfirmed !== undefined) nextMeta.activityRegistrationConfirmed = Boolean(profile.activityRegistrationConfirmed);
 
   const positionCode = String(profile.positionCode ?? "").trim().toUpperCase();
   const nextRole = positionCode || String(candidate?.attendee_type || "UM");

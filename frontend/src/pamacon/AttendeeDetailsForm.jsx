@@ -34,6 +34,40 @@ const ACTIVITY_KEYS = [
   { key: "extraMountainTour", label: "Cebu city — mountain tour" },
   { key: "extraSafari", label: "Cebu Safari" },
 ];
+const CEBU_TOUR_CARDS = [
+  {
+    id: "island-hopping",
+    title: "Island Hopping Adventure",
+    key: "extraIslandHopping",
+    short: "Snorkeling and island lunch stops.",
+    details:
+      "A full-day island route around Mactan and nearby islets, with beach time and guided transfer options for delegates.",
+  },
+  {
+    id: "city-heritage",
+    title: "Cebu City Heritage Tour",
+    key: "extraCityTour",
+    short: "History, landmarks, and local food.",
+    details:
+      "Visit Fort San Pedro, Basilica Minore, Magellan's Cross, and top city stops. Designed for delegates who want a classic Cebu city experience.",
+  },
+  {
+    id: "mountain-scenic",
+    title: "Mountain Scenic Route",
+    key: "extraMountainTour",
+    short: "Temple views and cool mountain spots.",
+    details:
+      "A scenic mountain loop featuring elevated viewpoints and curated stopovers for photos and team bonding.",
+  },
+  {
+    id: "cebu-safari",
+    title: "Cebu Safari Experience",
+    key: "extraSafari",
+    short: "Wildlife and family-friendly attractions.",
+    details:
+      "A day trip to Cebu Safari with coordinated transport schedules and optional group package rates.",
+  },
+];
 
 function draftFromProfile(p) {
   const arrivalDefault = p?.arrivalCebu || "2026-05-13";
@@ -57,6 +91,15 @@ function draftFromProfile(p) {
     extraMountainTour: Boolean(p?.extraMountainTour),
     extraSafari: Boolean(p?.extraSafari),
     extraOtherRequest: p?.extraOtherRequest || "",
+    activityRegistrationConfirmed: Boolean(p?.activityRegistrationConfirmed),
+    activityPaymentMethod: p?.activityPaymentMethod || "",
+    activityPaymentReference: p?.activityPaymentReference || "",
+    activityPaymentAmount: p?.activityPaymentAmount || "",
+    activityPaymentSenderNumber: p?.activityPaymentSenderNumber || "",
+    activityPaymentProofScreenshotDataUrl: p?.activityPaymentProofScreenshotDataUrl || "",
+    activityPaymentProofUploadedAt: p?.activityPaymentProofUploadedAt || "",
+    activityPaymentConfirmedAt: p?.activityPaymentConfirmedAt || "",
+    activityPaymentStatus: p?.activityPaymentStatus || "pending",
     mobileNumber: p?.mobileNumber || "",
     paymentProofScreenshotDataUrl: p?.paymentProofScreenshotDataUrl || "",
     paymentProofUploadedAt: p?.paymentProofUploadedAt || "",
@@ -93,6 +136,11 @@ function buildQuoteBody(draft, quoteKind) {
     `Arrival in Cebu: ${draft.arrivalCebu || "—"}`,
     `Departure from Cebu: ${draft.departureCebu || "—"}`,
     `Extra-day interests: ${activities.length ? activities.join("; ") : "None selected"}`,
+    `Activity registration confirmed: ${draft.activityRegistrationConfirmed ? "Yes" : "No"}`,
+    `Activity payment method: ${draft.activityPaymentMethod || "—"}`,
+    `Activity payment reference: ${draft.activityPaymentReference || "—"}`,
+    `Activity payment amount: ${draft.activityPaymentAmount || "—"}`,
+    `Activity payment sender no.: ${draft.activityPaymentSenderNumber || "—"}`,
     "",
     "Thank you.",
   ];
@@ -101,6 +149,7 @@ function buildQuoteBody(draft, quoteKind) {
 
 export default function AttendeeDetailsForm({ profile, authEmail, registrationRowSummary, onSaveProfile, profileSaving, quoteEmail }) {
   const [draft, setDraft] = useState(() => draftFromProfile(profile));
+  const [expandedTourCard, setExpandedTourCard] = useState("");
   const [savedFlash, setSavedFlash] = useState(false);
   const [saveError, setSaveError] = useState("");
   const shirtFieldsLocked = !isParticipantShirtEditOpenNow();
@@ -138,6 +187,15 @@ export default function AttendeeDetailsForm({ profile, authEmail, registrationRo
     const fromEnv = String(import.meta.env.VITE_QUOTE_REQUEST_EMAIL || "").trim();
     return String(quoteEmail || "").trim() || fromEnv || "";
   }, [quoteEmail]);
+  const activityGcashQrUrl =
+    String(import.meta.env.VITE_ACTIVITY_GCASH_QR_URL || "").trim() || "/payments/gcash-qr.png";
+  const hasSelectedActivities = useMemo(
+    () =>
+      ACTIVITY_KEYS.some(({ key }) => Boolean(draft[key])) ||
+      Boolean(String(draft.extraOtherRequest || "").trim()),
+    [draft]
+  );
+  const activityPaymentStatusLabel = String(draft.activityPaymentStatus || "pending").toLowerCase() === "confirmed" ? "Confirmed by admin" : "Pending confirmation";
 
   const openQuote = useCallback(
     (quoteKind) => {
@@ -354,6 +412,43 @@ export default function AttendeeDetailsForm({ profile, authEmail, registrationRo
         </Field>
       </div>
 
+      <section id="tours-cards" className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-base sm:text-lg font-semibold text-slate-900">Cebu City Tours & Activities</h3>
+            <p className="text-sm text-slate-600 mt-1">Tap any card to expand details. Choose your preferred activities below.</p>
+          </div>
+          <a href="#tour-registration" className="inline-flex min-h-[40px] items-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100">
+            Register here
+          </a>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {CEBU_TOUR_CARDS.map((card) => {
+            const selected = Boolean(draft[card.key]);
+            const expanded = expandedTourCard === card.id;
+            return (
+              <article
+                key={card.id}
+                className={`rounded-xl border p-3.5 transition ${
+                  selected ? "border-red-300 bg-red-50/60" : "border-slate-200 bg-slate-50/40"
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => setExpandedTourCard((prev) => (prev === card.id ? "" : card.id))}
+                  className="w-full text-left"
+                >
+                  <p className="text-sm font-semibold text-slate-900">{card.title}</p>
+                  <p className="mt-1 text-xs text-slate-600">{card.short}</p>
+                  <p className="mt-2 text-[11px] font-semibold text-red-700">{expanded ? "Hide details" : "View details"}</p>
+                </button>
+                {expanded ? <p className="mt-2 text-sm text-slate-700 leading-relaxed">{card.details}</p> : null}
+              </article>
+            );
+          })}
+        </div>
+      </section>
+
       <fieldset className="rounded-2xl border border-slate-200 bg-gradient-to-b from-red-50/40 to-white p-4 sm:p-6 space-y-4">
         <legend className="text-base sm:text-lg font-semibold text-slate-900 px-1">
           Would you like to extend your stay and enjoy fun Cebu activities after PAMACON?
@@ -390,6 +485,152 @@ export default function AttendeeDetailsForm({ profile, authEmail, registrationRo
           />
         </label>
       </fieldset>
+
+      <section id="tour-registration" className="scroll-mt-24 rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4 sm:p-6 space-y-3">
+        <h3 className="text-base font-semibold text-slate-900">Activities registration and payment confirmation</h3>
+        <p className="text-sm text-slate-700 leading-relaxed">
+          If you plan to join optional activities, confirm your registration intent here and upload your GCash / QR payment proof so the committee can include you in the activity list.
+        </p>
+        <div className="rounded-xl border border-emerald-200 bg-white p-3 sm:p-4 flex flex-col sm:flex-row gap-3 sm:items-center">
+          <img
+            src={activityGcashQrUrl}
+            alt="GCash QR code for activities payment"
+            className="h-36 w-36 rounded-lg border border-slate-200 bg-white object-contain"
+          />
+          <p className="text-sm text-slate-600 leading-relaxed">
+            Scan this QR with GCash to pay for optional activities, then upload the confirmation screenshot below.
+          </p>
+        </div>
+        <label className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm font-medium text-slate-800">
+          <input
+            type="checkbox"
+            checked={Boolean(draft.activityRegistrationConfirmed)}
+            onChange={(e) =>
+              setDraft((s) => ({
+                ...s,
+                activityRegistrationConfirmed: e.target.checked,
+                activityPaymentConfirmedAt: e.target.checked ? s.activityPaymentConfirmedAt || new Date().toISOString() : "",
+              }))
+            }
+            className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+          />
+          I want to register for selected activities
+        </label>
+        {!hasSelectedActivities ? (
+          <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+            Select at least one activity above so the team can process your activity registration and payment.
+          </p>
+        ) : null}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Payment method</span>
+            <select
+              className={inputClass}
+              value={draft.activityPaymentMethod}
+              onChange={(e) => setDraft((s) => ({ ...s, activityPaymentMethod: e.target.value }))}
+            >
+              <option value="">Select payment method…</option>
+              <option value="gcash_qr">GCash via QR code</option>
+              <option value="gcash_number">GCash send money</option>
+              <option value="bank_transfer">Bank transfer</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Reference number / note</span>
+            <input
+              className={inputClass}
+              placeholder="e.g. GCash ref no. / transaction note"
+              value={draft.activityPaymentReference}
+              onChange={(e) => setDraft((s) => ({ ...s, activityPaymentReference: e.target.value }))}
+            />
+          </label>
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Amount paid</span>
+            <input
+              className={inputClass}
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="e.g. 1200"
+              value={draft.activityPaymentAmount}
+              onChange={(e) => setDraft((s) => ({ ...s, activityPaymentAmount: e.target.value }))}
+            />
+          </label>
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sender mobile number</span>
+            <input
+              className={inputClass}
+              placeholder="e.g. 09XXXXXXXXX"
+              value={draft.activityPaymentSenderNumber}
+              onChange={(e) => setDraft((s) => ({ ...s, activityPaymentSenderNumber: e.target.value }))}
+            />
+          </label>
+        </div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <label className="inline-flex cursor-pointer items-center justify-center rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800">
+            Upload activity payment proof
+            <input
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = () => {
+                  if (typeof reader.result !== "string") return;
+                  setDraft((s) => ({
+                    ...s,
+                    activityPaymentProofScreenshotDataUrl: reader.result,
+                    activityPaymentProofUploadedAt: new Date().toISOString(),
+                    activityPaymentStatus: "pending",
+                  }));
+                };
+                reader.readAsDataURL(file);
+              }}
+            />
+          </label>
+          {draft.activityPaymentProofScreenshotDataUrl ? (
+            <button
+              type="button"
+              onClick={() =>
+                setDraft((s) => ({
+                  ...s,
+                  activityPaymentProofScreenshotDataUrl: "",
+                  activityPaymentProofUploadedAt: "",
+                  activityPaymentStatus: "pending",
+                }))
+              }
+              className="inline-flex items-center justify-center rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-700 hover:bg-rose-100"
+            >
+              Remove activity proof
+            </button>
+          ) : null}
+        </div>
+        {draft.activityPaymentProofScreenshotDataUrl ? (
+          <div className="space-y-2">
+            <img
+              src={draft.activityPaymentProofScreenshotDataUrl}
+              alt="Activity payment proof screenshot preview"
+              className="max-h-56 w-full max-w-md rounded-xl border border-slate-200 bg-white object-contain"
+            />
+            <p className="text-xs text-slate-500">
+              Uploaded {draft.activityPaymentProofUploadedAt ? new Date(draft.activityPaymentProofUploadedAt).toLocaleString() : "just now"}.
+            </p>
+          </div>
+        ) : null}
+        <p className="text-xs">
+          <span
+            className={`inline-flex rounded px-2 py-1 font-semibold ${
+              activityPaymentStatusLabel.includes("Confirmed") ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-900"
+            }`}
+          >
+            Activity payment: {activityPaymentStatusLabel}
+          </span>
+        </p>
+      </section>
 
       <section
         className={`rounded-2xl border p-4 sm:p-6 space-y-3 ${

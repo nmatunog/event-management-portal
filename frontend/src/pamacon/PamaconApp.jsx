@@ -244,6 +244,15 @@ function delegateFromApi(row) {
     paymentValidationStatus: String(meta.paymentValidationStatus || "pending"),
     paymentValidatedAt: meta.paymentValidatedAt || "",
     paymentValidatedBy: meta.paymentValidatedBy || "",
+    activityRegistrationConfirmed: Boolean(meta.activityRegistrationConfirmed),
+    activityPaymentMethod: String(meta.activityPaymentMethod || ""),
+    activityPaymentReference: String(meta.activityPaymentReference || ""),
+    activityPaymentAmount: String(meta.activityPaymentAmount || ""),
+    activityPaymentSenderNumber: String(meta.activityPaymentSenderNumber || ""),
+    activityPaymentProofScreenshotDataUrl: String(meta.activityPaymentProofScreenshotDataUrl || ""),
+    activityPaymentProofUploadedAt: String(meta.activityPaymentProofUploadedAt || ""),
+    activityPaymentConfirmedAt: String(meta.activityPaymentConfirmedAt || ""),
+    activityPaymentStatus: String(meta.activityPaymentStatus || "pending"),
   };
 }
 
@@ -1326,7 +1335,9 @@ export default function PamaconApp({
                 onApiError={onApiError}
               />
             )}
-            {activeTab === "other-activities" && <OtherActivitiesHub registrants={registrants} />}
+            {activeTab === "other-activities" && (
+              <OtherActivitiesHub registrants={registrants} canEdit={canEdit} isAdmin={isAdmin} authEmail={authEmail} onUpdate={updateRegistrantRecord} />
+            )}
             {activeTab === "accommodation" && (
               <AccommodationView config={config} registrants={registrants} onPair={pairManualDelegates} onToggleSolo={toggleSoloOccupancy} canEdit={canEdit} />
             )}
@@ -3931,7 +3942,7 @@ function PaymentsHub({ config, realized, projection }) {
   );
 }
 
-function OtherActivitiesHub({ registrants }) {
+function OtherActivitiesHub({ registrants, canEdit, isAdmin, authEmail, onUpdate }) {
   const defs = [
     { key: "extraIslandHopping", label: "Island hopping" },
     { key: "extraCityTour", label: "City tour / heritage tour" },
@@ -3954,38 +3965,150 @@ function OtherActivitiesHub({ registrants }) {
         departure: String(meta.departureCebu || "").trim(),
         selected,
         other,
+        activityRegistrationConfirmed: Boolean(meta.activityRegistrationConfirmed),
+        activityPaymentMethod: String(meta.activityPaymentMethod || "").trim(),
+        activityPaymentReference: String(meta.activityPaymentReference || "").trim(),
+        activityPaymentProofScreenshotDataUrl: String(meta.activityPaymentProofScreenshotDataUrl || "").trim(),
+        activityPaymentProofUploadedAt: String(meta.activityPaymentProofUploadedAt || "").trim(),
+        activityPaymentConfirmedBy: String(meta.activityPaymentConfirmedBy || "").trim(),
+        activityPaymentConfirmedAt: String(meta.activityPaymentConfirmedAt || "").trim(),
+        activityPaymentStatus: String(meta.activityPaymentStatus || "").trim(),
       });
     }
     out.sort((a, b) => a.name.localeCompare(b.name));
     return out;
   }, [registrants]);
   const [selectedFilter, setSelectedFilter] = useState("all");
+  const [paymentFilter, setPaymentFilter] = useState("all");
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [messageCopied, setMessageCopied] = useState(false);
+  const attendeeTourLink = `${window.location.origin}/sign-in`;
+  const attendeeBroadcastMessage = `Hi PAMACON delegates! Register here for tours and upload your GCash / QR payment proof: ${attendeeTourLink}`;
 
   const summary = useMemo(() => {
     const counts = Object.fromEntries(defs.map((d) => [d.key, 0]));
     let withOther = 0;
+    let withConfirmedRegistration = 0;
+    let withPaymentProof = 0;
     for (const row of rows) {
       for (const d of defs) {
         if (row.selected.includes(d.label)) counts[d.key] += 1;
       }
       if (row.other) withOther += 1;
+      if (row.activityRegistrationConfirmed) withConfirmedRegistration += 1;
+      if (row.activityPaymentProofScreenshotDataUrl) withPaymentProof += 1;
     }
-    return { counts, withOther };
+    return { counts, withOther, withConfirmedRegistration, withPaymentProof };
   }, [rows]);
 
   const filteredRows = useMemo(() => {
-    if (selectedFilter === "all") return rows;
-    if (selectedFilter === "other") return rows.filter((r) => Boolean(r.other));
-    const def = defs.find((d) => d.key === selectedFilter);
-    if (!def) return rows;
-    return rows.filter((r) => r.selected.includes(def.label));
-  }, [rows, selectedFilter]);
+    let base = rows;
+    if (selectedFilter !== "all") {
+      if (selectedFilter === "other") base = rows.filter((r) => Boolean(r.other));
+      else {
+        const def = defs.find((d) => d.key === selectedFilter);
+        base = def ? rows.filter((r) => r.selected.includes(def.label)) : rows;
+      }
+    }
+    if (paymentFilter === "all") return base;
+    return base.filter((r) => {
+      const hasProof = Boolean(r.activityPaymentProofScreenshotDataUrl);
+      const status = String(r.activityPaymentStatus || (hasProof ? "pending" : "unpaid")).toLowerCase();
+      if (paymentFilter === "paid") return status === "confirmed";
+      if (paymentFilter === "pending") return status === "pending";
+      if (paymentFilter === "unpaid") return status === "unpaid";
+      return true;
+    });
+  }, [rows, selectedFilter, paymentFilter]);
+  const canConfirmActivityPayments = Boolean(canEdit && isAdmin && typeof onUpdate === "function");
+
+  const setActivityPaymentStatus = async (row, status) => {
+    if (!canConfirmActivityPayments) return;
+    const source = registrants.find((r) => r.id === row.id);
+    if (!source) return;
+    const nowIso = new Date().toISOString();
+    await onUpdate({
+      ...source,
+      metaBase: {
+        ...(source.metaBase || {}),
+        activityPaymentStatus: status,
+        activityPaymentConfirmedAt: status === "confirmed" ? nowIso : "",
+        activityPaymentConfirmedBy: status === "confirmed" ? String(authEmail || "").trim().toLowerCase() : "",
+      },
+    });
+  };
 
   return (
     <div className="space-y-6 pb-20">
+      <div className="rounded-3xl border-2 border-red-300 bg-gradient-to-r from-red-600 via-rose-600 to-orange-500 p-5 sm:p-7 shadow-lg">
+        <p className="text-[11px] uppercase tracking-[0.14em] font-bold text-white/90">Attendee Broadcast Link</p>
+        <h3 className="mt-1 text-xl sm:text-2xl font-black text-white">Register Here for Tours</h3>
+        <p className="mt-2 text-sm text-white/90 max-w-3xl">
+          Copy this link and send it to your attendees group chat so they can sign in, register for activities, and upload GCash / QR payment proof.
+        </p>
+        <div className="mt-4 rounded-2xl border border-white/25 bg-white/15 p-3 sm:p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <code className="text-xs sm:text-sm font-semibold text-white break-all">{attendeeTourLink}</code>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(attendeeTourLink);
+                } catch {
+                  const ta = document.createElement("textarea");
+                  ta.value = attendeeTourLink;
+                  document.body.appendChild(ta);
+                  ta.select();
+                  document.execCommand("copy");
+                  ta.remove();
+                }
+                setLinkCopied(true);
+                setTimeout(() => setLinkCopied(false), 1800);
+              }}
+              className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-white px-4 py-2 text-sm font-bold text-red-700 hover:bg-red-50"
+            >
+              {linkCopied ? "Copied!" : "Copy link"}
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(attendeeBroadcastMessage);
+                } catch {
+                  const ta = document.createElement("textarea");
+                  ta.value = attendeeBroadcastMessage;
+                  document.body.appendChild(ta);
+                  ta.select();
+                  document.execCommand("copy");
+                  ta.remove();
+                }
+                setMessageCopied(true);
+                setTimeout(() => setMessageCopied(false), 1800);
+              }}
+              className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-white/80 bg-white/15 px-4 py-2 text-sm font-bold text-white hover:bg-white/25"
+            >
+              {messageCopied ? "Message copied!" : "Copy prewritten message"}
+            </button>
+          </div>
+        </div>
+      </div>
       <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-sm space-y-4">
         <h3 className="text-lg font-semibold text-slate-900">Other Activities Coordination Card</h3>
         <p className="text-sm text-slate-500">Use this to prepare bookings, transport, and delegate coordination for optional Cebu activities.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+            <p className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold">Respondents</p>
+            <p className="text-lg font-semibold text-slate-900">{rows.length}</p>
+          </div>
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
+            <p className="text-[11px] uppercase tracking-wide text-emerald-700 font-semibold">Confirmed registrations</p>
+            <p className="text-lg font-semibold text-emerald-900">{summary.withConfirmedRegistration}</p>
+          </div>
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+            <p className="text-[11px] uppercase tracking-wide text-amber-700 font-semibold">With payment proof</p>
+            <p className="text-lg font-semibold text-amber-900">{summary.withPaymentProof}</p>
+          </div>
+        </div>
         <div className="flex flex-wrap gap-2">
           {defs.map((d) => (
             <button
@@ -4018,6 +4141,44 @@ function OtherActivitiesHub({ registrants }) {
             Delegates with responses: {rows.length}
           </button>
         </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setPaymentFilter("all")}
+            className={`rounded-lg border px-2.5 py-1 text-xs font-semibold ${
+              paymentFilter === "all" ? "border-slate-300 bg-slate-100 text-slate-800" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            All payments
+          </button>
+          <button
+            type="button"
+            onClick={() => setPaymentFilter("paid")}
+            className={`rounded-lg border px-2.5 py-1 text-xs font-semibold ${
+              paymentFilter === "paid" ? "border-emerald-300 bg-emerald-100 text-emerald-900" : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+            }`}
+          >
+            Paid only
+          </button>
+          <button
+            type="button"
+            onClick={() => setPaymentFilter("pending")}
+            className={`rounded-lg border px-2.5 py-1 text-xs font-semibold ${
+              paymentFilter === "pending" ? "border-amber-300 bg-amber-100 text-amber-900" : "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100"
+            }`}
+          >
+            Pending only
+          </button>
+          <button
+            type="button"
+            onClick={() => setPaymentFilter("unpaid")}
+            className={`rounded-lg border px-2.5 py-1 text-xs font-semibold ${
+              paymentFilter === "unpaid" ? "border-rose-300 bg-rose-100 text-rose-900" : "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
+            }`}
+          >
+            Unpaid only
+          </button>
+        </div>
         <p className="text-xs text-slate-500">
           Showing:{" "}
           <strong>
@@ -4033,7 +4194,7 @@ function OtherActivitiesHub({ registrants }) {
 
       <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px] text-sm">
+          <table className="w-full min-w-[1400px] text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-[11px] uppercase tracking-wide text-slate-500">
                 <th className="py-2 text-left">Delegate</th>
@@ -4043,6 +4204,12 @@ function OtherActivitiesHub({ registrants }) {
                 <th className="py-2 text-left">Departure</th>
                 <th className="py-2 text-left">Selected activities</th>
                 <th className="py-2 text-left">Other request</th>
+                <th className="py-2 text-left">Registration</th>
+                <th className="py-2 text-left">Payment method</th>
+                <th className="py-2 text-left">Reference</th>
+                <th className="py-2 text-left">Proof</th>
+                <th className="py-2 text-left">Payment status</th>
+                <th className="py-2 text-left">Admin action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -4055,11 +4222,80 @@ function OtherActivitiesHub({ registrants }) {
                   <td className="py-2.5 pr-3 text-slate-600">{row.departure || "—"}</td>
                   <td className="py-2.5 pr-3 text-slate-700">{row.selected.length ? row.selected.join("; ") : "—"}</td>
                   <td className="py-2.5 pr-3 text-slate-600">{row.other || "—"}</td>
+                  <td className="py-2.5 pr-3 text-slate-700">
+                    {row.activityRegistrationConfirmed ? (
+                      <span className="inline-flex rounded bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">Confirmed</span>
+                    ) : (
+                      <span className="inline-flex rounded bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">Pending</span>
+                    )}
+                  </td>
+                  <td className="py-2.5 pr-3 text-slate-600">{row.activityPaymentMethod || "—"}</td>
+                  <td className="py-2.5 pr-3 text-slate-600 space-y-0.5">
+                    <p>{row.activityPaymentReference || "—"}</p>
+                    <p className="text-[11px] text-slate-500">Amount: {row.activityPaymentAmount || "—"}</p>
+                    <p className="text-[11px] text-slate-500">Sender: {row.activityPaymentSenderNumber || "—"}</p>
+                  </td>
+                  <td className="py-2.5 pr-3 text-slate-600">
+                    {row.activityPaymentProofScreenshotDataUrl ? (
+                      <a
+                        href={row.activityPaymentProofScreenshotDataUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-amber-700 font-semibold hover:underline"
+                      >
+                        View proof
+                      </a>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td className="py-2.5 pr-3 text-slate-600">
+                    {(() => {
+                      const hasProof = Boolean(row.activityPaymentProofScreenshotDataUrl);
+                      const status = String(row.activityPaymentStatus || (hasProof ? "pending" : "unpaid")).toLowerCase();
+                      if (status === "confirmed") {
+                        return (
+                          <div className="space-y-1">
+                            <span className="inline-flex rounded bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">Confirmed</span>
+                            {row.activityPaymentConfirmedBy ? <p className="text-[11px] text-slate-500">By: {row.activityPaymentConfirmedBy}</p> : null}
+                            {row.activityPaymentConfirmedAt ? <p className="text-[11px] text-slate-500">{new Date(row.activityPaymentConfirmedAt).toLocaleString()}</p> : null}
+                          </div>
+                        );
+                      }
+                      if (status === "pending") {
+                        return <span className="inline-flex rounded bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900">Pending</span>;
+                      }
+                      return <span className="inline-flex rounded bg-rose-100 px-2 py-0.5 text-[11px] font-semibold text-rose-800">Unpaid</span>;
+                    })()}
+                  </td>
+                  <td className="py-2.5 pr-3 text-slate-600">
+                    {canConfirmActivityPayments ? (
+                      <div className="flex flex-col items-start gap-1">
+                        <button
+                          type="button"
+                          className="rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-40"
+                          disabled={!row.activityPaymentProofScreenshotDataUrl}
+                          onClick={() => void setActivityPaymentStatus(row, "confirmed")}
+                        >
+                          Confirm payment
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-800 hover:bg-amber-100"
+                          onClick={() => void setActivityPaymentStatus(row, "pending")}
+                        >
+                          Mark pending
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-[11px] text-slate-400">Admin only</span>
+                    )}
+                  </td>
                 </tr>
               ))}
               {filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-3 text-slate-500">
+                  <td colSpan={13} className="py-3 text-slate-500">
                     No delegates found for this filter.
                   </td>
                 </tr>
