@@ -10,6 +10,8 @@ import { DEFAULT_ATTENDEE_PORTAL, PAMACON_TITLE } from "../pamacon/defaultConfig
  * royal blue accents, red pill CTA; white base with sunburst and poster art as reference.
  */
 export default function PublicLanding() {
+  const eMagazineUrl =
+    "https://design.rsvprojects.com/pamacon2026?fbclid=IwY2xjawRq4PhleHRuA2FlbQIxMABicmlkETFaYnZHNmdOZmYwbFlibGIyc3J0YwZhcHBfaWQQMjIyMDM5MTc4ODIwMDg5MgABHvQ9UifsEz85NbkB8XwVsj0ab1Bp50inOmWtww7BF0aRqQE08BmHpnMzcaYx_aem_HzFN2zQQMBVX4P32ZMdUrQ";
   const [heroEvent, setHeroEvent] = useState(null);
   const [loadError, setLoadError] = useState("");
   const [copiedField, setCopiedField] = useState("");
@@ -267,6 +269,47 @@ export default function PublicLanding() {
               Open sign-in
             </Link>
           </article>
+        </section>
+
+        {/* E-magazine highlight — in-page section with same-tab open action */}
+        <section className="mt-14 sm:mt-16 rounded-3xl border border-zinc-200 bg-white p-6 sm:p-8 shadow-lg shadow-zinc-900/5">
+          <div className="grid gap-6 md:grid-cols-[1.1fr_0.9fr] md:items-center">
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[#1d4ed8]">Official E-magazine</p>
+              <h3 className="mt-2 text-2xl sm:text-3xl font-black text-zinc-900 leading-tight">PAMA E-Magazine 2026</h3>
+              <p className="mt-3 text-sm sm:text-base text-zinc-600 font-medium leading-relaxed">
+                Added in the public landing page. The source site blocks embedded display on external domains, so this section provides a clean, visible placeholder with direct access.
+              </p>
+              <div className="mt-5 flex flex-wrap gap-3">
+                <a
+                  href={eMagazineUrl}
+                  className="inline-flex items-center justify-center gap-2 min-h-[46px] rounded-full px-6 py-2.5 text-xs font-black uppercase tracking-wide text-white bg-[#1d4ed8] hover:bg-[#1e40af] transition-colors shadow-sm"
+                >
+                  Open e-magazine here
+                  <ArrowRight size={15} aria-hidden />
+                </a>
+              </div>
+              <p className="mt-3 text-xs text-zinc-500">
+                Opens in the same tab and does not spawn a new window.
+              </p>
+            </div>
+            <div className="relative overflow-hidden rounded-2xl border border-zinc-200 bg-gradient-to-br from-zinc-50 to-zinc-100 min-h-[220px] p-5 sm:p-6">
+              <div className="absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_top_right,#e11d74_0%,transparent_45%),radial-gradient(circle_at_bottom_left,#1d4ed8_0%,transparent_45%)]" />
+              <div className="relative z-10 h-full rounded-xl border border-dashed border-zinc-300 bg-white/80 p-5 flex flex-col justify-between">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Live link placeholder</p>
+                  <p className="mt-2 text-sm font-bold text-zinc-800">PAMA - E-Magazine 2026</p>
+                  <p className="mt-1 text-xs text-zinc-600 break-all">{eMagazineUrl}</p>
+                </div>
+                <a
+                  href={eMagazineUrl}
+                  className="mt-4 inline-flex w-fit items-center rounded-full border border-zinc-300 bg-white px-4 py-2 text-[11px] font-black uppercase tracking-wide text-zinc-700 hover:bg-zinc-50"
+                >
+                  View now
+                </a>
+              </div>
+            </div>
+          </div>
         </section>
 
         {/* Rates + payment details */}

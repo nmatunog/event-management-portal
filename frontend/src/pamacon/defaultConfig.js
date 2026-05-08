@@ -1,5 +1,5 @@
 export const PAMACON_TITLE = "PAMACON 2026";
-export const ATTENDEE_POSTER_MAX = 10;
+export const ATTENDEE_POSTER_MAX = 12;
 
 export const DEFAULT_PROGRAM_MODULES = [
   { day: "Day 1 - May 13", time: "4:00", program: "Breakout Coffee Session", assigned: "Check in area Coffee Shop" },
@@ -35,8 +35,8 @@ export const DEFAULT_ATTENDEE_PORTAL = {
   youtubeUrl: "",
   /** Number of poster cards shown in attendee portal hub. */
   posterDisplayCount: 3,
-  /** Up to ten image URLs for marketing posters; empty strings show placeholders. */
-  posterImageUrls: ["/landing/poster-sulog-cebu.png", "/landing/poster-pamacon-white.png", "", "", "", "", "", "", "", ""],
+  /** Up to twelve image URLs for marketing posters; empty strings show placeholders. */
+  posterImageUrls: ["/landing/poster-sulog-cebu.png", "/landing/poster-pamacon-white.png", "", "", "", "", "", "", "", "", "", ""],
   /** Organizer inbox for quote requests (mailto). Falls back to VITE_QUOTE_REQUEST_EMAIL. */
   quoteRequestEmail: "",
 };
@@ -68,7 +68,7 @@ export function mergeConfigFromEvent(eventRow) {
       ? parsed.attendeePortal.posterImageUrls.slice(0, ATTENDEE_POSTER_MAX)
       : null;
     const mergedPosters = posterUrls
-      ? [...posterUrls, "", "", "", "", "", "", "", "", "", ""].slice(0, ATTENDEE_POSTER_MAX)
+      ? [...posterUrls, "", "", "", "", "", "", "", "", "", "", "", ""].slice(0, ATTENDEE_POSTER_MAX)
       : DEFAULT_ATTENDEE_PORTAL.posterImageUrls;
     const parsedDisplayCount = Number(parsed.attendeePortal?.posterDisplayCount);
     const posterDisplayCount = Number.isFinite(parsedDisplayCount)

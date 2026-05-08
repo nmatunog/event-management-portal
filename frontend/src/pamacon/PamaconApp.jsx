@@ -4740,7 +4740,7 @@ function SetupView({ config, setConfig, eventId, canEdit, isAdmin, isSuperuser, 
         outgoing.seededListScreenshotDataUrl = await reencodeImageDataUrlAsJpeg(shot, 2200, 0.88);
       }
       const portal = { ...(outgoing.attendeePortal || {}) };
-      const posterUrls = [...(Array.isArray(portal.posterImageUrls) ? portal.posterImageUrls : []), "", "", "", "", "", "", "", "", "", ""].slice(
+      const posterUrls = [...(Array.isArray(portal.posterImageUrls) ? portal.posterImageUrls : []), "", "", "", "", "", "", "", "", "", "", "", ""].slice(
         0,
         ATTENDEE_POSTER_MAX
       );
@@ -4840,10 +4840,10 @@ function SetupView({ config, setConfig, eventId, canEdit, isAdmin, isSuperuser, 
     youtubeUrl: "",
     quoteRequestEmail: "",
     posterDisplayCount: 3,
-    posterImageUrls: ["", "", "", "", "", "", "", "", "", ""],
+    posterImageUrls: ["", "", "", "", "", "", "", "", "", "", "", ""],
     ...(local.attendeePortal || {}),
   };
-  const posterUrls = [...(portalConfig.posterImageUrls || []), "", "", "", "", "", "", "", "", "", ""].slice(0, ATTENDEE_POSTER_MAX);
+  const posterUrls = [...(portalConfig.posterImageUrls || []), "", "", "", "", "", "", "", "", "", "", "", ""].slice(0, ATTENDEE_POSTER_MAX);
   const updatePortalConfig = (patch) => {
     setLocal({
       ...local,
@@ -4972,7 +4972,7 @@ function SetupView({ config, setConfig, eventId, canEdit, isAdmin, isSuperuser, 
                 <p className="text-[11px] text-slate-500">Leave blank to use the environment-level attendee video link.</p>
               </label>
               <label className="block space-y-1">
-                <span className="text-xs font-semibold text-slate-600">No. of posters to display (1-10)</span>
+                <span className="text-xs font-semibold text-slate-600">No. of posters to display (1-12)</span>
                 <input
                   type="number"
                   min={1}

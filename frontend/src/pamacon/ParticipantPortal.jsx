@@ -43,7 +43,7 @@ export default function ParticipantPortal({
   const portal = { ...DEFAULT_ATTENDEE_PORTAL, ...(config?.attendeePortal || {}) };
   const requestedPosterCount = Number(portal.posterDisplayCount);
   const posterCount = Number.isFinite(requestedPosterCount) ? Math.max(1, Math.min(ATTENDEE_POSTER_MAX, Math.trunc(requestedPosterCount))) : 3;
-  const posterSlots = [...(portal.posterImageUrls || []), "", "", "", "", "", "", "", "", "", ""].slice(0, posterCount);
+  const posterSlots = [...(portal.posterImageUrls || []), "", "", "", "", "", "", "", "", "", "", "", ""].slice(0, posterCount);
   const youtubeUrl =
     String(portal.youtubeUrl || "").trim() || String(import.meta.env.VITE_ATTENDEE_YOUTUBE_URL || "").trim();
   const embedSrc = youtubeEmbedSrc(youtubeUrl);
