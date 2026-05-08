@@ -1179,10 +1179,6 @@ export default function PamaconApp({
               <img src="/branding/pama-symbol.png" alt="PAMA" className="h-8 w-8 object-contain" />
               <img src="/branding/pama-wordmark.png" alt="AIA PAMA" className="h-6 w-auto max-w-[150px] object-contain" />
             </div>
-            <div className="min-w-0">
-              <h1 className="text-base font-semibold text-slate-900 leading-tight truncate">PAMACON 2026</h1>
-              <p className="text-[10px] font-medium text-slate-500 mt-0.5 truncate">AIA PAMA</p>
-            </div>
           </div>
           <button type="button" className="md:hidden p-2 rounded-xl hover:bg-slate-200/80 shrink-0" onClick={() => setIsMobileMenuOpen(false)}>
             <X size={22} />
@@ -1460,8 +1456,31 @@ function RegistrantsLedger({
   const [seedListPasteText, setSeedListPasteText] = useState("");
   const [importingSeedText, setImportingSeedText] = useState(false);
   const [harmonizingSeedRows, setHarmonizingSeedRows] = useState(false);
+  const [shirtOtherDraftByRegistrantId, setShirtOtherDraftByRegistrantId] = useState({});
   const tableMinWidthClass = showMoreColumns ? "min-w-[1640px]" : isAdmin ? "min-w-[1260px]" : "min-w-[1140px]";
   const canEditDelegateShirtFields = canEdit && (isParticipantShirtEditOpenNow() || isAdmin);
+
+  const participantOtherDraftKey = (row) => `${row.id}:participant`;
+  const committeeOtherDraftKey = (row) => `${row.id}:committee`;
+
+  const getDraftValue = (key, fallbackValue) =>
+    Object.prototype.hasOwnProperty.call(shirtOtherDraftByRegistrantId, key) ? shirtOtherDraftByRegistrantId[key] : fallbackValue;
+
+  const setOtherDraft = (key, value) => {
+    setShirtOtherDraftByRegistrantId((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  };
+
+  const clearOtherDraft = (key) => {
+    setShirtOtherDraftByRegistrantId((prev) => {
+      if (!Object.prototype.hasOwnProperty.call(prev, key)) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
 
   const persistParticipantShirt = async (row, size, otherOverride) => {
     if (!canEditDelegateShirtFields) return;
@@ -2770,11 +2789,22 @@ function RegistrantsLedger({
                     </td>
                     <td className="px-4 py-4 align-top min-w-[140px]">
                       <div className="space-y-1.5 max-w-[10rem]">
+                        {(() => {
+                          const participantDraftKey = participantOtherDraftKey(r);
+                          const participantOtherValue = getDraftValue(participantDraftKey, r.shirtSizeOther || "");
+                          return (
+                            <>
                         <select
                           className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-800 disabled:opacity-40"
                           disabled={!canEditDelegateShirtFields}
                           value={String(r.shirtSize ?? "")}
-                          onChange={(e) => void persistParticipantShirt(r, e.target.value, undefined)}
+                          onChange={(e) => {
+                            const nextSize = e.target.value;
+                            if (String(nextSize || "").toLowerCase() !== "others") {
+                              clearOtherDraft(participantDraftKey);
+                            }
+                            void persistParticipantShirt(r, nextSize, undefined);
+                          }}
                           aria-label={`Participant shirt for ${r.name}`}
                         >
                           {DELEGATE_SHIRT_SIZE_SELECT.map((o) => (
@@ -2789,11 +2819,27 @@ function RegistrantsLedger({
                             className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs disabled:opacity-40"
                             disabled={!canEditDelegateShirtFields}
                             placeholder="Specify size"
-                            value={r.shirtSizeOther || ""}
-                            onChange={(e) => void persistParticipantShirt(r, "others", e.target.value)}
+                            value={participantOtherValue}
+                            onChange={(e) => setOtherDraft(participantDraftKey, e.target.value)}
+                            onBlur={() => {
+                              const finalValue = getDraftValue(participantDraftKey, r.shirtSizeOther || "");
+                              void persistParticipantShirt(r, "others", finalValue);
+                              clearOtherDraft(participantDraftKey);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key !== "Enter") return;
+                              e.preventDefault();
+                              const finalValue = getDraftValue(participantDraftKey, r.shirtSizeOther || "");
+                              void persistParticipantShirt(r, "others", finalValue);
+                              clearOtherDraft(participantDraftKey);
+                              e.currentTarget.blur();
+                            }}
                             aria-label={`Participant shirt other for ${r.name}`}
                           />
                         ) : null}
+                            </>
+                          );
+                        })()}
                       </div>
                     </td>
                     <td className="px-4 py-4 align-top min-w-[10rem]">
@@ -2854,11 +2900,22 @@ function RegistrantsLedger({
                     </td>
                     <td className="px-4 py-4 align-top min-w-[140px]">
                       <div className="space-y-1.5 max-w-[10rem]">
+                        {(() => {
+                          const committeeDraftKey = committeeOtherDraftKey(r);
+                          const committeeOtherValue = getDraftValue(committeeDraftKey, r.committeeShirtSizeOther || "");
+                          return (
+                            <>
                         <select
                           className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-800 disabled:opacity-40"
                           disabled={!canEditDelegateShirtFields}
                           value={String(r.committeeShirtSize ?? "")}
-                          onChange={(e) => void persistCommitteeShirt(r, e.target.value, undefined)}
+                          onChange={(e) => {
+                            const nextSize = e.target.value;
+                            if (String(nextSize || "").toLowerCase() !== "others") {
+                              clearOtherDraft(committeeDraftKey);
+                            }
+                            void persistCommitteeShirt(r, nextSize, undefined);
+                          }}
                           aria-label={`Committee shirt default for ${r.name}`}
                         >
                           {DELEGATE_SHIRT_SIZE_SELECT.map((o) => (
@@ -2873,11 +2930,27 @@ function RegistrantsLedger({
                             className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs disabled:opacity-40"
                             disabled={!canEditDelegateShirtFields}
                             placeholder="Specify size"
-                            value={r.committeeShirtSizeOther || ""}
-                            onChange={(e) => void persistCommitteeShirt(r, "others", e.target.value)}
+                            value={committeeOtherValue}
+                            onChange={(e) => setOtherDraft(committeeDraftKey, e.target.value)}
+                            onBlur={() => {
+                              const finalValue = getDraftValue(committeeDraftKey, r.committeeShirtSizeOther || "");
+                              void persistCommitteeShirt(r, "others", finalValue);
+                              clearOtherDraft(committeeDraftKey);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key !== "Enter") return;
+                              e.preventDefault();
+                              const finalValue = getDraftValue(committeeDraftKey, r.committeeShirtSizeOther || "");
+                              void persistCommitteeShirt(r, "others", finalValue);
+                              clearOtherDraft(committeeDraftKey);
+                              e.currentTarget.blur();
+                            }}
                             aria-label={`Committee shirt other for ${r.name}`}
                           />
                         ) : null}
+                            </>
+                          );
+                        })()}
                       </div>
                     </td>
                     <td className="px-4 py-4">

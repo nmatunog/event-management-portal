@@ -85,10 +85,6 @@ export default function PublicLanding() {
               <img src="/branding/pama-symbol.png" alt="PAMA" className="h-8 w-8 object-contain" />
               <img src="/branding/pama-wordmark.png" alt="AIA PAMA" className="h-6 w-auto max-w-[160px] object-contain" />
             </div>
-            <div className="min-w-0">
-              <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[#1d4ed8]">AIA · AIA PAMA</p>
-              <p className="text-sm font-bold text-zinc-800 tracking-tight truncate">{title}</p>
-            </div>
           </Link>
           <div className="flex flex-wrap items-center gap-2">
             <Link

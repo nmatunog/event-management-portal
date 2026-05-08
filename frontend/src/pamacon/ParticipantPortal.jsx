@@ -133,10 +133,6 @@ export default function ParticipantPortal({
               <img src="/branding/pama-symbol.png" alt="PAMA" className="h-8 w-8 object-contain" />
               <img src="/branding/pama-wordmark.png" alt="AIA PAMA" className="h-6 w-auto max-w-[170px] object-contain" />
             </div>
-            <div className="min-w-0">
-              <h1 className="text-base sm:text-lg font-semibold text-slate-900 tracking-tight truncate">{title}</h1>
-              <p className="text-[11px] font-medium text-slate-500 mt-0.5">Attendee portal · AIA PAMA</p>
-            </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
             <Link
