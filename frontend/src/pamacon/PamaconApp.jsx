@@ -50,7 +50,6 @@ import {
   deleteSponsor,
   getEvents,
   getExpenses,
-  getMyRegistrationRowSummary,
   getRegistrations,
   deleteRegistration,
   getUserRoles,
@@ -461,35 +460,6 @@ export default function PamaconApp({
   const [eventRecord, setEventRecord] = useState(null);
   const [lastSyncAt, setLastSyncAt] = useState("");
   const isAdmin = authRole === "admin";
-
-  const [registrationRowSummary, setRegistrationRowSummary] = useState(undefined);
-
-  const loadRegistrationRowSummary = useCallback(async () => {
-    if (!eventId) return;
-    try {
-      const s = await getMyRegistrationRowSummary(eventId, {
-        firstName: profile?.firstName,
-        lastName: profile?.lastName,
-        nickname: profile?.nickname,
-        ...attendeeSyncHints,
-      });
-      setRegistrationRowSummary(s);
-    } catch {
-      setRegistrationRowSummary(null);
-    }
-  }, [eventId, profile?.firstName, profile?.lastName, profile?.nickname, attendeeSyncHints]);
-
-  useEffect(() => {
-    void loadRegistrationRowSummary();
-  }, [loadRegistrationRowSummary]);
-
-  const handlePortalSaveProfile = useCallback(
-    async (nextProfile) => {
-      await onSaveProfile?.(nextProfile);
-      await loadRegistrationRowSummary();
-    },
-    [onSaveProfile, loadRegistrationRowSummary]
-  );
 
   const reloadAll = useCallback(async () => {
     if (!eventId) return;
@@ -1143,8 +1113,7 @@ export default function PamaconApp({
         eventRow={eventRecord}
         authEmail={authEmail}
         profile={profile}
-        registrationRowSummary={registrationRowSummary}
-        onSaveProfile={handlePortalSaveProfile}
+        onSaveProfile={onSaveProfile}
         profileSaving={profileSaving}
         onLogout={onLogout}
       />
@@ -1176,8 +1145,7 @@ export default function PamaconApp({
             eventRow={eventRecord}
             authEmail={authEmail}
             profile={profile}
-            registrationRowSummary={registrationRowSummary}
-            onSaveProfile={handlePortalSaveProfile}
+            onSaveProfile={onSaveProfile}
             profileSaving={profileSaving}
             onLogout={onLogout}
           />
@@ -2299,7 +2267,7 @@ function RegistrantsLedger({
                 <strong className="text-slate-800">Committee shirt (default order)</strong> — logistics pre-order default when no participant shirt is saved.{" "}
                 <strong className="text-slate-800">Payment</strong> — open the proof image and use <em>Mark validated</em> when you have confirmed the transfer (scroll horizontally if columns are off-screen).
                 <span className="block mt-1.5 text-slate-600">
-                  <strong className="text-slate-800">Non-seeded</strong> delegates must upload payment proof in the attendee portal; new uploads appear here for your team to confirm.
+                  <strong className="text-slate-800">Conference fee</strong> payment proof in the attendee portal is optional; when delegates upload one, new uploads appear here for your team to confirm.
                 </span>
                 {!isParticipantShirtEditOpenNow() ? (
                   <span className="block mt-1.5 font-semibold text-amber-800">
@@ -3934,8 +3902,8 @@ function PaymentsHub({ config, realized, projection }) {
       <div className="md:col-span-2 rounded-3xl border border-amber-200 bg-amber-50 p-6 sm:p-7">
         <h4 className="text-sm font-black uppercase tracking-wide text-amber-900">Payment proof reminder</h4>
         <p className="mt-2 text-sm text-amber-900/90 leading-relaxed">
-          Ask delegates to screenshot their payment confirmation right after transfer and upload it in their attendee portal under{" "}
-          <strong>Payment proof screenshot</strong>. Staff/Admin can then open the proof link directly from the Delegates list during validation.
+          Delegates may optionally screenshot their conference fee confirmation and upload it under <strong>Conference registration payment proof screenshot</strong>. Staff/Admin
+          can open the proof from the Delegates list during validation. Profile save and tours/activities do not require conference fee proof.
         </p>
       </div>
     </div>

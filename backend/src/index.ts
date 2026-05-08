@@ -522,7 +522,8 @@ app.get("/api/events/:eventId/registrations/my-row-summary", requireRole(["admin
     isSeededRegistration,
     paymentValidated,
     hasPaymentProof: Boolean(proof),
-    requiresPaymentProofUpload: !isSeededRegistration && !paymentValidated && !proof,
+    /** Conference fee proof is optional; attendees can save profile and use tours without it. */
+    requiresPaymentProofUpload: false,
   });
 });
 
@@ -598,21 +599,6 @@ app.post("/api/events/:eventId/registrations/sync-my-profile", requireRole(["adm
     .join(" ")
     .trim() || String(candidate?.full_name || seededDelegateName || email.split("@")[0] || "Unnamed").trim();
   const normalizedNextName = toNameCase(nextName);
-
-  const registrationIsSeeded = candidate ? isSeedSource(parseMetadataJson(candidate.metadata_json).seedSource) : false;
-  const proofAfterMerge = String(nextMeta.paymentProofScreenshotDataUrl ?? "").trim();
-  const alreadyValidated = String(nextMeta.paymentValidationStatus ?? "").toLowerCase() === "validated";
-  if (
-    getRole(c) === "attendee" &&
-    !registrationIsSeeded &&
-    !alreadyValidated &&
-    !proofAfterMerge
-  ) {
-    throw new HTTPException(400, {
-      message:
-        "Payment proof is required for your registration. Upload a screenshot of your payment confirmation (bank or e-wallet), then click Save to my account again.",
-    });
-  }
 
   if (candidate?.id) {
     await c.env.DB.prepare(

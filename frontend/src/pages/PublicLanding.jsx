@@ -316,8 +316,9 @@ export default function PublicLanding() {
               </div>
             </div>
             <p className="mt-4 text-xs text-zinc-500">
-              Verify account details with the finance team before sending payment. After payment, screenshot your confirmation and upload it in the attendee portal
-              (“Payment proof screenshot” section) so staff can validate your payment.
+              Verify account details with the finance team before sending payment. After payment, you may screenshot your confirmation and upload it in the attendee portal
+              under <strong>Conference registration payment proof screenshot</strong> so staff can validate it. Uploading conference fee proof is optional and is not required to
+              save your profile or to pay for Cebu tours and activities.
             </p>
           </div>
         </section>

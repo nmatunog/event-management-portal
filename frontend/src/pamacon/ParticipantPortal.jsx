@@ -31,7 +31,6 @@ export default function ParticipantPortal({
   eventRow,
   authEmail,
   profile,
-  registrationRowSummary,
   onSaveProfile,
   profileSaving,
   onLogout,
@@ -504,7 +503,6 @@ export default function ParticipantPortal({
         <AttendeeDetailsForm
           profile={profile}
           authEmail={authEmail}
-          registrationRowSummary={registrationRowSummary}
           onSaveProfile={onSaveProfile}
           profileSaving={profileSaving}
           quoteEmail={portal.quoteRequestEmail}

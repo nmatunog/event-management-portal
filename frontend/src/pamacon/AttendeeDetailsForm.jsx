@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronRight, Save } from "lucide-react";
+import { ChevronRight, Download, Save, X } from "lucide-react";
 import { isParticipantShirtEditOpenNow, participantShirtDeadlineLabel } from "./shirtOrderingPolicy";
 
 const POSITION_OPTIONS = [
@@ -147,18 +147,13 @@ function buildQuoteBody(draft, quoteKind) {
   return lines.join("\n");
 }
 
-export default function AttendeeDetailsForm({ profile, authEmail, registrationRowSummary, onSaveProfile, profileSaving, quoteEmail }) {
+export default function AttendeeDetailsForm({ profile, authEmail, onSaveProfile, profileSaving, quoteEmail }) {
   const [draft, setDraft] = useState(() => draftFromProfile(profile));
   const [expandedTourCard, setExpandedTourCard] = useState("");
   const [activityQrLoadFailed, setActivityQrLoadFailed] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const [saveError, setSaveError] = useState("");
   const shirtFieldsLocked = !isParticipantShirtEditOpenNow();
-  const requiresPaymentProofUpload =
-    registrationRowSummary !== undefined &&
-    registrationRowSummary !== null &&
-    Boolean(registrationRowSummary.requiresPaymentProofUpload);
-  const registrationSummaryLoading = registrationRowSummary === undefined;
 
   useEffect(() => {
     setDraft(() => {
@@ -198,6 +193,52 @@ export default function AttendeeDetailsForm({ profile, authEmail, registrationRo
   );
   const activityPaymentStatusLabel = String(draft.activityPaymentStatus || "pending").toLowerCase() === "confirmed" ? "Confirmed by admin" : "Pending confirmation";
 
+  const [activityQrZoomOpen, setActivityQrZoomOpen] = useState(false);
+
+  const activityGcashQrAbsoluteUrl = useMemo(() => {
+    try {
+      return new URL(activityGcashQrUrl, window.location.origin).href;
+    } catch {
+      return activityGcashQrUrl;
+    }
+  }, [activityGcashQrUrl]);
+
+  const downloadActivityGcashQr = useCallback(async () => {
+    const filename = "PAMACON-tours-gcash-qr.jpg";
+    const url = activityGcashQrAbsoluteUrl;
+    try {
+      const res = await fetch(url, { mode: "cors" });
+      if (!res.ok) throw new Error("fetch failed");
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = filename;
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+  }, [activityGcashQrAbsoluteUrl]);
+
+  useEffect(() => {
+    if (!activityQrZoomOpen) return undefined;
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") setActivityQrZoomOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [activityQrZoomOpen]);
+
   const openQuote = useCallback(
     (quoteKind) => {
       const body = buildQuoteBody(draft, quoteKind);
@@ -214,14 +255,6 @@ export default function AttendeeDetailsForm({ profile, authEmail, registrationRo
   );
 
   const handleSave = async () => {
-    if (registrationSummaryLoading) {
-      setSaveError("Please wait a moment while we load your registration status, then try again.");
-      return;
-    }
-    if (requiresPaymentProofUpload && !String(draft.paymentProofScreenshotDataUrl || "").trim()) {
-      setSaveError("A payment proof screenshot is required. Upload a bank or e-wallet confirmation image, then save again.");
-      return;
-    }
     if (!shirtFieldsLocked) {
       if (!String(draft.shirtSize || "").trim()) {
         setSaveError("T-shirt size is required before saving.");
@@ -495,14 +528,24 @@ export default function AttendeeDetailsForm({ profile, authEmail, registrationRo
         <p className="rounded-xl border border-emerald-300 bg-emerald-100 px-3 py-2 text-xs font-semibold text-emerald-900">
           This payment section is for <strong>Cebu City Tours &amp; Activities only</strong> (not for conference registration payments).
         </p>
-        <div className="rounded-xl border border-emerald-200 bg-white p-3 sm:p-4 flex flex-col sm:flex-row gap-3 sm:items-center">
+        <div className="rounded-xl border border-emerald-200 bg-white p-3 sm:p-4 flex flex-col sm:flex-row gap-3 sm:items-start">
           {!activityQrLoadFailed ? (
-            <img
-              src={activityGcashQrUrl}
-              alt="GCash QR code for activities payment"
-              className="h-36 w-36 rounded-lg border border-slate-200 bg-white object-contain"
-              onError={() => setActivityQrLoadFailed(true)}
-            />
+            <div className="flex flex-col items-start gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setActivityQrZoomOpen(true)}
+                className="rounded-xl border border-emerald-200 bg-white p-1 shadow-sm transition hover:border-emerald-400 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600"
+                aria-label="Open GCash QR code full screen"
+              >
+                <img
+                  src={activityGcashQrUrl}
+                  alt="GCash QR code for activities payment"
+                  className="h-36 w-36 rounded-lg bg-white object-contain pointer-events-none"
+                  onError={() => setActivityQrLoadFailed(true)}
+                />
+              </button>
+              <span className="text-[11px] font-medium text-emerald-800">Tap QR to zoom in</span>
+            </div>
           ) : (
             <div className="h-36 w-36 rounded-lg border border-amber-300 bg-amber-50 p-2 text-[11px] font-semibold text-amber-900 leading-tight">
               QR image not found.
@@ -512,9 +555,21 @@ export default function AttendeeDetailsForm({ profile, authEmail, registrationRo
               </span>
             </div>
           )}
-          <p className="text-sm text-slate-600 leading-relaxed">
-            Scan this QR with GCash to pay for optional activities, then upload the confirmation screenshot below.
-          </p>
+          <div className="min-w-0 flex-1 space-y-2">
+            <p className="text-sm text-slate-600 leading-relaxed">
+              Scan this QR with GCash to pay for optional activities, then upload the confirmation screenshot below.
+            </p>
+            {!activityQrLoadFailed ? (
+              <button
+                type="button"
+                onClick={() => void downloadActivityGcashQr()}
+                className="inline-flex items-center justify-center gap-2 min-h-[44px] rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-900 hover:bg-emerald-100"
+              >
+                <Download size={18} aria-hidden />
+                Download QR to photos / files
+              </button>
+            ) : null}
+          </div>
         </div>
         <label className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm font-medium text-slate-800">
           <input
@@ -647,34 +702,17 @@ export default function AttendeeDetailsForm({ profile, authEmail, registrationRo
         </p>
       </section>
 
-      <section
-        className={`rounded-2xl border p-4 sm:p-6 space-y-3 ${
-          requiresPaymentProofUpload ? "border-rose-300 bg-rose-50/90 ring-1 ring-rose-200/80" : "border-amber-200 bg-amber-50/70"
-        }`}
-      >
+      <section className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 sm:p-6 space-y-3">
         <h3 className="text-base font-semibold text-slate-900">
           Conference registration payment proof screenshot
-          {requiresPaymentProofUpload ? (
-            <span className="ml-2 text-sm font-bold text-rose-700 normal-case">Required for your registration</span>
-          ) : registrationRowSummary?.isSeededRegistration ? (
-            <span className="ml-2 text-sm font-medium text-slate-500 normal-case">Optional (seeded delegate)</span>
-          ) : null}
+          <span className="ml-2 text-sm font-medium text-slate-500 normal-case">Optional</span>
         </h3>
-        {registrationSummaryLoading ? (
-          <p className="text-sm text-slate-600">Checking payment requirements…</p>
-        ) : null}
         <p className="text-sm text-slate-700 leading-relaxed">
-          After you pay, screenshot your bank / GCash confirmation and upload it here. Committee staff are notified to review it in the Delegates module.
-          <span className="block mt-1 font-semibold text-slate-800">This section is for conference registration payment only.</span>
-          {requiresPaymentProofUpload ? (
-            <span className="block mt-2 font-semibold text-rose-900">
-              You are not on the pre-approved seeded list—upload proof of payment before you can save your details to your account.
-            </span>
-          ) : (
-            <span className="block mt-1 text-slate-600">
-              Staff/Admin will confirm your screenshot from the Conference Delegates list (Payment column).
-            </span>
-          )}
+          If you have paid your <strong>conference fee</strong>, you may screenshot your bank / GCash confirmation and upload it here so committee staff can validate it in
+          the Delegates list. <strong>You do not need this to save your profile or to register and pay for Cebu tours and activities</strong> (use the tours section above for
+          activity payments).
+          <span className="block mt-1 font-semibold text-slate-800">Conference fee only — not for tours/activities.</span>
+          <span className="block mt-1 text-slate-600">Staff/Admin can open your proof from the Conference Delegates list (Payment column) when you upload one.</span>
         </p>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <label className="inline-flex cursor-pointer items-center justify-center rounded-xl bg-amber-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-800">
@@ -756,6 +794,50 @@ export default function AttendeeDetailsForm({ profile, authEmail, registrationRo
           </p>
         )}
       </div>
+
+      {activityQrZoomOpen && !activityQrLoadFailed ? (
+        <div
+          className="fixed inset-0 z-[130] bg-black/90 p-3 sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-label="GCash QR code enlarged"
+          onClick={() => setActivityQrZoomOpen(false)}
+        >
+          <div className="relative mx-auto flex h-full max-w-4xl flex-col items-center justify-center">
+            <div className="absolute right-0 top-0 z-10 flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void downloadActivityGcashQr();
+                }}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500"
+              >
+                <Download size={18} aria-hidden />
+                Download
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActivityQrZoomOpen(false);
+                }}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/40 bg-black/50 px-4 py-2.5 text-sm font-semibold text-white hover:bg-black/70"
+              >
+                <X size={18} aria-hidden />
+                Close
+              </button>
+            </div>
+            <img
+              src={activityGcashQrUrl}
+              alt="GCash QR code for activities payment — enlarged"
+              className="max-h-[88vh] max-w-full rounded-2xl bg-white object-contain shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+            <p className="mt-4 text-center text-xs text-white/80">Tap outside the QR or press Escape to close</p>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
