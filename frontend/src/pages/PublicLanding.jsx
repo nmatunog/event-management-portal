@@ -141,18 +141,21 @@ export default function PublicLanding() {
         {/* Hero — white-poster peg: magenta title, gold year, gold subline, CTA; Sulog poster as visual */}
         <section className="pt-10 sm:pt-14 lg:pt-16 grid lg:grid-cols-[1fr_min(48%,460px)] gap-10 lg:gap-12 items-center">
           <div className="order-2 lg:order-1 space-y-6">
-            <p className="text-[#1d4ed8] font-extrabold text-xs sm:text-sm uppercase tracking-[0.2em]">
-              Sulog · Rise with the current
-            </p>
-
-            <div className="space-y-1">
-              <h1 className="text-[clamp(2.75rem,8vw,5.5rem)] font-black italic leading-[0.92] tracking-tight text-[#e11d74] drop-shadow-sm [text-shadow:0_1px_0_rgba(255,255,255,0.4)]">
-                PAMACON
-              </h1>
-              <p className="font-year text-[clamp(4rem,14vw,9rem)] leading-none font-normal tracking-tight text-gold-gradient select-none" aria-hidden="true">
-                2026
-              </p>
-              <p className="pt-2 text-xl sm:text-2xl md:text-3xl font-extrabold uppercase tracking-[0.12em] text-gold-gradient-soft">In Cebu</p>
+            <div className="space-y-2 max-w-[520px]">
+              <img
+                src="/branding/sulog-logo.jpg"
+                alt="SULOG — Rise with the current"
+                className="h-9 sm:h-11 w-auto object-contain object-left"
+                loading="eager"
+                decoding="async"
+              />
+              <img
+                src="/branding/pamacon-2026-logo.jpg"
+                alt="PAMACON 2026 in Cebu, May 13–15"
+                className="w-full max-w-[430px] h-auto object-contain object-left"
+                loading="eager"
+                decoding="async"
+              />
               <p className="text-lg sm:text-xl font-bold uppercase tracking-widest text-gold-gradient-soft">{dateLabel}</p>
             </div>
 
