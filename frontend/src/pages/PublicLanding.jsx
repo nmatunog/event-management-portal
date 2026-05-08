@@ -134,21 +134,23 @@ export default function PublicLanding() {
         <section className="pt-10 sm:pt-14 lg:pt-16 grid lg:grid-cols-[1fr_min(48%,460px)] gap-10 lg:gap-12 items-center">
           <div className="order-2 lg:order-1 space-y-6">
             <div className="w-full max-w-[460px]">
-              <div className="relative overflow-hidden rounded-3xl border border-white shadow-2xl shadow-zinc-900/10 ring-1 ring-black/5 bg-white aspect-[3/4] p-6 sm:p-8 flex flex-col items-start justify-start">
+              <div className="relative overflow-hidden rounded-3xl border border-white shadow-2xl shadow-zinc-900/10 ring-1 ring-black/5 bg-white aspect-[3/4] p-6 sm:p-8 flex items-center justify-center">
+                <div className="w-full max-w-[370px] flex flex-col items-center justify-center gap-5">
                 <img
                   src="/branding/sulog-logo.jpg"
                   alt="SULOG — Rise with the current"
-                  className="h-14 sm:h-16 w-auto object-contain object-left"
+                  className="h-14 sm:h-16 w-auto object-contain object-center"
                   loading="eager"
                   decoding="async"
                 />
                 <img
                   src="/branding/pamacon-2026-logo.jpg"
                   alt="PAMACON 2026 in Cebu, May 13–15"
-                  className="mt-5 w-full max-w-[360px] h-auto object-contain object-left"
+                  className="w-full max-w-[360px] h-auto object-contain object-center"
                   loading="eager"
                   decoding="async"
                 />
+                </div>
               </div>
             </div>
 
