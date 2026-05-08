@@ -81,17 +81,9 @@ export default function PublicLanding() {
       <header className="sticky top-0 z-30 border-b border-zinc-200/90 bg-white/95 backdrop-blur-md shadow-sm">
         <div className="max-w-6xl mx-auto px-4 sm:px-8 py-4 flex flex-wrap items-center justify-between gap-4">
           <Link to="/" className="flex items-center gap-3 min-w-0 group">
-            <div className="rounded-xl bg-white border border-zinc-200 flex flex-col items-center justify-center gap-1 px-2 py-1.5 shadow-sm shrink-0 max-w-[min(240px,52vw)]">
-              <img
-                src="/branding/sulog-logo.jpg"
-                alt="SULOG — Rise with the current"
-                className="h-4 w-auto max-w-full object-contain object-center"
-              />
-              <img
-                src="/branding/pamacon-2026-logo.jpg"
-                alt="PAMACON 2026 in Cebu, May 13–15"
-                className="h-7 sm:h-8 w-auto max-w-full object-contain object-center"
-              />
+            <div className="rounded-xl bg-white border border-zinc-200 flex items-center gap-2 px-2.5 py-2 shadow-sm shrink-0">
+              <img src="/branding/pama-symbol.png" alt="PAMA" className="h-8 w-8 object-contain" />
+              <img src="/branding/pama-wordmark.png" alt="AIA PAMA" className="h-6 w-auto max-w-[160px] object-contain" />
             </div>
             <div className="min-w-0">
               <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[#1d4ed8]">AIA · AIA PAMA</p>

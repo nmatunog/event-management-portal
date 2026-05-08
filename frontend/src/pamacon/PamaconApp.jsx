@@ -1175,17 +1175,9 @@ export default function PamaconApp({
       >
         <div className="p-6 flex items-center justify-between md:justify-start gap-4 border-b border-slate-200/80 bg-white/80">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="max-w-[168px] rounded-xl overflow-hidden bg-white border border-slate-200 flex flex-col items-center justify-center gap-0.5 px-1.5 py-1 shrink-0 shadow-sm">
-              <img
-                src="/branding/sulog-logo.jpg"
-                alt="SULOG — Rise with the current"
-                className="h-3.5 w-auto max-w-full object-contain object-center"
-              />
-              <img
-                src="/branding/pamacon-2026-logo.jpg"
-                alt="PAMACON 2026 in Cebu, May 13–15"
-                className="h-7 w-auto max-w-full object-contain object-center"
-              />
+            <div className="rounded-xl bg-white border border-slate-200 flex items-center gap-2 px-2.5 py-2 shrink-0 shadow-sm">
+              <img src="/branding/pama-symbol.png" alt="PAMA" className="h-8 w-8 object-contain" />
+              <img src="/branding/pama-wordmark.png" alt="AIA PAMA" className="h-6 w-auto max-w-[150px] object-contain" />
             </div>
             <div className="min-w-0">
               <h1 className="text-base font-semibold text-slate-900 leading-tight truncate">PAMACON 2026</h1>
