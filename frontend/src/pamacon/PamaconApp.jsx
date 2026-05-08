@@ -62,6 +62,7 @@ import {
   upsertUserRole,
 } from "../lib/api";
 import {
+  ATTENDEE_POSTER_MAX,
   DEFAULT_EXPENSE_BUDGET_MODULES,
   DEFAULT_PAMACON_CONFIG,
   DEFAULT_PROGRAM_MODULES,
@@ -4739,7 +4740,10 @@ function SetupView({ config, setConfig, eventId, canEdit, isAdmin, isSuperuser, 
         outgoing.seededListScreenshotDataUrl = await reencodeImageDataUrlAsJpeg(shot, 2200, 0.88);
       }
       const portal = { ...(outgoing.attendeePortal || {}) };
-      const posterUrls = [...(Array.isArray(portal.posterImageUrls) ? portal.posterImageUrls : []), "", "", "", "", "", ""].slice(0, 6);
+      const posterUrls = [...(Array.isArray(portal.posterImageUrls) ? portal.posterImageUrls : []), "", "", "", "", "", "", "", "", "", ""].slice(
+        0,
+        ATTENDEE_POSTER_MAX
+      );
       for (let i = 0; i < posterUrls.length; i++) {
         const u = String(posterUrls[i] || "");
         if (u.startsWith("data:image/") && !u.startsWith("data:image/svg") && u.length > 50000) {
@@ -4836,10 +4840,10 @@ function SetupView({ config, setConfig, eventId, canEdit, isAdmin, isSuperuser, 
     youtubeUrl: "",
     quoteRequestEmail: "",
     posterDisplayCount: 3,
-    posterImageUrls: ["", "", "", "", "", ""],
+    posterImageUrls: ["", "", "", "", "", "", "", "", "", ""],
     ...(local.attendeePortal || {}),
   };
-  const posterUrls = [...(portalConfig.posterImageUrls || []), "", "", "", "", "", ""].slice(0, 6);
+  const posterUrls = [...(portalConfig.posterImageUrls || []), "", "", "", "", "", "", "", "", "", ""].slice(0, ATTENDEE_POSTER_MAX);
   const updatePortalConfig = (patch) => {
     setLocal({
       ...local,
@@ -4968,16 +4972,16 @@ function SetupView({ config, setConfig, eventId, canEdit, isAdmin, isSuperuser, 
                 <p className="text-[11px] text-slate-500">Leave blank to use the environment-level attendee video link.</p>
               </label>
               <label className="block space-y-1">
-                <span className="text-xs font-semibold text-slate-600">No. of posters to display (1-6)</span>
+                <span className="text-xs font-semibold text-slate-600">No. of posters to display (1-10)</span>
                 <input
                   type="number"
                   min={1}
-                  max={6}
+                  max={ATTENDEE_POSTER_MAX}
                   disabled={!canEdit}
                   value={Number(portalConfig.posterDisplayCount) || 3}
                   onChange={(e) =>
                     updatePortalConfig({
-                      posterDisplayCount: Math.max(1, Math.min(6, Number(e.target.value) || 3)),
+                      posterDisplayCount: Math.max(1, Math.min(ATTENDEE_POSTER_MAX, Number(e.target.value) || 3)),
                     })
                   }
                   className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 disabled:opacity-50"

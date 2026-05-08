@@ -1,4 +1,5 @@
 export const PAMACON_TITLE = "PAMACON 2026";
+export const ATTENDEE_POSTER_MAX = 10;
 
 export const DEFAULT_PROGRAM_MODULES = [
   { day: "Day 1 - May 13", time: "4:00", program: "Breakout Coffee Session", assigned: "Check in area Coffee Shop" },
@@ -34,8 +35,8 @@ export const DEFAULT_ATTENDEE_PORTAL = {
   youtubeUrl: "",
   /** Number of poster cards shown in attendee portal hub. */
   posterDisplayCount: 3,
-  /** Up to six image URLs for marketing posters; empty strings show placeholders. */
-  posterImageUrls: ["/landing/poster-sulog-cebu.png", "/landing/poster-pamacon-white.png", "", "", "", ""],
+  /** Up to ten image URLs for marketing posters; empty strings show placeholders. */
+  posterImageUrls: ["/landing/poster-sulog-cebu.png", "/landing/poster-pamacon-white.png", "", "", "", "", "", "", "", ""],
   /** Organizer inbox for quote requests (mailto). Falls back to VITE_QUOTE_REQUEST_EMAIL. */
   quoteRequestEmail: "",
 };
@@ -64,14 +65,14 @@ export function mergeConfigFromEvent(eventRow) {
   try {
     const parsed = JSON.parse(eventRow.config_json);
     const posterUrls = Array.isArray(parsed.attendeePortal?.posterImageUrls)
-      ? parsed.attendeePortal.posterImageUrls.slice(0, 6)
+      ? parsed.attendeePortal.posterImageUrls.slice(0, ATTENDEE_POSTER_MAX)
       : null;
     const mergedPosters = posterUrls
-      ? [...posterUrls, "", "", "", "", "", ""].slice(0, 6)
+      ? [...posterUrls, "", "", "", "", "", "", "", "", "", ""].slice(0, ATTENDEE_POSTER_MAX)
       : DEFAULT_ATTENDEE_PORTAL.posterImageUrls;
     const parsedDisplayCount = Number(parsed.attendeePortal?.posterDisplayCount);
     const posterDisplayCount = Number.isFinite(parsedDisplayCount)
-      ? Math.max(1, Math.min(6, Math.trunc(parsedDisplayCount)))
+      ? Math.max(1, Math.min(ATTENDEE_POSTER_MAX, Math.trunc(parsedDisplayCount)))
       : DEFAULT_ATTENDEE_PORTAL.posterDisplayCount;
     const seededShot =
       typeof parsed.seededListScreenshotDataUrl === "string" ? parsed.seededListScreenshotDataUrl : DEFAULT_PAMACON_CONFIG.seededListScreenshotDataUrl;

@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Award, Calendar, Camera, ChevronDown, ClipboardCheck, Clock3, Film, ImageIcon, LogOut, MapPin, Music, Sparkles, Star, User, Utensils } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { DEFAULT_PAMACON_CONFIG, DEFAULT_ATTENDEE_PORTAL, PAMACON_TITLE } from "./defaultConfig";
+import { ATTENDEE_POSTER_MAX, DEFAULT_PAMACON_CONFIG, DEFAULT_ATTENDEE_PORTAL, PAMACON_TITLE } from "./defaultConfig";
 import AttendeeDetailsForm from "./AttendeeDetailsForm";
 
 function youtubeEmbedSrc(url) {
@@ -42,8 +42,8 @@ export default function ParticipantPortal({
   const end = eventRow?.end_date || "2026-05-15";
   const portal = { ...DEFAULT_ATTENDEE_PORTAL, ...(config?.attendeePortal || {}) };
   const requestedPosterCount = Number(portal.posterDisplayCount);
-  const posterCount = Number.isFinite(requestedPosterCount) ? Math.max(1, Math.min(6, Math.trunc(requestedPosterCount))) : 3;
-  const posterSlots = [...(portal.posterImageUrls || []), "", "", "", "", "", ""].slice(0, posterCount);
+  const posterCount = Number.isFinite(requestedPosterCount) ? Math.max(1, Math.min(ATTENDEE_POSTER_MAX, Math.trunc(requestedPosterCount))) : 3;
+  const posterSlots = [...(portal.posterImageUrls || []), "", "", "", "", "", "", "", "", "", ""].slice(0, posterCount);
   const youtubeUrl =
     String(portal.youtubeUrl || "").trim() || String(import.meta.env.VITE_ATTENDEE_YOUTUBE_URL || "").trim();
   const embedSrc = youtubeEmbedSrc(youtubeUrl);
