@@ -138,43 +138,39 @@ export default function PublicLanding() {
                 <img
                   src="/branding/sulog-logo.jpg"
                   alt="SULOG — Rise with the current"
-                  className="self-end h-16 sm:h-20 w-auto object-contain object-right"
+                  className="self-end h-14 sm:h-16 w-auto object-contain object-right"
                   loading="eager"
                   decoding="async"
                 />
-                <div className="flex-1 flex items-center justify-center pt-2 sm:pt-3">
-                <img
-                  src="/branding/pamacon-2026-logo.jpg"
-                  alt="PAMACON 2026 in Cebu, May 13–15"
-                  className="w-full max-w-[400px] h-auto object-contain object-center"
-                  loading="eager"
-                  decoding="async"
-                />
+                <div className="flex-1 flex items-center justify-center py-2 sm:py-3">
+                  <img
+                    src="/branding/pamacon-2026-logo.jpg"
+                    alt="PAMACON 2026 in Cebu, May 13–15"
+                    className="w-full max-w-[360px] h-auto object-contain object-center"
+                    loading="eager"
+                    decoding="async"
+                  />
                 </div>
+                <p className="text-zinc-600 text-sm sm:text-base leading-relaxed font-medium">
+                  Register, plan your stay, and step into the delegate portal - same sign-in for participants and the committee workspace.
+                </p>
+                <div className="flex flex-col sm:flex-row flex-wrap gap-3 pt-3">
+                  <Link
+                    to="/sign-in"
+                    className="inline-flex items-center justify-center gap-2 min-h-[50px] rounded-full px-7 py-3 text-sm font-black uppercase tracking-wide text-white bg-[#dc2626] shadow-lg hover:bg-[#b91c1c] active:scale-[0.99] transition-transform"
+                  >
+                    Book your seats today
+                    <ArrowRight size={18} strokeWidth={2.5} aria-hidden />
+                  </Link>
+                  <a
+                    href="#rates"
+                    className="inline-flex items-center justify-center min-h-[50px] rounded-full px-6 py-3 text-sm font-bold uppercase tracking-wide text-[#be185d] border-2 border-[#e11d74]/80 bg-white hover:bg-rose-50/80 transition-colors"
+                  >
+                    Rates & info
+                  </a>
+                </div>
+                {loadError && <p className="mt-2 text-sm text-amber-800 font-semibold bg-amber-50 border border-amber-200 rounded-xl px-4 py-2">{loadError}</p>}
               </div>
-            </div>
-
-            <div className="mt-auto pt-4 sm:pt-5">
-              <p className="text-zinc-600 text-base sm:text-lg leading-relaxed max-w-xl font-medium">
-                Register, plan your stay, and step into the delegate portal — same sign-in for participants and the committee workspace.
-              </p>
-
-              <div className="flex flex-col sm:flex-row flex-wrap gap-3 pt-2">
-                <Link
-                  to="/sign-in"
-                  className="inline-flex items-center justify-center gap-2 min-h-[52px] rounded-full px-8 py-3.5 text-sm font-black uppercase tracking-wide text-white bg-[#dc2626] shadow-lg hover:bg-[#b91c1c] active:scale-[0.99] transition-transform"
-                >
-                  Book your seats today
-                  <ArrowRight size={18} strokeWidth={2.5} aria-hidden />
-                </Link>
-                <a
-                  href="#rates"
-                  className="inline-flex items-center justify-center min-h-[52px] rounded-full px-7 py-3.5 text-sm font-bold uppercase tracking-wide text-[#be185d] border-2 border-[#e11d74]/80 bg-white hover:bg-rose-50/80 transition-colors"
-                >
-                  Rates & info
-                </a>
-              </div>
-              {loadError && <p className="mt-2 text-sm text-amber-800 font-semibold bg-amber-50 border border-amber-200 rounded-xl px-4 py-2 max-w-xl">{loadError}</p>}
             </div>
           </div>
 
