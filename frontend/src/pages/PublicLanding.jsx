@@ -277,9 +277,6 @@ export default function PublicLanding() {
             <div>
               <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[#1d4ed8]">Official E-magazine</p>
               <h3 className="mt-2 text-2xl sm:text-3xl font-black text-zinc-900 leading-tight">PAMA E-Magazine 2026</h3>
-              <p className="mt-3 text-sm sm:text-base text-zinc-600 font-medium leading-relaxed">
-                Added in the public landing page. The source site blocks embedded display on external domains, so this section provides a clean, visible placeholder with direct access.
-              </p>
               <div className="mt-5 flex flex-wrap gap-3">
                 <a
                   href={eMagazineUrl}
