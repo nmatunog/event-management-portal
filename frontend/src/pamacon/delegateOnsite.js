@@ -197,6 +197,51 @@ export function onsiteMasterlistHeaders() {
   ];
 }
 
+function parseRegistrationMeta(row) {
+  const raw = row?.metadata_json ?? row?.metaBase;
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return {};
+    }
+  }
+  return raw && typeof raw === "object" ? raw : {};
+}
+
+export function mapRegistrationFromApi(row) {
+  const meta = parseRegistrationMeta(row);
+  const nameParts = String(row?.full_name || row?.name || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  const inferredLast = String(meta.lastName || (nameParts.length ? nameParts[nameParts.length - 1] : "")).trim();
+  const inferredFirst = String(meta.firstName || (nameParts.length ? nameParts[0] : "")).trim();
+  const roleSource = String(meta.positionCode || row?.attendee_type || row?.role || "").trim();
+  const mode =
+    row?.payment_plan === "installment" ? "Installment" : row?.payment_plan === "partial" ? "Partial" : "Full";
+  return {
+    id: row?.id,
+    name: row?.full_name || row?.name || "",
+    firstName: inferredFirst,
+    lastName: inferredLast,
+    role: formatPositionShort(roleSource),
+    mode,
+    status: row?.status || "pre-registered",
+    metaBase: { ...meta },
+    aiaAgentCode: meta.aiaAgentCode || "",
+    mobileNumber: meta.mobileNumber || meta.attendeeClaimMobile || "",
+    roomNumber: meta.roomNumber || "",
+    checkedInAt: row?.checked_in_at || "",
+    venueArrivalCheckInAt: meta.venueArrivalCheckInAt || meta.onsiteRegisteredAt || "",
+    venueArrivalCheckInBy: meta.venueArrivalCheckInBy || meta.onsiteRegisteredBy || "",
+    hallEntryCheckInAt: meta.hallEntryCheckInAt || "",
+    hallEntryCheckInBy: meta.hallEntryCheckInBy || "",
+    onsiteRegisteredAt: meta.onsiteRegisteredAt || meta.venueArrivalCheckInAt || "",
+    onsiteRegisteredBy: meta.onsiteRegisteredBy || meta.venueArrivalCheckInBy || "",
+  };
+}
+
 export function onsiteMasterlistRow(row) {
   const position = formatPositionShort(row?.role);
   return [

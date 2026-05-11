@@ -42,9 +42,15 @@ export default function SignInPage({
   }, [authError, signInTried]);
 
 
+  const postSignInPath = useMemo(() => {
+    const next = new URLSearchParams(location.search).get("next");
+    if (!next || !next.startsWith("/") || next.startsWith("//")) return "/portal";
+    return next;
+  }, [location.search]);
+
   useEffect(() => {
-    if (session) navigate("/portal", { replace: true });
-  }, [session, navigate]);
+    if (session) navigate(postSignInPath, { replace: true });
+  }, [session, navigate, postSignInPath]);
 
   useEffect(() => {
     if (location.hash === "#claim-seeded") {

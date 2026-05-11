@@ -175,6 +175,37 @@ function isSeedSource(source: unknown) {
   return src === "pamacon-seed" || src === "pamacon-seed-ocr" || src === "pamacon-seed-text" || src === "pamacon-seed-manual";
 }
 
+const PAMACON_CHECK_IN_TIMEZONE = "Asia/Manila";
+const PAMACON_VENUE_ARRIVAL_DATE = "2026-05-13";
+const PAMACON_HALL_ENTRY_DATE = "2026-05-14";
+
+function getManilaDateKey(now = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: PAMACON_CHECK_IN_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+}
+
+function getAutoCheckInPhaseForToday(now = new Date()) {
+  const today = getManilaDateKey(now);
+  if (today === PAMACON_HALL_ENTRY_DATE) return "hall-entry";
+  if (today === PAMACON_VENUE_ARRIVAL_DATE) return "venue-arrival";
+  return null;
+}
+
+function normalizeCheckInPhase(phase: unknown) {
+  return String(phase || "").trim().toLowerCase() === "hall-entry" ? "hall-entry" : "venue-arrival";
+}
+
+function isPhaseCheckedIn(meta: Record<string, unknown>, phase: string, checkedInAt?: unknown) {
+  if (normalizeCheckInPhase(phase) === "hall-entry") {
+    return Boolean(String(meta.hallEntryCheckInAt || "").trim());
+  }
+  return Boolean(String(meta.venueArrivalCheckInAt || meta.onsiteRegisteredAt || checkedInAt || "").trim());
+}
+
 function findSyncCandidate(
   rows: any[],
   email: string,
@@ -525,6 +556,100 @@ app.get("/api/events/:eventId/registrations/my-row-summary", requireRole(["admin
     /** Conference fee proof is optional; attendees can save profile and use tours without it. */
     requiresPaymentProofUpload: false,
   });
+});
+
+app.get("/api/events/:eventId/registrations/my-check-in", requireRole(["admin", "staff", "attendee"]), async (c) => {
+  const eventId = c.req.param("eventId");
+  const email = String(c.get("authUser")?.email || "").trim().toLowerCase();
+  if (!email) throw new HTTPException(400, { message: "Signed-in email is required." });
+  const qs = c.req.query();
+  const profile = {
+    firstName: String(qs.firstName ?? "").trim(),
+    lastName: String(qs.lastName ?? "").trim(),
+    nickname: String(qs.nickname ?? "").trim(),
+  };
+  const seededRegistrationId = String(qs.seededRegistrationId ?? "").trim();
+  const seededDelegateName = String(qs.seededDelegateName ?? "").trim();
+  const rowsRes = await c.env.DB.prepare("SELECT * FROM registrations WHERE event_id = ? ORDER BY created_at ASC").bind(eventId).all<any>();
+  const candidate = findSyncCandidate((rowsRes.results || []) as any[], email, { seededRegistrationId, seededDelegateName, profile });
+  const autoPhase = getAutoCheckInPhaseForToday();
+  const checkInPhase = autoPhase || "venue-arrival";
+  if (!candidate?.id) {
+    return c.json({
+      hasRegistration: false,
+      autoPhase,
+      checkInPhase,
+      venueCheckedIn: false,
+      hallCheckedIn: false,
+      item: null,
+    });
+  }
+  const meta = parseMetadataJson(candidate.metadata_json);
+  return c.json({
+    hasRegistration: true,
+    autoPhase,
+    checkInPhase,
+    venueCheckedIn: isPhaseCheckedIn(meta, "venue-arrival", candidate.checked_in_at),
+    hallCheckedIn: isPhaseCheckedIn(meta, "hall-entry"),
+    item: candidate,
+  });
+});
+
+app.post("/api/events/:eventId/registrations/self-check-in", requireRole(["admin", "staff", "attendee"]), async (c) => {
+  const eventId = c.req.param("eventId");
+  const email = String(c.get("authUser")?.email || "").trim().toLowerCase();
+  if (!email) throw new HTTPException(400, { message: "Signed-in email is required." });
+  const body = await c.req.json();
+  const profile = body?.profile && typeof body.profile === "object" ? (body.profile as Record<string, unknown>) : {};
+  const rowsRes = await c.env.DB.prepare("SELECT * FROM registrations WHERE event_id = ? ORDER BY created_at ASC").bind(eventId).all<any>();
+  const candidate = findSyncCandidate((rowsRes.results || []) as any[], email, {
+    seededRegistrationId: String(body?.seededRegistrationId ?? "").trim(),
+    seededDelegateName: String(body?.seededDelegateName ?? "").trim(),
+    profile,
+  });
+  if (!candidate?.id) throw new HTTPException(404, { message: "No matching registration for this account." });
+  const autoPhase = getAutoCheckInPhaseForToday();
+  if (!autoPhase) throw new HTTPException(403, { message: "Self check-in opens on May 13 and May 14 only." });
+  const phase = normalizeCheckInPhase(body?.checkInPhase || autoPhase);
+  if (phase !== autoPhase) throw new HTTPException(403, { message: "This check-in window is not open today." });
+  const meta = parseMetadataJson(candidate.metadata_json);
+  if (isPhaseCheckedIn(meta, phase, candidate.checked_in_at)) {
+    const item = await c.env.DB.prepare("SELECT * FROM registrations WHERE id = ?").bind(candidate.id).first();
+    return c.json({ item, alreadyCheckedIn: true });
+  }
+  const nowIso = new Date().toISOString();
+  if (phase === "hall-entry") {
+    meta.hallEntryCheckInAt = nowIso;
+    meta.hallEntryCheckInBy = email;
+    await c.env.DB.prepare("UPDATE registrations SET metadata_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+      .bind(JSON.stringify(meta), candidate.id)
+      .run();
+  } else {
+    const positionCode = String(body?.positionCode ?? meta.positionCode ?? candidate.attendee_type ?? "UM").trim().toUpperCase();
+    const aiaAgentCode = String(body?.aiaAgentCode ?? meta.aiaAgentCode ?? "").trim();
+    if (!aiaAgentCode) throw new HTTPException(400, { message: "Agent code is required before the May 13 venue check-in." });
+    meta.positionCode = positionCode;
+    meta.aiaAgentCode = aiaAgentCode;
+    meta.mobileNumber = String(body?.mobileNumber ?? meta.mobileNumber ?? meta.attendeeClaimMobile ?? "").trim();
+    meta.roomNumber = String(body?.roomNumber ?? meta.roomNumber ?? "").trim();
+    meta.venueArrivalCheckInAt = nowIso;
+    meta.venueArrivalCheckInBy = email;
+    meta.onsiteRegisteredAt = nowIso;
+    meta.onsiteRegisteredBy = email;
+    await c.env.DB.prepare(
+      `UPDATE registrations SET
+        attendee_type = ?,
+        status = 'checked-in',
+        checked_in_at = COALESCE(checked_in_at, CURRENT_TIMESTAMP),
+        metadata_json = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?`
+    )
+      .bind(positionCode, JSON.stringify(meta), candidate.id)
+      .run();
+  }
+  const item = await c.env.DB.prepare("SELECT * FROM registrations WHERE id = ?").bind(candidate.id).first();
+  return c.json({ item, alreadyCheckedIn: false });
 });
 
 app.post("/api/events/:eventId/registrations/sync-my-profile", requireRole(["admin", "staff", "attendee"]), async (c) => {

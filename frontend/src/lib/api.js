@@ -98,6 +98,24 @@ export function syncMyRegistrationProfile(eventId, payload) {
 }
 
 /** Attendee: server resolves seeded vs public registration and payment-proof rules. */
+export function getMyCheckInRegistration(eventId, params = {}) {
+  const q = new URLSearchParams();
+  if (params.seededRegistrationId) q.set("seededRegistrationId", String(params.seededRegistrationId));
+  if (params.seededDelegateName) q.set("seededDelegateName", String(params.seededDelegateName));
+  if (params.firstName) q.set("firstName", String(params.firstName));
+  if (params.lastName) q.set("lastName", String(params.lastName));
+  if (params.nickname) q.set("nickname", String(params.nickname));
+  const qs = q.toString();
+  return request(`/api/events/${eventId}/registrations/my-check-in${qs ? `?${qs}` : ""}`);
+}
+
+export function selfCheckInRegistration(eventId, payload) {
+  return request(`/api/events/${eventId}/registrations/self-check-in`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function getMyRegistrationRowSummary(eventId, params = {}) {
   const q = new URLSearchParams();
   if (params.seededRegistrationId) q.set("seededRegistrationId", String(params.seededRegistrationId));
