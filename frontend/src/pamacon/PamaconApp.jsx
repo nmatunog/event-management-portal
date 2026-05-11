@@ -34,6 +34,7 @@ import {
   ClipboardPaste,
   LogOut,
   UserRound,
+  UserCheck,
   Download,
 } from "lucide-react";
 import ParticipantPortal from "./ParticipantPortal";
@@ -471,6 +472,15 @@ export default function PamaconApp({
   /** When `attendee`, committee users preview the same portal delegates see. */
   const [committeePortalView, setCommitteePortalView] = useState("admin");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const openOnsiteDesk = useCallback(() => {
+    setCommitteePortalView("admin");
+    setActiveTab("registration");
+    setIsMobileMenuOpen(false);
+    window.setTimeout(() => {
+      document.getElementById("pamacon-onsite-desk")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
+  }, []);
   const [loading, setLoading] = useState(true);
   const [eventId, setEventId] = useState(null);
   const [config, setConfig] = useState(DEFAULT_PAMACON_CONFIG);
@@ -1209,7 +1219,7 @@ export default function PamaconApp({
             <UserRound className="text-red-600 shrink-0" size={20} aria-hidden />
             <div className="min-w-0">
               <p className="text-xs font-semibold text-slate-900">Attendee portal preview</p>
-              <p className="text-[11px] text-slate-500 truncate">Same experience delegates see after sign-in</p>
+              <p className="text-[11px] text-slate-500 truncate">Delegate view only. Onsite check-in lives in the admin workspace under Delegates.</p>
             </div>
           </div>
           <button
@@ -1318,6 +1328,14 @@ export default function PamaconApp({
                 Last sync: {lastSyncAt ? new Date(lastSyncAt).toLocaleTimeString() : "—"}
               </p>
             </div>
+            <button
+              type="button"
+              onClick={openOnsiteDesk}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors"
+            >
+              <UserCheck size={18} />
+              Onsite desk
+            </button>
             <button
               type="button"
               onClick={() => setCommitteePortalView("attendee")}

@@ -136,7 +136,7 @@ export default function DelegateOnsiteDesk({ registrants, canEdit, authEmail, on
   };
 
   return (
-    <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+    <div id="pamacon-onsite-desk" className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
       <div className="p-5 sm:p-6 border-b border-slate-100 bg-gradient-to-br from-slate-50 to-white space-y-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
