@@ -59,6 +59,7 @@ import {
   patchEvent,
   patchRegistration,
   patchSpeaker,
+  checkInRegistration,
   upsertUserRole,
 } from "../lib/api";
 import {
@@ -75,6 +76,15 @@ import { PAMACON_SEED_EXPENSES } from "./seedExpenses";
 import { inferSeedRole, modeToPaymentPlan, PAMACON_SEED_DELEGATES } from "./seedDelegates";
 import { parseSeedListOcrRows } from "./parseSeedListOcrRows";
 import ProfileModule from "../components/ProfileModule";
+import DelegateOnsiteDesk from "./DelegateOnsiteDesk";
+import DelegateWorkingTeamPanel from "./DelegateWorkingTeamPanel";
+import { PORTAL_ROLE_OPTIONS, portalRoleLabel, resolveDelegatePortalEmail } from "./delegatePortalAccess";
+import {
+  isDelegatePhaseCheckedIn,
+  normalizeCheckInPhase,
+  onsiteMasterlistHeaders,
+  onsiteMasterlistRow,
+} from "./delegateOnsite";
 import {
   DELEGATE_SHIRT_SIZE_SELECT,
   effectiveShirtOrderBucket,
@@ -233,6 +243,16 @@ function delegateFromApi(row) {
     attendeeClaimEmail: meta.attendeeClaimEmail || "",
     attendeeClaimedAt: meta.attendeeClaimedAt || "",
     nickname: meta.nickname || "",
+    aiaAgentCode: meta.aiaAgentCode || "",
+    mobileNumber: meta.mobileNumber || meta.attendeeClaimMobile || "",
+    roomNumber: meta.roomNumber || "",
+    checkedInAt: row.checked_in_at || "",
+    venueArrivalCheckInAt: meta.venueArrivalCheckInAt || meta.onsiteRegisteredAt || "",
+    venueArrivalCheckInBy: meta.venueArrivalCheckInBy || meta.onsiteRegisteredBy || "",
+    hallEntryCheckInAt: meta.hallEntryCheckInAt || "",
+    hallEntryCheckInBy: meta.hallEntryCheckInBy || "",
+    onsiteRegisteredAt: meta.onsiteRegisteredAt || meta.venueArrivalCheckInAt || "",
+    onsiteRegisteredBy: meta.onsiteRegisteredBy || meta.venueArrivalCheckInBy || "",
     shirtSize: meta.shirtSize || "",
     shirtSizeOther: meta.shirtSizeOther || "",
     committeeShirtSize: meta.committeeShirtSize || "",
@@ -805,6 +825,15 @@ export default function PamaconApp({
       middleName: u.middleName ?? "",
       lastName: u.lastName ?? "",
       nickname: u.nickname ?? prev.nickname ?? "",
+      aiaAgentCode: u.aiaAgentCode ?? prev.aiaAgentCode ?? "",
+      mobileNumber: u.mobileNumber ?? prev.mobileNumber ?? prev.attendeeClaimMobile ?? "",
+      roomNumber: u.roomNumber ?? prev.roomNumber ?? "",
+      venueArrivalCheckInAt: u.venueArrivalCheckInAt ?? prev.venueArrivalCheckInAt ?? prev.onsiteRegisteredAt ?? "",
+      venueArrivalCheckInBy: u.venueArrivalCheckInBy ?? prev.venueArrivalCheckInBy ?? prev.onsiteRegisteredBy ?? "",
+      hallEntryCheckInAt: u.hallEntryCheckInAt ?? prev.hallEntryCheckInAt ?? "",
+      hallEntryCheckInBy: u.hallEntryCheckInBy ?? prev.hallEntryCheckInBy ?? "",
+      onsiteRegisteredAt: u.onsiteRegisteredAt ?? prev.onsiteRegisteredAt ?? prev.venueArrivalCheckInAt ?? "",
+      onsiteRegisteredBy: u.onsiteRegisteredBy ?? prev.onsiteRegisteredBy ?? prev.venueArrivalCheckInBy ?? "",
       shirtSize: u.shirtSize ?? prev.shirtSize ?? "",
       shirtSizeOther: u.shirtSizeOther ?? prev.shirtSizeOther ?? "",
       committeeShirtSize: u.committeeShirtSize ?? prev.committeeShirtSize ?? "",
@@ -834,6 +863,57 @@ export default function PamaconApp({
       setLastSyncAt(new Date().toISOString());
     } else {
       await reloadAll();
+    }
+  };
+
+  const saveOnsiteCheckInRegistration = async (row, deskPayload) => {
+    if (!canEdit || !row?.id) return;
+    const phase = normalizeCheckInPhase(deskPayload.checkInPhase);
+    const alreadyPhaseCheckedIn = isDelegatePhaseCheckedIn(row, phase);
+    const nowIso = new Date().toISOString();
+    const checkedInBy = String(deskPayload.checkedInBy || "").trim();
+    if (phase === "hall-entry") {
+      if (alreadyPhaseCheckedIn) return;
+      await updateRegistrantRecord({
+        ...row,
+        hallEntryCheckInAt: nowIso,
+        hallEntryCheckInBy: checkedInBy,
+      });
+      return;
+    }
+    const nextRow = {
+      ...row,
+      role: deskPayload.positionCode,
+      aiaAgentCode: deskPayload.aiaAgentCode,
+      mobileNumber: deskPayload.mobileNumber,
+      roomNumber: deskPayload.roomNumber,
+      conferenceKitClaimed: deskPayload.conferenceKitClaimed,
+      tshirtClaimed: deskPayload.tshirtClaimed,
+      venueArrivalCheckInAt: row.venueArrivalCheckInAt || "",
+      venueArrivalCheckInBy: row.venueArrivalCheckInBy || "",
+      hallEntryCheckInAt: row.hallEntryCheckInAt || "",
+      hallEntryCheckInBy: row.hallEntryCheckInBy || "",
+      onsiteRegisteredAt: row.onsiteRegisteredAt || row.venueArrivalCheckInAt || "",
+      onsiteRegisteredBy: row.onsiteRegisteredBy || row.venueArrivalCheckInBy || "",
+      status: row.status,
+    };
+    if (!alreadyPhaseCheckedIn) {
+      nextRow.venueArrivalCheckInAt = nowIso;
+      nextRow.venueArrivalCheckInBy = checkedInBy;
+      nextRow.onsiteRegisteredAt = nowIso;
+      nextRow.onsiteRegisteredBy = checkedInBy;
+      nextRow.status = "checked-in";
+    }
+    await updateRegistrantRecord(nextRow);
+    if (phase === "venue-arrival" && !alreadyPhaseCheckedIn && !String(row.checkedInAt || "").trim()) {
+      const res = await checkInRegistration(row.id);
+      if (res?.item) {
+        const next = delegateFromApi(res.item);
+        setRegistrants((prevRows) => prevRows.map((item) => (item.id === next.id ? next : item)));
+        setLastSyncAt(new Date().toISOString());
+      } else {
+        await reloadAll();
+      }
     }
   };
 
@@ -1293,6 +1373,7 @@ export default function PamaconApp({
                 authEmail={authEmail}
                 onToggleStaffClaim={toggleDelegateStaffClaim}
                 onUpdate={updateRegistrantRecord}
+                onSaveOnsiteCheckIn={saveOnsiteCheckInRegistration}
                 onCreate={createRegistrantRecord}
                 onDelete={removeRegistrantRecord}
                 onDeleteAll={removeAllRegistrantRecords}
@@ -1414,6 +1495,7 @@ function RegistrantsLedger({
   authEmail,
   onToggleStaffClaim,
   onUpdate,
+  onSaveOnsiteCheckIn,
   onCreate,
   onDelete,
   onDeleteAll,
@@ -1458,6 +1540,7 @@ function RegistrantsLedger({
   const [importingSeedText, setImportingSeedText] = useState(false);
   const [harmonizingSeedRows, setHarmonizingSeedRows] = useState(false);
   const [shirtOtherDraftByRegistrantId, setShirtOtherDraftByRegistrantId] = useState({});
+  const [portalEmailDraftByRegistrantId, setPortalEmailDraftByRegistrantId] = useState({});
   const tableMinWidthClass = showMoreColumns ? "min-w-[1640px]" : isAdmin ? "min-w-[1260px]" : "min-w-[1140px]";
   const canEditDelegateShirtFields = canEdit && (isParticipantShirtEditOpenNow() || isAdmin);
 
@@ -1569,19 +1652,39 @@ function RegistrantsLedger({
     return map;
   }, [committeeRoles]);
 
-  const handlePortalRoleChange = async (row, nextRole) => {
-    const email = String(row.attendeeClaimEmail || "").trim().toLowerCase();
-    if (!email || !isSuperuser) return;
-    const prev = committeeRoleByEmail.get(email) || "attendee";
+  const assignPortalRole = async (email, nextRole) => {
+    const normalized = String(email || "").trim().toLowerCase();
+    if (!normalized || !isSuperuser) return;
+    const prev = committeeRoleByEmail.get(normalized) || "attendee";
     if (prev === nextRole) return;
-    if (email === myEmail && prev === "admin" && nextRole !== "admin") {
+    if (normalized === myEmail && prev === "admin" && nextRole !== "admin") {
       if (!window.confirm("You are changing your own account away from Admin. Continue?")) return;
     }
+    if (superUserEmails.has(normalized)) {
+      onApiInfo?.("This email is already a configured superuser and keeps full admin access.", "warn");
+      return;
+    }
+    await upsertUserRole({ email: normalized, role: nextRole });
+    const res = await getUserRoles();
+    setCommitteeRoles(res.items || []);
+    onInfo?.(`${normalized} is now ${portalRoleLabel(nextRole)} in the portal.`);
+  };
+
+  const handlePortalRoleChange = async (row, nextRole, emailOverride) => {
+    if (!isSuperuser) return;
+    const email = String(emailOverride || resolveDelegatePortalEmail(row) || "").trim().toLowerCase();
+    if (!email) {
+      onApiError?.(new Error("Email required"), "Enter the delegate sign-in email before assigning a portal role.");
+      return;
+    }
     try {
-      await upsertUserRole({ email, role: nextRole });
-      const res = await getUserRoles();
-      setCommitteeRoles(res.items || []);
-      onInfo?.(`Portal role updated for ${email}.`);
+      await assignPortalRole(email, nextRole);
+      setPortalEmailDraftByRegistrantId((prev) => {
+        if (!Object.prototype.hasOwnProperty.call(prev, row.id)) return prev;
+        const next = { ...prev };
+        delete next[row.id];
+        return next;
+      });
     } catch (e) {
       onApiError?.(e, "Could not update portal role.");
     }
@@ -1758,55 +1861,9 @@ function RegistrantsLedger({
   }, [registrants]);
 
   const downloadMasterlist = () => {
-    const headers = [
-      "Full Name",
-      "Nickname",
-      "Position",
-      "Gender",
-      "Participant Shirt",
-      "Committee Shirt (default order)",
-      "Effective For Ordering",
-      "Tshirt Claimed",
-      "Conference Kit Claimed",
-      "Payment Mode",
-      "Paid Amount",
-      "Payment validation",
-      "Payment validated at",
-      "Payment validated by",
-      "Status",
-    ];
-    const esc = (v) => `"${String(v ?? "").replaceAll("\"", "\"\"")}"`;
-    const rows = sorted.map((r) =>
-      [
-        r.name,
-        r.nickname || "",
-        formatPositionShort(r.role),
-        r.gender || "",
-        formatShirtSizeCell(r.shirtSize, r.shirtSizeOther),
-        formatShirtSizeCell(r.committeeShirtSize, r.committeeShirtSizeOther),
-        formatShirtSizeCell(
-          String(r.shirtSize || "").trim() ? r.shirtSize : r.committeeShirtSize,
-          String(r.shirtSize || "").trim() ? r.shirtSizeOther : r.committeeShirtSizeOther
-        ),
-        r.tshirtClaimed ? "Yes" : "No",
-        r.conferenceKitClaimed ? "Yes" : "No",
-        r.mode || "",
-        Number(r.paid || 0),
-        String(r.paymentValidationStatus || "pending"),
-        r.paymentValidatedAt || "",
-        r.paymentValidatedBy || "",
-        r.status || "",
-      ].map(esc).join(",")
-    );
-    const csv = [headers.map(esc).join(","), ...rows].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `pamacon-masterlist-${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(link.href);
+    const headers = onsiteMasterlistHeaders();
+    const rows = sorted.map((r) => onsiteMasterlistRow(r));
+    downloadCsv(`pamacon-masterlist-${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
   };
 
   const downloadTshirtList = () => {
@@ -2274,6 +2331,24 @@ function RegistrantsLedger({
           </div>
         </div>
       ) : null}
+      <DelegateWorkingTeamPanel
+        registrants={registrants}
+        isSuperuser={isSuperuser}
+        committeeRoles={committeeRoles}
+        committeeRolesLoading={committeeRolesLoading}
+        superUserEmails={superUserEmails}
+        onAssignRole={assignPortalRole}
+        onInfo={onInfo}
+        onApiError={onApiError}
+      />
+      <DelegateOnsiteDesk
+        registrants={registrants}
+        canEdit={canEdit}
+        authEmail={authEmail}
+        onSaveCheckIn={onSaveOnsiteCheckIn}
+        onInfo={onInfo}
+        onApiError={onApiError}
+      />
       <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
         <div className="p-6 md:p-8 border-b border-slate-100 bg-slate-50/50 flex flex-col gap-4">
             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
@@ -2506,9 +2581,9 @@ function RegistrantsLedger({
                 {isAdmin ? (
                   <th className="px-4 py-3.5 align-bottom text-left">
                     <span className="inline-flex flex-col gap-0.5">
-                      <span className="inline-flex items-center gap-1 font-semibold uppercase tracking-wide text-slate-500">Portal role</span>
+                      <span className="inline-flex items-center gap-1 font-semibold uppercase tracking-wide text-slate-500">Portal access</span>
                       {!isSuperuser ? (
-                        <span className="normal-case font-normal text-[10px] text-slate-400">Superuser assigns Staff / Admin</span>
+                        <span className="normal-case font-normal text-[10px] text-slate-400">Superuser promotes Working Team</span>
                       ) : null}
                     </span>
                   </th>
@@ -2752,33 +2827,51 @@ function RegistrantsLedger({
                     {isAdmin ? (
                       <td className="px-4 py-4 align-top">
                         {(() => {
-                          const claimEmail = String(r.attendeeClaimEmail || "").trim().toLowerCase();
-                          if (!claimEmail) {
-                            return <span className="text-xs text-slate-400">After attendee claim</span>;
-                          }
+                          const claimEmail = resolveDelegatePortalEmail(r);
+                          const draftEmail = Object.prototype.hasOwnProperty.call(portalEmailDraftByRegistrantId, r.id)
+                            ? portalEmailDraftByRegistrantId[r.id]
+                            : claimEmail;
                           if (superUserEmails.has(claimEmail)) {
                             return <span className="text-xs font-semibold text-amber-800">Admin (env)</span>;
                           }
-                          const current = committeeRoleByEmail.get(claimEmail) || "attendee";
+                          const current = claimEmail ? committeeRoleByEmail.get(claimEmail) || "attendee" : "attendee";
                           if (!isSuperuser) {
                             return (
                               <span className="text-xs font-semibold text-slate-700">
-                                {current === "staff" ? "Working Team" : current === "admin" ? "Admin" : "Viewer"}
+                                {portalRoleLabel(current)}
                               </span>
                             );
                           }
                           return (
-                            <select
-                              value={current}
-                              disabled={committeeRolesLoading}
-                              onChange={(e) => handlePortalRoleChange(r, e.target.value)}
-                              className="w-full max-w-[9.5rem] rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-800 disabled:opacity-50"
-                              aria-label={`Portal role for ${claimEmail}`}
-                            >
-                              <option value="attendee">Viewer</option>
-                              <option value="staff">Staff</option>
-                              <option value="admin">Admin</option>
-                            </select>
+                            <div className="space-y-1.5 max-w-[11rem]">
+                              <input
+                                type="email"
+                                value={draftEmail}
+                                disabled={committeeRolesLoading}
+                                onChange={(e) =>
+                                  setPortalEmailDraftByRegistrantId((prev) => ({
+                                    ...prev,
+                                    [r.id]: e.target.value,
+                                  }))
+                                }
+                                placeholder="Sign-in email"
+                                className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-800 disabled:opacity-50"
+                                aria-label={`Portal sign-in email for ${r.name}`}
+                              />
+                              <select
+                                value={current}
+                                disabled={committeeRolesLoading}
+                                onChange={(e) => void handlePortalRoleChange(r, e.target.value, draftEmail)}
+                                className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-800 disabled:opacity-50"
+                                aria-label={`Portal role for ${r.name}`}
+                              >
+                                {PORTAL_ROLE_OPTIONS.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
                           );
                         })()}
                       </td>

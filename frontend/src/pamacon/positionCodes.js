@@ -6,6 +6,17 @@ const CODE_SET = new Set(POSITION_CODES);
 /**
  * Map stored attendee_type (long or short) to DD | AD | SUM | UM.
  */
+const POSITION_LABELS = {
+  DD: "District Director",
+  AD: "Agency Director",
+  SUM: "Senior Unit Manager",
+  UM: "Unit Manager",
+};
+
+export function positionLabelLong(raw) {
+  return POSITION_LABELS[formatPositionShort(raw)] || formatPositionShort(raw);
+}
+
 export function formatPositionShort(raw) {
   if (!raw || typeof raw !== "string") return "UM";
   const t = raw.trim();
