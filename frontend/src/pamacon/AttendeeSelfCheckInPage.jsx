@@ -14,6 +14,7 @@ import {
   isVenueRegistrationCheckIn,
   mapRegistrationFromApi,
   normalizeCheckInPhase,
+  SELF_CHECK_IN_DISCLAIMER,
 } from "./delegateOnsite";
 import { formatPositionShort } from "./positionCodes";
 
@@ -181,6 +182,10 @@ export default function AttendeeSelfCheckInPage({
       </header>
 
       <main className="mx-auto max-w-3xl px-4 py-6 sm:px-6">
+        <div className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          <p className="font-semibold">Note</p>
+          <p className="mt-1 leading-relaxed">{SELF_CHECK_IN_DISCLAIMER}</p>
+        </div>
         {loading ? (
           <div className="rounded-3xl border border-slate-200 bg-white px-6 py-16 text-center text-sm text-slate-500">Loading your registration…</div>
         ) : loadError ? (

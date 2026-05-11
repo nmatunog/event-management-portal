@@ -4,6 +4,8 @@ import { formatShirtSizeCell } from "./shirtOrderingPolicy";
 export const PAMACON_CHECK_IN_TIMEZONE = "Asia/Manila";
 export const PAMACON_VENUE_ARRIVAL_DATE = "2026-05-13";
 export const PAMACON_HALL_ENTRY_DATE = "2026-05-14";
+export const SELF_CHECK_IN_DISCLAIMER =
+  "This is not the Waterfront Hotel Check In. This is the Conference Self Registration and Event Check in.";
 
 export const DELEGATE_CHECK_IN_PHASES = [
   {
