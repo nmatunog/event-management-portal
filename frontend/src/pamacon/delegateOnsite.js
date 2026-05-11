@@ -241,6 +241,8 @@ export function mapRegistrationFromApi(row) {
     hallEntryCheckInBy: meta.hallEntryCheckInBy || "",
     onsiteRegisteredAt: meta.onsiteRegisteredAt || meta.venueArrivalCheckInAt || "",
     onsiteRegisteredBy: meta.onsiteRegisteredBy || meta.venueArrivalCheckInBy || "",
+    conferenceKitClaimed: Boolean(meta.conferenceKitClaimed),
+    tshirtClaimed: Boolean(meta.tshirtClaimed),
   };
 }
 

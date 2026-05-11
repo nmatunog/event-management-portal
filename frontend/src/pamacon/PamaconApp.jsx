@@ -883,9 +883,17 @@ export default function PamaconApp({
     const nowIso = new Date().toISOString();
     const checkedInBy = String(deskPayload.checkedInBy || "").trim();
     if (phase === "hall-entry") {
-      if (alreadyPhaseCheckedIn) return;
+      const claimUpdate = {
+        conferenceKitClaimed: Boolean(deskPayload.conferenceKitClaimed),
+        tshirtClaimed: Boolean(deskPayload.tshirtClaimed),
+      };
+      if (alreadyPhaseCheckedIn) {
+        await updateRegistrantRecord({ ...row, ...claimUpdate });
+        return;
+      }
       await updateRegistrantRecord({
         ...row,
+        ...claimUpdate,
         hallEntryCheckInAt: nowIso,
         hallEntryCheckInBy: checkedInBy,
       });

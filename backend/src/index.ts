@@ -206,6 +206,11 @@ function isPhaseCheckedIn(meta: Record<string, unknown>, phase: string, checkedI
   return Boolean(String(meta.venueArrivalCheckInAt || meta.onsiteRegisteredAt || checkedInAt || "").trim());
 }
 
+function applyClaimFlags(meta: Record<string, unknown>, body: Record<string, unknown>) {
+  if (body.conferenceKitClaimed !== undefined) meta.conferenceKitClaimed = Boolean(body.conferenceKitClaimed);
+  if (body.tshirtClaimed !== undefined) meta.tshirtClaimed = Boolean(body.tshirtClaimed);
+}
+
 function findSyncCandidate(
   rows: any[],
   email: string,
@@ -613,7 +618,11 @@ app.post("/api/events/:eventId/registrations/self-check-in", requireRole(["admin
   const phase = normalizeCheckInPhase(body?.checkInPhase || autoPhase);
   if (phase !== autoPhase) throw new HTTPException(403, { message: "This check-in window is not open today." });
   const meta = parseMetadataJson(candidate.metadata_json);
+  applyClaimFlags(meta, body && typeof body === "object" ? body : {});
   if (isPhaseCheckedIn(meta, phase, candidate.checked_in_at)) {
+    await c.env.DB.prepare("UPDATE registrations SET metadata_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+      .bind(JSON.stringify(meta), candidate.id)
+      .run();
     const item = await c.env.DB.prepare("SELECT * FROM registrations WHERE id = ?").bind(candidate.id).first();
     return c.json({ item, alreadyCheckedIn: true });
   }

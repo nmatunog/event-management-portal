@@ -16,6 +16,7 @@ import {
   normalizeCheckInPhase,
   SELF_CHECK_IN_DISCLAIMER,
 } from "./delegateOnsite";
+import ClaimConfirmationFields from "./ClaimConfirmationFields";
 import { formatPositionShort } from "./positionCodes";
 
 function emptyDraft() {
@@ -24,6 +25,8 @@ function emptyDraft() {
     aiaAgentCode: "",
     mobileNumber: "",
     roomNumber: "",
+    conferenceKitClaimed: false,
+    tshirtClaimed: false,
   };
 }
 
@@ -34,6 +37,8 @@ function draftFromRegistration(row) {
     aiaAgentCode: delegateAgentCode(row),
     mobileNumber: delegateContactNumber(row),
     roomNumber: delegateRoomNumber(row),
+    conferenceKitClaimed: Boolean(row.conferenceKitClaimed),
+    tshirtClaimed: Boolean(row.tshirtClaimed),
   };
 }
 
@@ -130,6 +135,8 @@ export default function AttendeeSelfCheckInPage({
           lastName: profile?.lastName,
           nickname: profile?.nickname,
         },
+        conferenceKitClaimed: Boolean(draft.conferenceKitClaimed),
+        tshirtClaimed: Boolean(draft.tshirtClaimed),
         ...(isQuickHallCheckIn
           ? {}
           : {
@@ -290,6 +297,12 @@ export default function AttendeeSelfCheckInPage({
                   </label>
                 </div>
               )}
+
+              <ClaimConfirmationFields
+                draft={draft}
+                disabled={saving || selectedPhaseCheckedIn}
+                onChange={(next) => setDraft((prev) => ({ ...prev, ...next }))}
+              />
 
               <button
                 type="button"

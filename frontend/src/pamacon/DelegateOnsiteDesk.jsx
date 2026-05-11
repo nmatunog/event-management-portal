@@ -15,6 +15,7 @@ import {
   isVenueRegistrationCheckIn,
   normalizeCheckInPhase,
 } from "./delegateOnsite";
+import ClaimConfirmationFields from "./ClaimConfirmationFields";
 import { formatPositionShort } from "./positionCodes";
 
 function emptyDraft() {
@@ -109,6 +110,8 @@ export default function DelegateOnsiteDesk({ registrants, canEdit, authEmail, on
         isQuickHallCheckIn
           ? {
               checkInPhase: activePhase,
+              conferenceKitClaimed: Boolean(draft.conferenceKitClaimed),
+              tshirtClaimed: Boolean(draft.tshirtClaimed),
               checkedInBy: String(authEmail || "").trim(),
             }
           : {
@@ -341,34 +344,14 @@ export default function DelegateOnsiteDesk({ registrants, canEdit, authEmail, on
                 </label>
               </div>
 
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  disabled={!canEdit || saving}
-                  onClick={() => setDraft((prev) => ({ ...prev, conferenceKitClaimed: !prev.conferenceKitClaimed }))}
-                  className={`rounded-xl px-3 py-2 text-xs font-semibold border ${
-                    draft.conferenceKitClaimed
-                      ? "border-emerald-300 bg-emerald-50 text-emerald-800"
-                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                  }`}
-                >
-                  Conference kit: {draft.conferenceKitClaimed ? "Claimed" : "Pending"}
-                </button>
-                <button
-                  type="button"
-                  disabled={!canEdit || saving}
-                  onClick={() => setDraft((prev) => ({ ...prev, tshirtClaimed: !prev.tshirtClaimed }))}
-                  className={`rounded-xl px-3 py-2 text-xs font-semibold border ${
-                    draft.tshirtClaimed
-                      ? "border-emerald-300 bg-emerald-50 text-emerald-800"
-                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                  }`}
-                >
-                  T-shirt: {draft.tshirtClaimed ? "Claimed" : "Pending"}
-                </button>
-              </div>
               </>
               )}
+
+              <ClaimConfirmationFields
+                draft={draft}
+                disabled={!canEdit || saving}
+                onChange={(next) => setDraft((prev) => ({ ...prev, ...next }))}
+              />
 
               <button
                 type="button"
