@@ -300,6 +300,17 @@ export function createPaymentVoucher(eventId, payload) {
   });
 }
 
+export function getPaymentVoucher(voucherId) {
+  return request(`/api/payment-vouchers/${voucherId}`);
+}
+
+export function patchPaymentVoucherDetails(voucherId, payload) {
+  return request(`/api/payment-vouchers/${voucherId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function voidPaymentVoucher(voucherId) {
   return request(`/api/payment-vouchers/${voucherId}`, {
     method: "PATCH",

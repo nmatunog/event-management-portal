@@ -40,6 +40,7 @@ import {
 } from "lucide-react";
 import ParticipantPortal from "./ParticipantPortal";
 import PaymentVouchersHub from "./PaymentVouchersHub";
+import SupplierVouchersPanel from "./SupplierVouchersPanel";
 import {
   createEvent,
   createExpense,
@@ -1442,15 +1443,25 @@ export default function PamaconApp({
               <SpeakersHub speakers={speakers} totalHonorarium={totalSpeakerHonorarium} eventId={eventId} canEdit={canEdit} onReload={reloadAll} onError={onApiError} />
             )}
             {activeTab === "suppliers" && (
-              <SuppliersHub
-                suppliers={suppliers}
-                totalSpend={totalSupplierSpend}
-                eventId={eventId}
-                canEdit={canEdit}
-                onReload={reloadAll}
-                onError={onApiError}
-                onSeedExpenses={seedExpenseRecords}
-              />
+              <div className="space-y-8">
+                <SuppliersHub
+                  suppliers={suppliers}
+                  totalSpend={totalSupplierSpend}
+                  eventId={eventId}
+                  canEdit={canEdit}
+                  onReload={reloadAll}
+                  onError={onApiError}
+                  onSeedExpenses={seedExpenseRecords}
+                />
+                <SupplierVouchersPanel
+                  eventId={eventId}
+                  suppliers={suppliers}
+                  canEdit={canEdit}
+                  isAdmin={isAdmin}
+                  onError={onApiError}
+                  onInfo={onApiInfo}
+                />
+              </div>
             )}
             {activeTab === "payments" && <PaymentsHub config={config} realized={totalRealizedRevenueValue} projection={totalRevenueProjection} />}
             {activeTab === "payment-vouchers" && (
@@ -1458,11 +1469,24 @@ export default function PamaconApp({
                 eventId={eventId}
                 suppliers={suppliers}
                 canEdit={canEdit}
+                isAdmin={isAdmin}
                 onError={onApiError}
                 onInfo={onApiInfo}
               />
             )}
-            {activeTab === "expenses" && <ExpenseDashboard config={config} suppliers={suppliers} />}
+            {activeTab === "expenses" && (
+              <div className="space-y-8">
+                <ExpenseDashboard config={config} suppliers={suppliers} />
+                <SupplierVouchersPanel
+                  eventId={eventId}
+                  suppliers={suppliers}
+                  canEdit={canEdit}
+                  isAdmin={isAdmin}
+                  onError={onApiError}
+                  onInfo={onApiInfo}
+                />
+              </div>
+            )}
             {activeTab === "setup" && (
               <SetupView
                 config={config}

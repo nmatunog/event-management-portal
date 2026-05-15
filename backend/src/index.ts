@@ -115,6 +115,12 @@ function requireRole(allowed: Role[]) {
   };
 }
 
+function assertAdminOnly(c: Context<AppContext>) {
+  if (getRole(c) !== "admin") {
+    throw new HTTPException(403, { message: "Forbidden: only admins can perform this action." });
+  }
+}
+
 function asNumber(value: unknown, fallback = 0) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
@@ -1363,6 +1369,25 @@ app.post("/api/events/:eventId/payment-vouchers", requireRole(["admin", "staff"]
   return c.json({ item, confirmUrl: `/supplier-voucher/${token}` }, 201);
 });
 
+app.get("/api/payment-vouchers/:id", requireRole(["admin", "staff"]), async (c) => {
+  const id = c.req.param("id");
+  const row = await c.env.DB.prepare(
+    `SELECT v.*,
+            CASE WHEN v.signature_data_url IS NOT NULL AND v.signature_data_url != '' THEN 1 ELSE 0 END AS has_signature
+     FROM supplier_payment_vouchers v WHERE v.id = ?`
+  )
+    .bind(id)
+    .first<Record<string, unknown>>();
+  if (!row) throw new HTTPException(404, { message: "Voucher not found." });
+  const { signature_data_url: _sig, ...rest } = row;
+  return c.json({
+    item: {
+      ...rest,
+      hasSignature: Boolean(row.has_signature),
+    },
+  });
+});
+
 app.patch("/api/payment-vouchers/:id", requireRole(["admin", "staff"]), async (c) => {
   const id = c.req.param("id");
   const body = await c.req.json();
@@ -1374,6 +1399,82 @@ app.patch("/api/payment-vouchers/:id", requireRole(["admin", "staff"]), async (c
     await c.env.DB.prepare("UPDATE supplier_payment_vouchers SET status = 'void', updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(id).run();
     const item = await c.env.DB.prepare("SELECT * FROM supplier_payment_vouchers WHERE id = ?").bind(id).first();
     return c.json({ item });
+  }
+
+  const hasDetailUpdate =
+    body.supplierName !== undefined ||
+    body.amount !== undefined ||
+    body.payeeEmail !== undefined ||
+    body.payeeContact !== undefined ||
+    body.paymentMethod !== undefined ||
+    body.paymentReference !== undefined ||
+    body.paymentDate !== undefined ||
+    body.description !== undefined ||
+    body.notes !== undefined ||
+    body.expenseId !== undefined ||
+    body.dateReceived !== undefined;
+
+  if (hasDetailUpdate) {
+    assertAdminOnly(c);
+    const actor = c.get("authUser");
+    const supplierName =
+      body.supplierName !== undefined ? String(body.supplierName ?? "").trim() : String(existing.supplier_name ?? "").trim();
+    if (!supplierName) throw new HTTPException(400, { message: "Supplier name is required." });
+    const amount = body.amount !== undefined ? asNumber(body.amount, 0) : asNumber(existing.amount, 0);
+    if (amount <= 0) throw new HTTPException(400, { message: "Amount must be greater than zero." });
+
+    let expenseId: string | null =
+      body.expenseId !== undefined ? (body.expenseId ? String(body.expenseId) : null) : (existing.expense_id as string | null);
+    if (expenseId) {
+      const expense = await c.env.DB.prepare("SELECT id FROM expenses WHERE id = ? AND event_id = ?")
+        .bind(expenseId, existing.event_id)
+        .first();
+      if (!expense) throw new HTTPException(400, { message: "Linked expense not found for this event." });
+    }
+
+    let dateReceived = existing.date_received as string | null;
+    if (body.dateReceived !== undefined) {
+      const dr = String(body.dateReceived ?? "").trim();
+      if (dr && !/^\d{4}-\d{2}-\d{2}$/.test(dr)) {
+        throw new HTTPException(400, { message: "Date received must be YYYY-MM-DD." });
+      }
+      dateReceived = dr || null;
+    }
+
+    await c.env.DB.prepare(
+      `UPDATE supplier_payment_vouchers SET
+        expense_id = ?,
+        supplier_name = ?,
+        payee_email = ?,
+        payee_contact = ?,
+        amount = ?,
+        payment_method = ?,
+        payment_reference = ?,
+        payment_date = ?,
+        description = ?,
+        notes = ?,
+        date_received = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?`
+    )
+      .bind(
+        expenseId,
+        supplierName,
+        body.payeeEmail !== undefined ? String(body.payeeEmail ?? "").trim() || null : existing.payee_email,
+        body.payeeContact !== undefined ? String(body.payeeContact ?? "").trim() || null : existing.payee_contact,
+        amount,
+        body.paymentMethod !== undefined ? String(body.paymentMethod ?? "").trim() || null : existing.payment_method,
+        body.paymentReference !== undefined ? String(body.paymentReference ?? "").trim() || null : existing.payment_reference,
+        body.paymentDate !== undefined ? String(body.paymentDate ?? "").trim() || null : existing.payment_date,
+        body.description !== undefined ? String(body.description ?? "").trim() || null : existing.description,
+        body.notes !== undefined ? String(body.notes ?? "").trim() || null : existing.notes,
+        dateReceived,
+        id
+      )
+      .run();
+
+    const item = await c.env.DB.prepare("SELECT * FROM supplier_payment_vouchers WHERE id = ?").bind(id).first();
+    return c.json({ item, editedBy: actor?.email ?? null });
   }
 
   throw new HTTPException(400, { message: "Unsupported update." });
@@ -1475,7 +1576,11 @@ app.patch("/api/payment-vouchers/public/:token/confirm", async (c) => {
 
 app.get("/api/payment-vouchers/:id/signature", requireRole(["admin", "staff"]), async (c) => {
   const id = c.req.param("id");
-  const row = await c.env.DB.prepare("SELECT signature_data_url, signature_method, signer_name, status FROM supplier_payment_vouchers WHERE id = ?")
+  const row = await c.env.DB.prepare(
+    `SELECT signature_data_url, signature_method, signer_name, signer_title, status,
+            receipt_notes, date_received, confirmed_at, signed_at, voucher_number, supplier_name, amount
+     FROM supplier_payment_vouchers WHERE id = ?`
+  )
     .bind(id)
     .first<Record<string, unknown>>();
   if (!row) throw new HTTPException(404, { message: "Voucher not found." });
@@ -1483,6 +1588,14 @@ app.get("/api/payment-vouchers/:id/signature", requireRole(["admin", "staff"]), 
     signatureDataUrl: row.signature_data_url ?? null,
     signatureMethod: row.signature_method ?? null,
     signerName: row.signer_name ?? null,
+    signerTitle: row.signer_title ?? null,
+    receiptNotes: row.receipt_notes ?? null,
+    dateReceived: row.date_received ?? null,
+    confirmedAt: row.confirmed_at ?? null,
+    signedAt: row.signed_at ?? null,
+    voucherNumber: row.voucher_number ?? null,
+    supplierName: row.supplier_name ?? null,
+    amount: row.amount ?? null,
     status: row.status,
   });
 });

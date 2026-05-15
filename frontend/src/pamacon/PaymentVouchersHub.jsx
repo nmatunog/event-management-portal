@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Check, Copy, FileSignature, Link2, Plus, Trash2, XCircle } from "lucide-react";
+import { Check, Copy, Edit3, Eye, FileSignature, Link2, Plus, Trash2, XCircle } from "lucide-react";
 import {
   createPaymentVoucher,
   deletePaymentVoucher,
@@ -9,6 +9,7 @@ import {
   voidPaymentVoucher,
 } from "../lib/api";
 import { formatPaidStampDate } from "../components/PaidStamp";
+import { VoucherDetailDialog, VoucherEditDialog } from "./SupplierVouchersPanel";
 
 const STATUS_STYLES = {
   sent: "bg-slate-100 text-slate-700",
@@ -29,12 +30,14 @@ function SetupInput({ label, ...props }) {
   );
 }
 
-export default function PaymentVouchersHub({ eventId, suppliers, canEdit, onError, onInfo }) {
+export default function PaymentVouchersHub({ eventId, suppliers, canEdit, isAdmin = false, onError, onInfo }) {
   const [vouchers, setVouchers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [copiedId, setCopiedId] = useState("");
-  const [preview, setPreview] = useState(null);
+  const [viewVoucher, setViewVoucher] = useState(null);
+  const [viewSignature, setViewSignature] = useState(null);
+  const [editVoucher, setEditVoucher] = useState(null);
   const [draft, setDraft] = useState({
     expenseId: "",
     supplierName: "",
@@ -138,17 +141,16 @@ export default function PaymentVouchersHub({ eventId, suppliers, canEdit, onErro
     }
   };
 
-  const viewSignature = async (v) => {
-    try {
-      const res = await getPaymentVoucherSignature(v.id);
-      setPreview({
-        voucherNumber: v.voucher_number,
-        signerName: res.signerName,
-        signatureMethod: res.signatureMethod,
-        signatureDataUrl: res.signatureDataUrl,
-      });
-    } catch (e) {
-      onError?.(e, "Failed to load signature.");
+  const openView = async (v) => {
+    setViewVoucher(v);
+    setViewSignature(null);
+    if (v.status === "confirmed" || v.has_signature) {
+      try {
+        const sig = await getPaymentVoucherSignature(v.id);
+        setViewSignature(sig);
+      } catch (e) {
+        onError?.(e, "Failed to load stored acknowledgment.");
+      }
     }
   };
 
@@ -297,14 +299,22 @@ export default function PaymentVouchersHub({ eventId, suppliers, canEdit, onErro
                           {copiedId === v.id ? <Check size={14} /> : <Link2 size={14} />}
                           {copiedId === v.id ? "Copied" : "Link"}
                         </button>
-                        {v.has_signature || v.status === "confirmed" ? (
+                        <button
+                          type="button"
+                          onClick={() => void openView(v)}
+                          className="inline-flex items-center gap-1 rounded-xl border border-slate-200 px-3 py-1.5 text-[10px] font-black uppercase hover:bg-slate-100"
+                        >
+                          <Eye size={14} />
+                          View
+                        </button>
+                        {isAdmin ? (
                           <button
                             type="button"
-                            onClick={() => void viewSignature(v)}
+                            onClick={() => setEditVoucher(v)}
                             className="inline-flex items-center gap-1 rounded-xl border border-violet-200 text-violet-700 px-3 py-1.5 text-[10px] font-black uppercase hover:bg-violet-50"
                           >
-                            <FileSignature size={14} />
-                            Signature
+                            <Edit3 size={14} />
+                            Edit
                           </button>
                         ) : null}
                         {canEdit && v.status !== "confirmed" && v.status !== "void" ? (
@@ -336,27 +346,21 @@ export default function PaymentVouchersHub({ eventId, suppliers, canEdit, onErro
         </div>
       )}
 
-      {preview ? (
-        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
-          <div className="bg-white rounded-[32px] max-w-lg w-full p-8 space-y-4 shadow-2xl">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-[10px] font-black uppercase text-slate-400">Signature</p>
-                <h3 className="font-black text-slate-900">{preview.voucherNumber}</h3>
-                <p className="text-sm text-slate-600">{preview.signerName}</p>
-              </div>
-              <button type="button" onClick={() => setPreview(null)} className="text-slate-400 hover:text-slate-700 text-2xl leading-none">
-                ×
-              </button>
-            </div>
-            {preview.signatureDataUrl ? (
-              <img src={preview.signatureDataUrl} alt="Supplier signature" className="max-h-48 mx-auto border rounded-xl p-4 bg-white" />
-            ) : (
-              <p className="text-sm text-amber-800 bg-amber-50 rounded-xl p-4">Typed-name acknowledgment (no image signature).</p>
-            )}
-          </div>
-        </div>
-      ) : null}
+      <VoucherDetailDialog
+        voucher={viewVoucher}
+        signature={viewSignature}
+        onClose={() => {
+          setViewVoucher(null);
+          setViewSignature(null);
+        }}
+      />
+      <VoucherEditDialog
+        voucher={editVoucher}
+        suppliers={suppliers}
+        onClose={() => setEditVoucher(null)}
+        onSaved={reload}
+        onError={onError}
+      />
     </div>
   );
 }
