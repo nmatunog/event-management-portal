@@ -1,0 +1,36 @@
+CREATE TABLE IF NOT EXISTS supplier_payment_vouchers (
+  id TEXT PRIMARY KEY,
+  event_id TEXT NOT NULL,
+  expense_id TEXT,
+  token TEXT NOT NULL UNIQUE,
+  voucher_number TEXT,
+  status TEXT NOT NULL DEFAULT 'sent',
+  supplier_name TEXT NOT NULL,
+  payee_email TEXT,
+  payee_contact TEXT,
+  amount REAL NOT NULL DEFAULT 0,
+  currency TEXT DEFAULT 'PHP',
+  payment_method TEXT,
+  payment_reference TEXT,
+  payment_date TEXT,
+  description TEXT,
+  notes TEXT,
+  signature_method TEXT,
+  signature_data_url TEXT,
+  signer_name TEXT,
+  signer_title TEXT,
+  signed_at TEXT,
+  confirmed_receipt INTEGER DEFAULT 0,
+  receipt_notes TEXT,
+  created_by_email TEXT,
+  sent_at TEXT,
+  viewed_at TEXT,
+  confirmed_at TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+  FOREIGN KEY (expense_id) REFERENCES expenses(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_payment_voucher_token ON supplier_payment_vouchers(token);
+CREATE INDEX IF NOT EXISTS idx_payment_voucher_event ON supplier_payment_vouchers(event_id);

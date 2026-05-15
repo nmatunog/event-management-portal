@@ -36,8 +36,10 @@ import {
   UserRound,
   UserCheck,
   Download,
+  FileSignature,
 } from "lucide-react";
 import ParticipantPortal from "./ParticipantPortal";
+import PaymentVouchersHub from "./PaymentVouchersHub";
 import {
   createEvent,
   createExpense,
@@ -411,6 +413,7 @@ const SECTION_COPY = {
   sponsorship: { title: "Sponsorship", subtitle: "Partners and commitments" },
   speakers: { title: "Speakers & talent", subtitle: "Talks and honoraria" },
   suppliers: { title: "Suppliers & contractors", subtitle: "Vendor spend by category" },
+  "payment-vouchers": { title: "Payment vouchers", subtitle: "Supplier payment acknowledgment links" },
   payments: { title: "Payments & rules", subtitle: "Installments and revenue bridge" },
   expenses: { title: "Budget vs actual", subtitle: "Expense lines against limits" },
   setup: { title: "Event setup", subtitle: "Targets, rates, and projections" },
@@ -443,6 +446,7 @@ const NAV_GROUPS = [
     label: "Finance",
     items: [
       { id: "payments", label: "Payments", icon: CreditCard },
+      { id: "payment-vouchers", label: "Payment vouchers", icon: FileSignature },
       { id: "expenses", label: "Budget", icon: BarChart3 },
     ],
   },
@@ -1449,6 +1453,15 @@ export default function PamaconApp({
               />
             )}
             {activeTab === "payments" && <PaymentsHub config={config} realized={totalRealizedRevenueValue} projection={totalRevenueProjection} />}
+            {activeTab === "payment-vouchers" && (
+              <PaymentVouchersHub
+                eventId={eventId}
+                suppliers={suppliers}
+                canEdit={canEdit}
+                onError={onApiError}
+                onInfo={onApiInfo}
+              />
+            )}
             {activeTab === "expenses" && <ExpenseDashboard config={config} suppliers={suppliers} />}
             {activeTab === "setup" && (
               <SetupView

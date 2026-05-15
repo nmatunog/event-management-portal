@@ -258,3 +258,77 @@ export function deleteUserRole(email) {
     method: "DELETE",
   });
 }
+
+async function publicRequest(path, options = {}) {
+  const response = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: {
+      ...DEFAULT_HEADERS,
+      ...(options.headers ?? {}),
+    },
+  });
+  if (!response.ok) {
+    let message = `Request failed: ${response.status}`;
+    try {
+      const text = await response.text();
+      if (text) {
+        try {
+          const parsed = JSON.parse(text);
+          message = parsed?.message || parsed?.error || text;
+        } catch {
+          message = text;
+        }
+      }
+    } catch {
+      // no-op
+    }
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
+  }
+  return response.json();
+}
+
+export function getPaymentVouchers(eventId) {
+  return request(`/api/events/${eventId}/payment-vouchers`);
+}
+
+export function createPaymentVoucher(eventId, payload) {
+  return request(`/api/events/${eventId}/payment-vouchers`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function voidPaymentVoucher(voucherId) {
+  return request(`/api/payment-vouchers/${voucherId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status: "void" }),
+  });
+}
+
+export function deletePaymentVoucher(voucherId) {
+  return request(`/api/payment-vouchers/${voucherId}`, { method: "DELETE" });
+}
+
+export function getPaymentVoucherSignature(voucherId) {
+  return request(`/api/payment-vouchers/${voucherId}/signature`);
+}
+
+export function getPublicPaymentVoucher(token) {
+  return publicRequest(`/api/payment-vouchers/public/${encodeURIComponent(token)}`);
+}
+
+export function confirmPublicPaymentVoucher(token, payload) {
+  return publicRequest(`/api/payment-vouchers/public/${encodeURIComponent(token)}/confirm`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function supplierVoucherPublicUrl(token) {
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return `${window.location.origin}/supplier-voucher/${token}`;
+  }
+  return `/supplier-voucher/${token}`;
+}

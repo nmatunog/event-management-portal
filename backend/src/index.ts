@@ -1254,6 +1254,239 @@ app.patch("/api/invitations/respond/:token", async (c) => {
   return c.json({ ok: true, status });
 });
 
+const SIGNATURE_DATA_URL_MAX = 600_000;
+
+function nextVoucherNumber() {
+  const d = new Date();
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  const suffix = crypto.randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase();
+  return `EPV-${y}${m}${day}-${suffix}`;
+}
+
+function sanitizeSignatureDataUrl(raw: unknown) {
+  const s = String(raw ?? "").trim();
+  if (!s) return null;
+  if (!s.startsWith("data:image/")) throw new HTTPException(400, { message: "Signature must be a valid image." });
+  if (s.length > SIGNATURE_DATA_URL_MAX) throw new HTTPException(400, { message: "Signature image is too large. Please use a smaller image or redraw." });
+  return s;
+}
+
+function publicVoucherPayload(row: Record<string, unknown>) {
+  return {
+    id: row.id,
+    voucherNumber: row.voucher_number,
+    status: row.status,
+    supplierName: row.supplier_name,
+    amount: row.amount,
+    currency: row.currency ?? "PHP",
+    paymentMethod: row.payment_method,
+    paymentReference: row.payment_reference,
+    paymentDate: row.payment_date,
+    description: row.description,
+    confirmedReceipt: Boolean(row.confirmed_receipt),
+    signerName: row.signer_name,
+    signerTitle: row.signer_title,
+    signedAt: row.signed_at,
+    confirmedAt: row.confirmed_at,
+    dateReceived: row.date_received,
+    hasSignature: Boolean(row.signature_data_url),
+    eventTitle: row.event_title ?? null,
+  };
+}
+
+app.get("/api/events/:eventId/payment-vouchers", requireRole(["admin", "staff"]), async (c) => {
+  const eventId = c.req.param("eventId");
+  const res = await c.env.DB.prepare(
+    `SELECT v.id, v.event_id, v.expense_id, v.token, v.voucher_number, v.status, v.supplier_name, v.payee_email,
+            v.payee_contact, v.amount, v.currency, v.payment_method, v.payment_reference, v.payment_date,
+            v.description, v.notes, v.signature_method, v.signer_name, v.signer_title, v.signed_at,
+            v.confirmed_receipt, v.receipt_notes, v.date_received, v.created_by_email, v.sent_at, v.viewed_at, v.confirmed_at,
+            v.created_at, v.updated_at,
+            CASE WHEN v.signature_data_url IS NOT NULL AND v.signature_data_url != '' THEN 1 ELSE 0 END AS has_signature
+     FROM supplier_payment_vouchers v
+     WHERE v.event_id = ?
+     ORDER BY v.created_at DESC`
+  )
+    .bind(eventId)
+    .all();
+  return c.json({ items: res.results });
+});
+
+app.post("/api/events/:eventId/payment-vouchers", requireRole(["admin", "staff"]), async (c) => {
+  const eventId = c.req.param("eventId");
+  const body = await c.req.json();
+  const actor = c.get("authUser");
+  const supplierName = String(body.supplierName ?? body.supplier ?? "").trim();
+  if (!supplierName) throw new HTTPException(400, { message: "Supplier name is required." });
+  const amount = asNumber(body.amount, 0);
+  if (amount <= 0) throw new HTTPException(400, { message: "Amount must be greater than zero." });
+
+  let expenseId: string | null = body.expenseId ? String(body.expenseId) : null;
+  if (expenseId) {
+    const expense = await c.env.DB.prepare("SELECT id FROM expenses WHERE id = ? AND event_id = ?").bind(expenseId, eventId).first();
+    if (!expense) throw new HTTPException(400, { message: "Linked expense not found for this event." });
+  }
+
+  const id = crypto.randomUUID();
+  const token = crypto.randomUUID();
+  const voucherNumber = nextVoucherNumber();
+  await c.env.DB.prepare(
+    `INSERT INTO supplier_payment_vouchers (
+      id, event_id, expense_id, token, voucher_number, status, supplier_name, payee_email, payee_contact,
+      amount, currency, payment_method, payment_reference, payment_date, description, notes,
+      created_by_email, sent_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, 'sent', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+  )
+    .bind(
+      id,
+      eventId,
+      expenseId,
+      token,
+      voucherNumber,
+      supplierName,
+      String(body.payeeEmail ?? "").trim() || null,
+      String(body.payeeContact ?? "").trim() || null,
+      amount,
+      String(body.currency ?? "PHP").trim() || "PHP",
+      String(body.paymentMethod ?? "").trim() || null,
+      String(body.paymentReference ?? "").trim() || null,
+      String(body.paymentDate ?? "").trim() || null,
+      String(body.description ?? "").trim() || null,
+      String(body.notes ?? "").trim() || null,
+      actor?.email ?? null
+    )
+    .run();
+
+  const item = await c.env.DB.prepare("SELECT * FROM supplier_payment_vouchers WHERE id = ?").bind(id).first();
+  return c.json({ item, confirmUrl: `/supplier-voucher/${token}` }, 201);
+});
+
+app.patch("/api/payment-vouchers/:id", requireRole(["admin", "staff"]), async (c) => {
+  const id = c.req.param("id");
+  const body = await c.req.json();
+  const existing = await c.env.DB.prepare("SELECT * FROM supplier_payment_vouchers WHERE id = ?").bind(id).first<Record<string, unknown>>();
+  if (!existing) throw new HTTPException(404, { message: "Voucher not found." });
+
+  if (body.status === "void") {
+    if (existing.status === "confirmed") throw new HTTPException(400, { message: "Cannot void a confirmed voucher." });
+    await c.env.DB.prepare("UPDATE supplier_payment_vouchers SET status = 'void', updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(id).run();
+    const item = await c.env.DB.prepare("SELECT * FROM supplier_payment_vouchers WHERE id = ?").bind(id).first();
+    return c.json({ item });
+  }
+
+  throw new HTTPException(400, { message: "Unsupported update." });
+});
+
+app.delete("/api/payment-vouchers/:id", requireRole(["admin", "staff"]), async (c) => {
+  const id = c.req.param("id");
+  const existing = await c.env.DB.prepare("SELECT status FROM supplier_payment_vouchers WHERE id = ?").bind(id).first<{ status: string }>();
+  if (!existing) throw new HTTPException(404, { message: "Voucher not found." });
+  if (existing.status === "confirmed") throw new HTTPException(400, { message: "Cannot delete a confirmed voucher." });
+  await c.env.DB.prepare("DELETE FROM supplier_payment_vouchers WHERE id = ?").bind(id).run();
+  return c.json({ ok: true });
+});
+
+app.get("/api/payment-vouchers/public/:token", async (c) => {
+  const token = c.req.param("token");
+  const row = await c.env.DB.prepare(
+    `SELECT v.*, e.title AS event_title
+     FROM supplier_payment_vouchers v
+     LEFT JOIN events e ON e.id = v.event_id
+     WHERE v.token = ?`
+  )
+    .bind(token)
+    .first<Record<string, unknown>>();
+  if (!row) throw new HTTPException(404, { message: "Payment voucher not found or link has expired." });
+  if (row.status === "void") throw new HTTPException(410, { message: "This payment voucher has been voided." });
+
+  if (row.status === "sent") {
+    await c.env.DB.prepare("UPDATE supplier_payment_vouchers SET status = 'viewed', viewed_at = COALESCE(viewed_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP WHERE token = ? AND status = 'sent'")
+      .bind(token)
+      .run();
+    row.status = "viewed";
+  }
+
+  return c.json({ voucher: publicVoucherPayload(row) });
+});
+
+app.patch("/api/payment-vouchers/public/:token/confirm", async (c) => {
+  const token = c.req.param("token");
+  const body = await c.req.json();
+  const row = await c.env.DB.prepare("SELECT * FROM supplier_payment_vouchers WHERE token = ?").bind(token).first<Record<string, unknown>>();
+  if (!row) throw new HTTPException(404, { message: "Payment voucher not found." });
+  if (row.status === "void") throw new HTTPException(410, { message: "This payment voucher has been voided." });
+  if (row.status === "confirmed") throw new HTTPException(409, { message: "This payment has already been confirmed." });
+
+  const confirmedReceipt = body.confirmedReceipt === true || body.confirmedReceipt === 1;
+  if (!confirmedReceipt) throw new HTTPException(400, { message: "You must confirm receipt of payment." });
+
+  const signerName = String(body.signerName ?? "").trim();
+  if (!signerName) throw new HTTPException(400, { message: "Signer name is required." });
+
+  const signatureMethod = String(body.signatureMethod ?? "draw").trim().toLowerCase();
+  if (!["draw", "upload", "typed"].includes(signatureMethod)) {
+    throw new HTTPException(400, { message: "Invalid signature method." });
+  }
+
+  let signatureDataUrl: string | null = null;
+  if (signatureMethod === "typed") {
+    signatureDataUrl = null;
+  } else {
+    signatureDataUrl = sanitizeSignatureDataUrl(body.signatureDataUrl);
+    if (!signatureDataUrl) throw new HTTPException(400, { message: "Signature image is required." });
+  }
+
+  const receiptNotes = String(body.receiptNotes ?? "").trim() || null;
+  const signerTitle = String(body.signerTitle ?? "").trim() || null;
+  const dateReceived = String(body.dateReceived ?? "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateReceived)) {
+    throw new HTTPException(400, { message: "Date received is required (YYYY-MM-DD)." });
+  }
+  const now = new Date().toISOString();
+
+  await c.env.DB.prepare(
+    `UPDATE supplier_payment_vouchers SET
+      status = 'confirmed',
+      confirmed_receipt = 1,
+      signature_method = ?,
+      signature_data_url = ?,
+      signer_name = ?,
+      signer_title = ?,
+      receipt_notes = ?,
+      date_received = ?,
+      signed_at = ?,
+      confirmed_at = ?,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE token = ?`
+  )
+    .bind(signatureMethod, signatureDataUrl, signerName, signerTitle, receiptNotes, dateReceived, now, now, token)
+    .run();
+
+  const updated = await c.env.DB.prepare(
+    `SELECT v.*, e.title AS event_title FROM supplier_payment_vouchers v LEFT JOIN events e ON e.id = v.event_id WHERE v.token = ?`
+  )
+    .bind(token)
+    .first<Record<string, unknown>>();
+
+  return c.json({ ok: true, voucher: publicVoucherPayload(updated ?? row) });
+});
+
+app.get("/api/payment-vouchers/:id/signature", requireRole(["admin", "staff"]), async (c) => {
+  const id = c.req.param("id");
+  const row = await c.env.DB.prepare("SELECT signature_data_url, signature_method, signer_name, status FROM supplier_payment_vouchers WHERE id = ?")
+    .bind(id)
+    .first<Record<string, unknown>>();
+  if (!row) throw new HTTPException(404, { message: "Voucher not found." });
+  return c.json({
+    signatureDataUrl: row.signature_data_url ?? null,
+    signatureMethod: row.signature_method ?? null,
+    signerName: row.signer_name ?? null,
+    status: row.status,
+  });
+});
+
 app.onError((err, c) => {
   console.error(err);
   if (err instanceof HTTPException) {

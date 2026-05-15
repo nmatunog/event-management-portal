@@ -6,6 +6,7 @@ import PamaconApp from "./pamacon/PamaconApp";
 import AttendeeSelfCheckInPage from "./pamacon/AttendeeSelfCheckInPage.jsx";
 import PublicLanding from "./pages/PublicLanding.jsx";
 import SignInPage from "./pages/SignInPage.jsx";
+import SupplierPaymentVoucherPage from "./pamacon/SupplierPaymentVoucherPage.jsx";
 
 export default function App() {
   const [session, setSession] = useState(null);
@@ -473,6 +474,7 @@ export default function App() {
           />
         }
       />
+      <Route path="/supplier-voucher/:token" element={<SupplierPaymentVoucherPage />} />
       <Route path="/portal" element={session ? portalShell : <Navigate to="/sign-in" replace />} />
       <Route
         path="/check-in"
