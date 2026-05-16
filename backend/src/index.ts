@@ -1654,6 +1654,49 @@ app.patch("/api/invitations/respond/:token", async (c) => {
 });
 
 const SIGNATURE_DATA_URL_MAX = 600_000;
+const SUPPLIER_RECEIPT_IMAGES_MAX = 8;
+
+function parseSupplierReceiptImages(stored: string | null | undefined): string[] {
+  const s = String(stored ?? "").trim();
+  if (!s) return [];
+  if (s.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(s) as unknown;
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter((x): x is string => typeof x === "string" && x.startsWith("data:image/"));
+    } catch {
+      return [];
+    }
+  }
+  if (s.startsWith("data:image/")) return [s];
+  return [];
+}
+
+function serializeSupplierReceiptImages(urls: string[]): string | null {
+  const clean = urls.filter(Boolean);
+  if (clean.length === 0) return null;
+  if (clean.length === 1) return clean[0]!;
+  return JSON.stringify(clean);
+}
+
+function sanitizeSupplierReceiptImages(raw: unknown, label = "Receipt"): string | null {
+  if (raw === null || raw === undefined || raw === "") return null;
+  if (Array.isArray(raw)) {
+    if (raw.length > SUPPLIER_RECEIPT_IMAGES_MAX) {
+      throw new HTTPException(400, { message: `At most ${SUPPLIER_RECEIPT_IMAGES_MAX} receipt images allowed.` });
+    }
+    const urls = raw
+      .map((item) => sanitizeImageDataUrl(item, label))
+      .filter((u): u is string => Boolean(u));
+    return serializeSupplierReceiptImages(urls);
+  }
+  const one = sanitizeImageDataUrl(raw, label);
+  return one ? serializeSupplierReceiptImages([one]) : null;
+}
+
+function supplierReceiptHasImages(stored: string | null | undefined): boolean {
+  return parseSupplierReceiptImages(stored).length > 0;
+}
 
 async function nextVoucherNumber(db: D1Database, eventId: string) {
   const d = new Date();
@@ -1750,7 +1793,7 @@ function publicVoucherPayload(row: Record<string, unknown>) {
     confirmedAt: row.confirmed_at,
     dateReceived: row.date_received,
     hasSignature: Boolean(row.signature_data_url),
-    hasReceipt: Boolean(row.supplier_receipt_data_url),
+    hasReceipt: supplierReceiptHasImages(row.supplier_receipt_data_url as string | null),
     supplierReceiptNumber: row.supplier_receipt_number ?? null,
     eventTitle: row.event_title ?? null,
   };
@@ -1872,7 +1915,8 @@ app.patch("/api/payment-vouchers/:id", requireRole(["admin", "staff"]), async (c
     body.expenseId !== undefined ||
     body.dateReceived !== undefined ||
     body.supplierReceiptNumber !== undefined ||
-    body.supplierReceiptDataUrl !== undefined;
+    body.supplierReceiptDataUrl !== undefined ||
+    body.supplierReceiptDataUrls !== undefined;
 
   if (hasDetailUpdate) {
     assertAdminOnly(c);
@@ -1902,16 +1946,17 @@ app.patch("/api/payment-vouchers/:id", requireRole(["admin", "staff"]), async (c
     }
 
     let supplierReceiptDataUrl = existing.supplier_receipt_data_url as string | null;
-    if (body.supplierReceiptDataUrl !== undefined) {
-      const raw = body.supplierReceiptDataUrl;
-      supplierReceiptDataUrl = raw === null || raw === "" ? null : sanitizeImageDataUrl(raw, "Receipt");
+    if (body.supplierReceiptDataUrls !== undefined) {
+      supplierReceiptDataUrl = sanitizeSupplierReceiptImages(body.supplierReceiptDataUrls);
+    } else if (body.supplierReceiptDataUrl !== undefined) {
+      supplierReceiptDataUrl = sanitizeSupplierReceiptImages(body.supplierReceiptDataUrl);
     }
     const supplierReceiptNumber =
       body.supplierReceiptNumber !== undefined
         ? String(body.supplierReceiptNumber ?? "").trim() || null
         : (existing.supplier_receipt_number as string | null);
     const receiptUploadedAt =
-      body.supplierReceiptDataUrl !== undefined && supplierReceiptDataUrl
+      (body.supplierReceiptDataUrl !== undefined || body.supplierReceiptDataUrls !== undefined) && supplierReceiptDataUrl
         ? new Date().toISOString()
         : (existing.receipt_uploaded_at as string | null);
 
@@ -2023,7 +2068,12 @@ app.patch("/api/payment-vouchers/public/:token/confirm", async (c) => {
   const receiptNotes = String(body.receiptNotes ?? "").trim() || null;
   const signerTitle = String(body.signerTitle ?? "").trim() || null;
   const supplierReceiptNumber = String(body.supplierReceiptNumber ?? "").trim() || null;
-  const supplierReceiptDataUrl = body.receiptDataUrl ? sanitizeImageDataUrl(body.receiptDataUrl, "Receipt") : null;
+  let supplierReceiptDataUrl: string | null = null;
+  if (body.receiptDataUrls !== undefined) {
+    supplierReceiptDataUrl = sanitizeSupplierReceiptImages(body.receiptDataUrls);
+  } else if (body.receiptDataUrl) {
+    supplierReceiptDataUrl = sanitizeSupplierReceiptImages(body.receiptDataUrl);
+  }
   const dateReceived = String(body.dateReceived ?? "").trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateReceived)) {
     throw new HTTPException(400, { message: "Date received is required (YYYY-MM-DD)." });
@@ -2143,8 +2193,10 @@ app.get("/api/payment-vouchers/:id/receipt", requireRole(["admin", "staff"]), as
     .bind(id)
     .first<Record<string, unknown>>();
   if (!row) throw new HTTPException(404, { message: "Voucher not found." });
+  const receiptDataUrls = parseSupplierReceiptImages(row.supplier_receipt_data_url as string | null);
   return c.json({
-    receiptDataUrl: row.supplier_receipt_data_url ?? null,
+    receiptDataUrls,
+    receiptDataUrl: receiptDataUrls[0] ?? null,
     supplierReceiptNumber: row.supplier_receipt_number ?? null,
     receiptUploadedAt: row.receipt_uploaded_at ?? null,
     voucherNumber: row.voucher_number ?? null,

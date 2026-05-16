@@ -10,6 +10,7 @@ import {
   patchPaymentVoucherDetails,
   supplierVoucherPublicUrl,
 } from "../lib/api";
+import { parseReceiptDataUrls } from "../lib/receiptImages";
 
 const STATUS_STYLES = {
   sent: "bg-slate-100 text-slate-700",
@@ -110,13 +111,22 @@ export function VoucherDetailDialog({ voucher, signature, receipt, onClose }) {
           </div>
         ) : null}
 
-        {receipt?.receiptDataUrl ? (
+        {(receipt?.receiptDataUrls?.length || receipt?.receiptDataUrl) ? (
           <div className="border-t border-slate-100 pt-4 space-y-2">
             <p className="text-[10px] font-black uppercase text-slate-400">Official receipt on file</p>
             {receipt.supplierReceiptNumber ? (
               <p className="text-sm font-semibold">OR / Receipt no.: {receipt.supplierReceiptNumber}</p>
             ) : null}
-            <img src={receipt.receiptDataUrl} alt="Official receipt" className="max-h-56 mx-auto border rounded-xl p-2 bg-white" />
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {(receipt.receiptDataUrls?.length ? receipt.receiptDataUrls : [receipt.receiptDataUrl]).map((url, i) => (
+                <img
+                  key={i}
+                  src={url}
+                  alt={`Official receipt ${i + 1}`}
+                  className="max-h-56 w-full object-contain border rounded-xl p-2 bg-white"
+                />
+              ))}
+            </div>
           </div>
         ) : null}
 
@@ -174,9 +184,27 @@ export function VoucherEditDialog({ voucher, suppliers, onClose, onSaved, onErro
       notes: voucher.notes || "",
       dateReceived: voucher.date_received || "",
       supplierReceiptNumber: voucher.supplier_receipt_number || "",
-      receiptDataUrl: "",
+      receiptDataUrls: [],
     });
   }, [voucher]);
+
+  useEffect(() => {
+    if (!voucher?.has_receipt) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const rec = await getPaymentVoucherReceipt(voucher.id);
+        if (cancelled) return;
+        const urls = rec.receiptDataUrls?.length ? rec.receiptDataUrls : parseReceiptDataUrls(rec.receiptDataUrl);
+        setDraft((d) => (d ? { ...d, receiptDataUrls: urls } : d));
+      } catch {
+        /* keep empty; save still allowed */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [voucher?.id, voucher?.has_receipt]);
 
   if (!voucher || !draft) return null;
 
@@ -197,7 +225,7 @@ export function VoucherEditDialog({ voucher, suppliers, onClose, onSaved, onErro
         notes: draft.notes,
         dateReceived: draft.dateReceived || null,
         supplierReceiptNumber: draft.supplierReceiptNumber,
-        supplierReceiptDataUrl: draft.receiptDataUrl || null,
+        supplierReceiptDataUrls: draft.receiptDataUrls?.length ? draft.receiptDataUrls : null,
       });
       await onSaved?.();
       onClose();
@@ -269,7 +297,11 @@ export function VoucherEditDialog({ voucher, suppliers, onClose, onSaved, onErro
             />
           </Field>
           <Field label="Receipt image" className="sm:col-span-2">
-            <ReceiptUpload value={draft.receiptDataUrl} onChange={(url) => setDraft({ ...draft, receiptDataUrl: url })} />
+            <ReceiptUpload
+              value={draft.receiptDataUrls}
+              onChange={(urls) => setDraft({ ...draft, receiptDataUrls: urls })}
+              label="Upload official receipt images (optional)"
+            />
           </Field>
           <Field label="Payment date (issuer)">
             <input type="date" className={inputClass(false)} value={draft.paymentDate} onChange={(e) => setDraft({ ...draft, paymentDate: e.target.value })} />

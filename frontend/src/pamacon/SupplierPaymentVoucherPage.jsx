@@ -32,7 +32,7 @@ export default function SupplierPaymentVoucherPage() {
   const [useTypedSignature, setUseTypedSignature] = useState(false);
   const [dateReceived, setDateReceived] = useState(todayIsoDate);
   const [supplierReceiptNumber, setSupplierReceiptNumber] = useState("");
-  const [receiptDataUrl, setReceiptDataUrl] = useState("");
+  const [receiptDataUrls, setReceiptDataUrls] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -91,7 +91,7 @@ export default function SupplierPaymentVoucherPage() {
         signatureDataUrl: useTypedSignature ? undefined : payloadSignature,
         dateReceived: String(dateReceived).trim(),
         supplierReceiptNumber: String(supplierReceiptNumber).trim() || undefined,
-        receiptDataUrl: receiptDataUrl || undefined,
+        receiptDataUrls: receiptDataUrls.length ? receiptDataUrls : undefined,
       });
       setVoucher(res.voucher);
       setDone(true);
@@ -283,7 +283,11 @@ export default function SupplierPaymentVoucherPage() {
               />
             </label>
 
-            <ReceiptUpload value={receiptDataUrl} onChange={setReceiptDataUrl} label="Upload official receipt image (optional)" />
+            <ReceiptUpload
+              value={receiptDataUrls}
+              onChange={setReceiptDataUrls}
+              label="Upload official receipt images (optional)"
+            />
 
             <label className="flex items-center gap-3 cursor-pointer">
               <input
