@@ -2668,10 +2668,78 @@ app.get("/api/events/:eventId/feedback/me", requireRole(["admin", "staff", "atte
   if (!email) throw new HTTPException(400, { message: "Signed-in email is required." });
   const event = await c.env.DB.prepare("SELECT id, venue FROM events WHERE id = ?").bind(eventId).first<{ id: string; venue?: string }>();
   if (!event) throw new HTTPException(404, { message: "Event not found." });
-  const row = await c.env.DB.prepare("SELECT * FROM event_feedback WHERE event_id = ? AND respondent_email = ?")
+
+  const firstName = String(c.req.query("firstName") ?? "").trim();
+  const lastName = String(c.req.query("lastName") ?? "").trim();
+  const nickname = String(c.req.query("nickname") ?? "").trim();
+  const seededRegistrationId = String(c.req.query("seededRegistrationId") ?? "").trim();
+  const seededDelegateName = String(c.req.query("seededDelegateName") ?? "").trim();
+  const profile = { firstName, lastName, nickname };
+
+  const rowsRes = await c.env.DB.prepare("SELECT * FROM registrations WHERE event_id = ? ORDER BY created_at ASC").bind(eventId).all<any>();
+  const rows = (rowsRes.results || []) as any[];
+
+  let registration =
+    findSyncCandidate(rows, email, { seededRegistrationId, seededDelegateName, profile }) ||
+    (firstName && lastName ? findRegistrationByName(rows, firstName, lastName) : null);
+
+  let row = await c.env.DB.prepare("SELECT * FROM event_feedback WHERE event_id = ? AND respondent_email = ?")
     .bind(eventId, email)
     .first<Record<string, unknown>>();
-  return c.json({ schema: feedbackSchemaPayload(event.venue), item: mapFeedbackRow(row) });
+
+  if (!row?.id && registration) {
+    const resolvedFirst = firstName || String(registration.full_name || "").trim().split(/\s+/)[0] || "";
+    const resolvedLast =
+      lastName ||
+      String(registration.full_name || "")
+        .trim()
+        .split(/\s+/)
+        .slice(1)
+        .join(" ") ||
+      "";
+    const guestEmail = resolveFeedbackRespondentEmail(eventId, resolvedFirst, resolvedLast, registration);
+    if (guestEmail !== email) {
+      row = await c.env.DB.prepare("SELECT * FROM event_feedback WHERE event_id = ? AND respondent_email = ?")
+        .bind(eventId, guestEmail)
+        .first<Record<string, unknown>>();
+    }
+  }
+
+  let agencyFromRegistration: string | null = null;
+  if (registration) {
+    const meta = parseMetadataJson(registration.metadata_json);
+    agencyFromRegistration = String(meta.agency ?? meta.company ?? registration.attendee_type ?? "").trim() || null;
+  }
+
+  const delegateFirst = firstName || (registration ? String(registration.full_name || "").trim().split(/\s+/)[0] : "") || "";
+  const delegateLast =
+    lastName ||
+    (registration
+      ? String(registration.full_name || "")
+          .trim()
+          .split(/\s+/)
+          .slice(1)
+          .join(" ")
+      : "") ||
+    "";
+
+  return c.json({
+    schema: feedbackSchemaPayload(event.venue),
+    item: mapFeedbackRow(row),
+    connectedAccount: true,
+    delegate: {
+      email,
+      firstName: delegateFirst,
+      lastName: delegateLast,
+      agency: agencyFromRegistration || "",
+    },
+    match: {
+      registrationMatched: Boolean(registration),
+      registrationName: registration ? String(registration.full_name ?? "") : null,
+      agencyFromRegistration,
+      greetingName: [delegateFirst, delegateLast].filter(Boolean).join(" "),
+    },
+  });
 });
 
 app.put("/api/events/:eventId/feedback/me", requireRole(["admin", "staff", "attendee"]), async (c) => {

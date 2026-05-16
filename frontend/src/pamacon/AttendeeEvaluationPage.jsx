@@ -6,6 +6,7 @@ import { resolvePamaconEvent } from "./resolvePamaconEvent";
 import AttendeeEventFeedback from "./AttendeeEventFeedback";
 
 export default function AttendeeEvaluationPage({
+  authInitialized = true,
   authEmail,
   profile,
   attendeeSyncHints,
@@ -133,6 +134,7 @@ export default function AttendeeEvaluationPage({
         ) : (
           <AttendeeEventFeedback
             eventId={eventRow.id}
+            authInitialized={authInitialized}
             authEmail={authEmail}
             attendeeSyncHints={attendeeSyncHints}
             profile={profile}

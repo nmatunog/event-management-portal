@@ -359,8 +359,18 @@ export function supplierVoucherPublicUrl(token) {
   return `/supplier-voucher/${token}`;
 }
 
-export function getMyEventFeedback(eventId) {
-  return request(`/api/events/${eventId}/feedback/me`);
+export function getMyEventFeedback(
+  eventId,
+  { firstName = "", lastName = "", nickname = "", seededRegistrationId = "", seededDelegateName = "" } = {}
+) {
+  const qs = new URLSearchParams();
+  if (firstName) qs.set("firstName", firstName);
+  if (lastName) qs.set("lastName", lastName);
+  if (nickname) qs.set("nickname", nickname);
+  if (seededRegistrationId) qs.set("seededRegistrationId", seededRegistrationId);
+  if (seededDelegateName) qs.set("seededDelegateName", seededDelegateName);
+  const q = qs.toString();
+  return request(`/api/events/${eventId}/feedback/me${q ? `?${q}` : ""}`);
 }
 
 export function putMyEventFeedback(eventId, payload) {

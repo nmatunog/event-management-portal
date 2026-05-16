@@ -98,7 +98,7 @@ function OverviewTab({ data }) {
         <div className="absolute top-0 right-0 w-72 h-72 bg-red-600/15 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8">
           <div>
-            <h4 className="text-2xl sm:text-3xl font-black uppercase tracking-tight">Convention metrics</h4>
+            <h4 className="text-2xl sm:text-3xl font-black uppercase tracking-tight">Conference metrics</h4>
             <p className="text-white/50 text-xs font-bold uppercase tracking-widest mt-2">Delegate evaluation survey</p>
             <p className="text-sm text-white/70 mt-3 max-w-md">
               Data from <span className="font-mono text-white/90">{data.evaluationSurveyUrl || "/evaluation"}</span> — matched delegates and guest submissions by name.

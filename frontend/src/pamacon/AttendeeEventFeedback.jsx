@@ -17,6 +17,7 @@ import {
   UtensilsCrossed,
 } from "lucide-react";
 import { getMyEventFeedback, getPublicEventFeedback, putMyEventFeedback, submitPublicEventFeedback } from "../lib/api";
+import { loadDelegateIdentity, mergeDelegateProfile, saveDelegateIdentity } from "../lib/delegateIdentity";
 import {
   FEEDBACK_RATING_SECTIONS,
   defaultRatingScores,
@@ -155,6 +156,7 @@ function RatingStepContent({ stepNum, schema, scores, setScores, saving }) {
 
 export default function AttendeeEventFeedback({
   eventId,
+  authInitialized = true,
   authEmail,
   attendeeSyncHints = {},
   profile = {},
@@ -171,8 +173,10 @@ export default function AttendeeEventFeedback({
   const [formClosed, setFormClosed] = useState(false);
   const [matchInfo, setMatchInfo] = useState(null);
   const [lookupBusy, setLookupBusy] = useState(false);
+  const [connectedDelegate, setConnectedDelegate] = useState(null);
 
   const isLoggedIn = Boolean(String(authEmail || "").trim());
+  const rememberedDelegate = useMemo(() => mergeDelegateProfile(profile), [profile]);
   const greetingName = formatGreetingName(responses.firstName, responses.lastName);
   const maxStep = 5;
 
@@ -200,37 +204,79 @@ export default function AttendeeEventFeedback({
   }, []);
 
   const load = useCallback(async () => {
-    if (!eventId) return;
+    if (!eventId || !authInitialized) return;
     setLoading(true);
     try {
-      const data = isLoggedIn ? await getMyEventFeedback(eventId) : await getPublicEventFeedback(eventId);
+      const saved = loadDelegateIdentity();
+      const merged = mergeDelegateProfile(profile, saved);
+      const lookupFirst = merged.firstName;
+      const lookupLast = merged.lastName;
+
+      const data = isLoggedIn
+        ? await getMyEventFeedback(eventId, {
+            firstName: lookupFirst,
+            lastName: lookupLast,
+            nickname: merged.nickname,
+            seededRegistrationId: attendeeSyncHints.seededRegistrationId,
+            seededDelegateName: attendeeSyncHints.seededDelegateName,
+          })
+        : await getPublicEventFeedback(eventId, {
+            firstName: lookupFirst,
+            lastName: lookupLast,
+          });
+
       const sch = data.schema || null;
       setSchema(sch);
       const ratingKeys = (sch?.ratings || []).map((r) => r.key);
       const emptyScores = ratingKeys.length ? Object.fromEntries(ratingKeys.map((k) => [k, 0])) : defaultRatingScores();
 
+      const delegate = data.delegate || {};
+      const agencyPrefill = data.match?.agencyFromRegistration || data.match?.agencyPrefill || delegate.agency || merged.agency;
       const baseResponses = {
         ...defaultResponses(),
-        firstName: String(profile?.firstName || "").trim(),
-        lastName: String(profile?.lastName || "").trim(),
+        firstName: String(delegate.firstName || lookupFirst || "").trim(),
+        lastName: String(delegate.lastName || lookupLast || "").trim(),
+        agency: String(agencyPrefill || "").trim(),
       };
+
+      if (data.match) setMatchInfo(data.match);
+      if (data.connectedAccount || isLoggedIn) {
+        setConnectedDelegate({
+          email: authEmail || delegate.email || saved?.email || "",
+          fromLogin: Boolean(isLoggedIn),
+          fromRemembered: Boolean(!isLoggedIn && saved?.email),
+        });
+      } else if (saved?.email || saved?.firstName) {
+        setConnectedDelegate({ email: saved.email, fromLogin: false, fromRemembered: true });
+      } else {
+        setConnectedDelegate(null);
+      }
 
       if (applyFeedbackItem(data, emptyScores)) {
         setFormClosed(true);
+        if (isLoggedIn) {
+          saveDelegateIdentity({
+            email: authEmail,
+            firstName: baseResponses.firstName,
+            lastName: baseResponses.lastName,
+            agency: baseResponses.agency,
+            nickname: merged.nickname,
+          });
+        }
       } else {
         setScores(emptyScores);
         setResponses(baseResponses);
         setTextExtras({ likedMost: "", suggestions: "" });
         setSubmitted(false);
         setFormClosed(false);
-        setMatchInfo(null);
+        if (!data.match) setMatchInfo(null);
       }
     } catch (e) {
       onNotify?.("error", e?.message || "Could not load feedback form.");
     } finally {
       setLoading(false);
     }
-  }, [eventId, isLoggedIn, onNotify, profile, applyFeedbackItem]);
+  }, [eventId, authInitialized, isLoggedIn, authEmail, onNotify, profile, attendeeSyncHints, applyFeedbackItem]);
 
   useEffect(() => {
     void load();
@@ -258,6 +304,31 @@ export default function AttendeeEventFeedback({
   const handleContinueFromStep1 = async () => {
     if (!step1Complete || !eventId) return;
     if (isLoggedIn) {
+      if (!matchInfo?.registrationMatched) {
+        setLookupBusy(true);
+        try {
+          const data = await getPublicEventFeedback(eventId, {
+            firstName: responses.firstName,
+            lastName: responses.lastName,
+          });
+          setMatchInfo(data.match || null);
+          const agencyPrefill = data.match?.agencyFromRegistration || data.match?.agencyPrefill;
+          if (agencyPrefill && !String(responses.agency || "").trim()) {
+            setResponses((p) => ({ ...p, agency: agencyPrefill }));
+          }
+        } catch {
+          // Proceed without blocking — signed-in save still works.
+        } finally {
+          setLookupBusy(false);
+        }
+      }
+      saveDelegateIdentity({
+        email: authEmail,
+        firstName: responses.firstName,
+        lastName: responses.lastName,
+        agency: responses.agency,
+        nickname: rememberedDelegate.nickname,
+      });
       setStep(2);
       return;
     }
@@ -326,6 +397,13 @@ export default function AttendeeEventFeedback({
         ? await putMyEventFeedback(eventId, payload)
         : await submitPublicEventFeedback(eventId, payload);
       if (result?.match) setMatchInfo(result.match);
+      saveDelegateIdentity({
+        email: authEmail || loadDelegateIdentity()?.email,
+        firstName: responses.firstName,
+        lastName: responses.lastName,
+        agency: responses.agency,
+        nickname: rememberedDelegate.nickname,
+      });
       setSubmitted(true);
       setFormClosed(true);
       onNotify?.("ok", `Your feedback has been submitted! Thank you${greetingName ? `, ${greetingName}` : ""}!`);
@@ -401,12 +479,29 @@ export default function AttendeeEventFeedback({
             {isLoggedIn ? (
               <>
                 {" "}
-                Signed in as <span className="font-semibold text-slate-800">{authEmail}</span>.
+                Signed in as <span className="font-semibold text-slate-800">{authEmail}</span> — your delegate profile is linked to this evaluation.
+              </>
+            ) : connectedDelegate?.fromRemembered ? (
+              <>
+                {" "}
+                Welcome back
+                {greetingName ? (
+                  <>
+                    , <span className="font-semibold text-slate-800">{greetingName}</span>
+                  </>
+                ) : null}
+                . We restored your details from your last sign-in.
               </>
             ) : (
               <> No account or sign-in required — enter your name as registered for PAMACON.</>
             )}
           </p>
+          {connectedDelegate?.fromLogin && matchInfo?.registrationMatched ? (
+            <p className="mt-2 text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
+              Connected to delegate registration
+              {matchInfo.registrationName ? `: ${matchInfo.registrationName}` : ""}.
+            </p>
+          ) : null}
         </div>
       </div>
 

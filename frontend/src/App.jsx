@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { claimSeededRegistration, getAuthMe, getEvents, setAccessToken, syncMyRegistrationProfile } from "./lib/api";
+import { clearDelegateIdentity, saveDelegateIdentity } from "./lib/delegateIdentity";
 import { supabase } from "./lib/supabaseClient";
 import PamaconApp from "./pamacon/PamaconApp";
 import AttendeeSelfCheckInPage from "./pamacon/AttendeeSelfCheckInPage.jsx";
@@ -20,6 +21,7 @@ export default function App() {
   const [apiBanner, setApiBanner] = useState(null);
   const [profileSaving, setProfileSaving] = useState(false);
   const [seedClaimSyncDoneFor, setSeedClaimSyncDoneFor] = useState("");
+  const [authInitialized, setAuthInitialized] = useState(false);
 
   const superUserEmails = new Set(
     String(import.meta.env.VITE_SUPERUSER_EMAILS || "")
@@ -101,7 +103,10 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (!supabase) return;
+    if (!supabase) {
+      setAuthInitialized(true);
+      return;
+    }
     supabase.auth.getSession().then(async ({ data }) => {
       const currentSession = data.session;
       setSession(currentSession);
@@ -114,6 +119,7 @@ export default function App() {
           setAuthUser(null);
         }
       }
+      setAuthInitialized(true);
     });
 
     const {
@@ -131,6 +137,7 @@ export default function App() {
       } else {
         setAuthUser(null);
       }
+      setAuthInitialized(true);
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -280,6 +287,7 @@ export default function App() {
   const handleLogout = async () => {
     if (!supabase) return;
     await supabase.auth.signOut();
+    clearDelegateIdentity();
     setApiBanner(null);
   };
 
@@ -326,6 +334,16 @@ export default function App() {
     paymentProofScreenshotDataUrl: userMetadata.paymentProofScreenshotDataUrl || "",
     paymentProofUploadedAt: userMetadata.paymentProofUploadedAt || "",
   };
+
+  useEffect(() => {
+    if (!authInitialized || !session) return;
+    saveDelegateIdentity({
+      email: sessionEmail,
+      firstName: profile.firstName,
+      lastName: profile.lastName,
+      nickname: profile.nickname,
+    });
+  }, [authInitialized, session, sessionEmail, profile.firstName, profile.lastName, profile.nickname]);
 
   const handleSaveProfile = async (nextProfile) => {
     if (!supabase) return;
@@ -406,7 +424,8 @@ export default function App() {
       )}
       <div className={apiBanner ? "pt-12" : ""}>
         <AttendeeEvaluationPage
-          authEmail={session ? authUser?.email ?? session.user?.email ?? "" : ""}
+          authInitialized={authInitialized}
+          authEmail={session ? sessionEmail : ""}
           profile={session ? profile : {}}
           attendeeSyncHints={session ? attendeeSyncHints : {}}
           canManage={session ? canManage : false}
