@@ -313,7 +313,7 @@ function AdminHomeOverview({
   const delegatesToGo = Math.max(0, breakEvenDelegates - (Number(regCount) || 0));
 
   const shortcuts = [
-    { id: "feedback", title: "Attendee feedback", desc: "Ratings & improvement themes", icon: MessageSquare, group: "Insights" },
+    { id: "feedback", title: "Event evaluation", desc: "Analytics, AI strategy & next PAMACON actions", icon: MessageSquare, group: "Insights" },
     { id: "registration", title: "Delegates", desc: "Payments & roles", icon: Users, group: "People" },
     { id: "accommodation", title: "Rooming", desc: "Pairs & solo rooms", icon: Hotel, group: "People" },
     { id: "sponsorship", title: "Sponsorship", desc: "Partners & tiers", icon: Handshake, group: "Partners" },
@@ -425,7 +425,7 @@ const SECTION_COPY = {
   expenses: { title: "Budget vs actual", subtitle: "Expense lines against limits" },
   setup: { title: "Event setup", subtitle: "Targets, rates, and projections" },
   profile: { title: "View profile", subtitle: "Personal account information" },
-  feedback: { title: "Attendee feedback", subtitle: "Ratings, themes, and improvement ideas" },
+  feedback: { title: "Event evaluation", subtitle: "Survey analytics, written feedback, and AI planning for next PAMACON" },
 };
 
 const NAV_GROUPS = [
@@ -433,7 +433,7 @@ const NAV_GROUPS = [
     label: "Start here",
     items: [
       { id: "dashboard", label: "Overview", icon: Layout },
-      { id: "feedback", label: "Attendee feedback", icon: MessageSquare },
+      { id: "feedback", label: "Event evaluation", icon: MessageSquare },
     ],
   },
   {

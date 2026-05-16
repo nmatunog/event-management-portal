@@ -1,13 +1,58 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, ChevronLeft, ChevronRight, MessageSquareText, Star } from "lucide-react";
+import {
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Coffee,
+  Hotel,
+  MessageSquareText,
+  Mic,
+  Mic2,
+  Presentation,
+  Sparkles,
+  Star,
+  Trophy,
+  Tv,
+  Users2,
+  UtensilsCrossed,
+} from "lucide-react";
 import { getMyEventFeedback, putMyEventFeedback } from "../lib/api";
-import { defaultRatingScores, defaultResponses, formatDisplayName } from "./eventFeedbackSchema";
+import {
+  FEEDBACK_RATING_SECTIONS,
+  defaultRatingScores,
+  defaultResponses,
+  formatDisplayName,
+  ratingsForStep,
+} from "./eventFeedbackSchema";
 
-function StarRow({ label, value, onChange, disabled }) {
+const ICONS = {
+  Coffee,
+  UtensilsCrossed,
+  Sparkles,
+  Presentation,
+  Mic,
+  Mic2,
+  Users2,
+  Trophy,
+  Tv,
+  Hotel,
+  Star,
+};
+
+function RatingCard({ label, subtitle, iconName, value, onChange, disabled }) {
+  const Icon = ICONS[iconName] || Star;
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <p className="text-sm font-semibold text-slate-900 leading-snug">{label}</p>
-      <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label={label}>
+    <div className="bg-white p-5 sm:p-6 rounded-[28px] border border-slate-100 shadow-sm space-y-4 hover:border-red-200/80 transition-colors">
+      <div className="flex items-start gap-3 text-slate-800">
+        <div className="p-2.5 bg-slate-50 rounded-xl text-slate-500 shrink-0">
+          <Icon size={20} aria-hidden />
+        </div>
+        <div className="min-w-0">
+          <p className="text-[11px] sm:text-xs font-black uppercase tracking-tight leading-snug">{label}</p>
+          {subtitle ? <p className="text-[11px] text-slate-500 mt-1 leading-snug">{subtitle}</p> : null}
+        </div>
+      </div>
+      <div className="flex justify-between gap-1.5" role="group" aria-label={label}>
         {[1, 2, 3, 4, 5].map((n) => {
           const active = value === n;
           return (
@@ -16,28 +61,25 @@ function StarRow({ label, value, onChange, disabled }) {
               type="button"
               disabled={disabled}
               onClick={() => onChange(n)}
-              className={`inline-flex min-h-[44px] min-w-[44px] flex-1 sm:flex-none sm:min-w-[52px] items-center justify-center rounded-xl border text-sm font-bold transition-colors ${
-                active
-                  ? "border-red-600 bg-red-600 text-white shadow-md"
-                  : "border-slate-200 bg-slate-50 text-slate-700 hover:border-red-200 hover:bg-red-50"
+              className={`flex-1 min-h-[48px] rounded-xl font-black text-sm transition-all ${
+                active ? "bg-red-600 text-white shadow-lg scale-[1.02]" : "bg-slate-50 text-slate-400 hover:bg-slate-100"
               } disabled:opacity-50`}
               aria-pressed={active}
-              aria-label={`${n} out of 5 — ${n === 1 ? "dissatisfied" : n === 5 ? "highly satisfied" : ""}`}
+              aria-label={`${n} out of 5`}
             >
-              <Star className={`h-4 w-4 ${active ? "fill-white text-white" : "text-amber-400 fill-amber-200"}`} aria-hidden />
-              <span className="ml-1">{n}</span>
+              {n}
             </button>
           );
         })}
       </div>
-      <p className="mt-2 text-[11px] text-slate-500">1 = dissatisfied · 5 = highly satisfied</p>
+      <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">1 = dissatisfied · 5 = highly satisfied</p>
     </div>
   );
 }
 
 function TextAreaField({ id, label, required, value, onChange, disabled, rows = 3, placeholder }) {
   return (
-    <div>
+    <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
       <label htmlFor={id} className="block text-sm font-semibold text-slate-900">
         {label}
         {required ? <span className="text-red-600"> *</span> : null}
@@ -50,8 +92,61 @@ function TextAreaField({ id, label, required, value, onChange, disabled, rows = 
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-inner focus:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-100"
+        className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 focus:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-100"
       />
+    </div>
+  );
+}
+
+function RatingStepContent({ stepNum, schema, scores, setScores, saving }) {
+  const schemaRatings = schema?.ratings || [];
+  const sections = FEEDBACK_RATING_SECTIONS.filter((s) => s.step === stepNum);
+
+  if (sections.length) {
+    return (
+      <div className="mt-5 space-y-8">
+        {sections.map((section) => (
+          <div key={section.title} className="space-y-4">
+            <h3 className={`text-base font-black uppercase border-l-4 pl-3 ${section.accent.replace("border-", "text-").replace("600", "700")} ${section.accent}`}>
+              {section.title}
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {section.items.map((item) => {
+                const row = schemaRatings.find((r) => r.key === item.key);
+                return (
+                  <RatingCard
+                    key={item.key}
+                    label={row?.label || item.label}
+                    subtitle={row?.subtitle || item.subtitle}
+                    iconName={item.icon}
+                    value={scores[item.key] || 0}
+                    disabled={saving}
+                    onChange={(n) => setScores((prev) => ({ ...prev, [item.key]: n }))}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const orphan = ratingsForStep(schemaRatings, stepNum);
+  if (!orphan.length) return null;
+  return (
+    <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {orphan.map((row) => (
+        <RatingCard
+          key={row.key}
+          label={row.label}
+          subtitle={row.subtitle}
+          iconName="Star"
+          value={scores[row.key] || 0}
+          disabled={saving}
+          onChange={(n) => setScores((prev) => ({ ...prev, [row.key]: n }))}
+        />
+      ))}
     </div>
   );
 }
@@ -73,7 +168,7 @@ export default function AttendeeEventFeedback({
   const [submitted, setSubmitted] = useState(false);
   const [formClosed, setFormClosed] = useState(false);
 
-  const maxStep = 3;
+  const maxStep = 5;
 
   const load = useCallback(async () => {
     if (!eventId) return;
@@ -121,40 +216,43 @@ export default function AttendeeEventFeedback({
 
   const stepLabel = schema?.steps?.find((s) => s.id === step)?.label || "";
 
-  const step1Complete = useMemo(() => {
-    return (
-      String(responses.displayName || "").trim().length > 0 && String(responses.agency || "").trim().length > 0
-    );
-  }, [responses]);
+  const ratingsComplete = useCallback(
+    (stepNum) => {
+      const list = ratingsForStep(schema?.ratings, stepNum);
+      if (!list.length) return true;
+      return list.every((r) => scores[r.key] >= 1 && scores[r.key] <= 5);
+    },
+    [schema, scores]
+  );
 
-  const step2Complete = useMemo(() => {
-    const ratings = schema?.ratings || [];
-    return ratings.every((r) => scores[r.key] >= 1 && scores[r.key] <= 5);
-  }, [schema, scores]);
+  const step1Complete = useMemo(
+    () => String(responses.displayName || "").trim() && String(responses.agency || "").trim(),
+    [responses]
+  );
 
-  const step3Complete = useMemo(() => {
-    return (
+  const step5Complete = useMemo(
+    () =>
       String(responses.speakerImpact || "").trim() &&
       String(responses.biggestTakeaway || "").trim() &&
       String(textExtras.likedMost || "").trim() &&
       String(textExtras.suggestions || "").trim() &&
-      String(responses.testimonial || "").trim()
-    );
-  }, [responses, textExtras]);
+      String(responses.testimonial || "").trim(),
+    [responses, textExtras]
+  );
 
-  const stepComplete = (n) => (n === 1 ? step1Complete : n === 2 ? step2Complete : step3Complete);
+  const stepComplete = (n) => {
+    if (n === 1) return step1Complete;
+    if (n === 5) return step5Complete;
+    return ratingsComplete(n);
+  };
 
   const handleSubmit = async () => {
-    if (!eventId || !step3Complete) return;
+    if (!eventId || !step5Complete) return;
     setSaving(true);
     try {
       await putMyEventFeedback(eventId, {
         scores,
-        responses: {
-          ...responses,
-          likedMost: textExtras.likedMost,
-          suggestions: textExtras.suggestions,
-        },
+        responses: { ...responses, likedMost: textExtras.likedMost, suggestions: textExtras.suggestions },
         likedMost: textExtras.likedMost,
         highlights: textExtras.likedMost,
         suggestions: textExtras.suggestions,
@@ -180,8 +278,8 @@ export default function AttendeeEventFeedback({
 
   if (loading) {
     return (
-      <section id="event-feedback" className="rounded-2xl sm:rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-sm" aria-busy="true">
-        <p className="text-sm text-slate-600">Loading feedback…</p>
+      <section className="rounded-2xl sm:rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-sm" aria-busy="true">
+        <p className="text-sm text-slate-600">Loading evaluation…</p>
       </section>
     );
   }
@@ -191,19 +289,16 @@ export default function AttendeeEventFeedback({
   if (formClosed) {
     return (
       <section
-        id="event-feedback"
         aria-labelledby="event-feedback-thanks-heading"
         className="rounded-2xl sm:rounded-3xl border border-emerald-200 bg-gradient-to-b from-emerald-50/90 to-white p-8 sm:p-10 shadow-sm text-center"
       >
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-600 text-white shadow-md shadow-emerald-600/25">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-600 text-white shadow-md">
           <CheckCircle2 className="h-8 w-8" aria-hidden />
         </div>
         <h2 id="event-feedback-thanks-heading" className="mt-5 text-xl sm:text-2xl font-bold text-slate-900">
           Your feedback has been submitted! Thank you!
         </h2>
-        <p className="mt-2 text-sm text-slate-600 leading-relaxed max-w-md mx-auto">
-          We appreciate you taking the time to share your conference experience.
-        </p>
+        <p className="mt-2 text-sm text-slate-600 max-w-md mx-auto">We appreciate you rating the sessions and sharing your experience.</p>
         <button
           type="button"
           onClick={() => {
@@ -219,41 +314,45 @@ export default function AttendeeEventFeedback({
   }
 
   const isLastStep = step === maxStep;
+  const progressSteps = schema.steps?.length ? schema.steps : [1, 2, 3, 4, 5].map((id) => ({ id, label: `Step ${id}` }));
 
   return (
     <section
-      id="event-feedback"
       aria-labelledby="event-feedback-heading"
-      className="rounded-2xl sm:rounded-3xl border border-slate-200 bg-gradient-to-b from-white to-slate-50/80 p-6 sm:p-8 shadow-sm"
+      className="rounded-2xl sm:rounded-3xl border border-slate-200 bg-gradient-to-b from-white to-slate-50/80 p-5 sm:p-8 shadow-sm"
     >
       <div className="flex items-start gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-red-600 text-white shadow-md shadow-red-600/25">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-red-600 text-white shadow-md">
           <MessageSquareText className="h-5 w-5" aria-hidden />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-red-700">Post-event</p>
+          <p className="text-[11px] font-bold uppercase tracking-wide text-red-700">Post-event evaluation</p>
           <h2 id="event-feedback-heading" className="text-lg sm:text-xl font-bold text-slate-900">
-            {schema.formTitle || "PAMA Conference Feedback"}
+            {schema.formTitle || "PAMACON Conference Evaluation"}
           </h2>
           <p className="mt-1 text-sm text-slate-600 leading-relaxed">
-            {schema.formIntro ||
-              "Share your experience — the same topics as our official delegate survey. You can update your answers anytime while signed in."}{" "}
+            {schema.formIntro}{" "}
             <span className="font-semibold text-slate-800">{authEmail}</span>
           </p>
         </div>
       </div>
 
-      <ol className="mt-6 flex items-center gap-1 text-[11px] font-semibold text-slate-500" aria-label="Progress">
-        {[1, 2, 3].map((n) => (
-          <li key={n} className="flex flex-1 items-center gap-1 min-w-0">
+      <ol className="mt-6 flex items-center gap-0.5 overflow-x-auto pb-1" aria-label="Progress">
+        {progressSteps.map((s, i) => (
+          <li key={s.id} className="flex items-center gap-0.5 shrink-0">
             <span
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border ${
-                step === n ? "border-red-600 bg-red-600 text-white" : stepComplete(n) ? "border-emerald-500 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-white"
+              className={`flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-full border text-[10px] font-bold ${
+                step === s.id
+                  ? "border-red-600 bg-red-600 text-white"
+                  : stepComplete(s.id)
+                    ? "border-emerald-500 bg-emerald-50 text-emerald-800"
+                    : "border-slate-200 bg-white text-slate-500"
               }`}
+              title={s.label}
             >
-              {stepComplete(n) ? <CheckCircle2 className="h-4 w-4" aria-hidden /> : n}
+              {stepComplete(s.id) ? <CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> : s.id}
             </span>
-            {n < 3 ? <span className="h-px flex-1 bg-slate-200" aria-hidden /> : null}
+            {i < progressSteps.length - 1 ? <span className="w-3 sm:w-6 h-px bg-slate-200" aria-hidden /> : null}
           </li>
         ))}
       </ol>
@@ -261,7 +360,7 @@ export default function AttendeeEventFeedback({
 
       {step === 1 ? (
         <div className="mt-5 space-y-4">
-          <div>
+          <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm space-y-4">
             <label htmlFor="fb-name" className="block text-sm font-semibold text-slate-900">
               Name (First Name Last Name) <span className="text-red-600">*</span>
             </label>
@@ -271,11 +370,9 @@ export default function AttendeeEventFeedback({
               disabled={saving}
               value={responses.displayName}
               onChange={(e) => setResponses((p) => ({ ...p, displayName: e.target.value }))}
-              className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-medium"
               placeholder="e.g. Juan Santos"
             />
-          </div>
-          <div>
             <label htmlFor="fb-agency" className="block text-sm font-semibold text-slate-900">
               Agency <span className="text-red-600">*</span>
             </label>
@@ -285,28 +382,17 @@ export default function AttendeeEventFeedback({
               disabled={saving}
               value={responses.agency}
               onChange={(e) => setResponses((p) => ({ ...p, agency: e.target.value }))}
-              className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-medium"
             />
           </div>
         </div>
       ) : null}
 
-      {step === 2 ? (
-        <div className="mt-5 space-y-4">
-          {(schema.ratings || []).map((row) => (
-            <StarRow
-              key={row.key}
-              label={row.label}
-              value={scores[row.key] || 0}
-              disabled={saving}
-              onChange={(n) => setScores((prev) => ({ ...prev, [row.key]: n }))}
-            />
-          ))}
-        </div>
-      ) : null}
+      {step >= 2 && step <= 4 ? <RatingStepContent stepNum={step} schema={schema} scores={scores} setScores={setScores} saving={saving} /> : null}
 
-      {step === 3 ? (
+      {step === 5 ? (
         <div className="mt-5 space-y-4">
+          <h3 className="text-base font-black uppercase border-l-4 border-emerald-600 pl-3 text-emerald-800">Your reflections</h3>
           <TextAreaField
             id="fb-speaker"
             label="Which speaker impacted you the most and why?"
@@ -336,7 +422,7 @@ export default function AttendeeEventFeedback({
           />
           <TextAreaField
             id="fb-suggestions"
-            label="Do you have any suggestions for us to improve in the next conferences?"
+            label="Suggestions to improve future PAMACON events"
             required
             rows={4}
             disabled={saving}
@@ -345,13 +431,12 @@ export default function AttendeeEventFeedback({
           />
           <TextAreaField
             id="fb-testimonial"
-            label="Please write a short testimonial of your experience at the conference"
+            label="Short testimonial (may be used with permission)"
             required
             rows={4}
             disabled={saving}
             value={responses.testimonial}
             onChange={(v) => setResponses((p) => ({ ...p, testimonial: v }))}
-            placeholder="A few sentences we may use (with permission) for future promotions."
           />
         </div>
       ) : null}
@@ -379,11 +464,11 @@ export default function AttendeeEventFeedback({
         ) : (
           <button
             type="button"
-            disabled={saving || !step3Complete}
+            disabled={saving || !step5Complete}
             onClick={() => void handleSubmit()}
-            className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-red-600 px-5 text-sm font-semibold text-white shadow-md hover:bg-red-700 disabled:opacity-40"
+            className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-2xl bg-slate-900 px-6 text-sm font-black uppercase tracking-wide text-white hover:bg-black disabled:opacity-40"
           >
-            {saving ? "Saving…" : submitted ? "Update feedback" : "Submit feedback"}
+            {saving ? "Saving…" : submitted ? "Update feedback" : "Submit evaluation"}
           </button>
         )}
       </div>

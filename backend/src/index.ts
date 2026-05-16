@@ -11,6 +11,8 @@ type Env = {
   SUPABASE_ISSUER?: string;
   AUTH_DEV_FALLBACK?: string;
   SUPERUSER_EMAILS?: string;
+  GEMINI_API_KEY?: string;
+  GEMINI_MODEL?: string;
 };
 type AppContext = {
   Bindings: Env;
@@ -257,14 +259,25 @@ function findSyncCandidate(
   );
 }
 
-/** Numeric ratings harmonized with the PAMA Con Google feedback form. */
+/** Ratings in program order: Day 1 → Day 2 speakers → logistics. */
 const EVENT_FEEDBACK_RATING_SCHEMA = [
-  { key: "coffee_sessions", label: "Day 1 Breakout Sessions", step: 2 },
-  { key: "welcome_dinner", label: "Welcome Dinner", step: 2 },
-  { key: "conference_proper", label: "Conference proper", step: 2 },
-  { key: "fellowship_night", label: "Fellowship Night", step: 2 },
-  { key: "hotel_venue", label: "Hotel & venue", step: 2 },
+  { key: "coffee_sessions", label: "Day 1 Breakout Sessions", step: 2, group: "day1" },
+  { key: "welcome_dinner", label: "Welcome Dinner", step: 2, group: "day1" },
+  { key: "workshop_nicdao", label: "Eric Nicdao", subtitle: "The Rise Begins: Aligning with the Current", step: 3, group: "speakers" },
+  { key: "keynote_pages", label: "Mr. Bunny Pages", subtitle: "Keynote Speaker", step: 3, group: "speakers" },
+  { key: "talk_dimaliuat", label: "DJ Dimaliuat", subtitle: "Riding the Wave: Sustainable Success thru Leadership", step: 3, group: "speakers" },
+  { key: "talk_velasquez", label: "James Velasquez", subtitle: "Product Bundling — The MDRT Way!", step: 3, group: "speakers" },
+  { key: "panel", label: "Panel — Christine Dimaliuat & Abbie Villarosa", subtitle: "Facilitator: Emman Paras", step: 3, group: "speakers" },
+  { key: "keynote_ledesma", label: "Ms. Anagel Ledesma", subtitle: "Keynote 2", step: 3, group: "speakers" },
+  { key: "talk_nilo", label: "Nilo Matunog", subtitle: "Optimizing AI for AIA", step: 3, group: "speakers" },
+  { key: "fellowship_night", label: "Fellowship Night", step: 4, group: "logistics" },
+  { key: "hotel_venue", label: "Hotel & venue", step: 4, group: "logistics" },
+  { key: "conference_proper", label: "Conference proper (overall)", step: 4, group: "logistics" },
 ] as const;
+
+const SPEAKER_FEEDBACK_KEYS = new Set(
+  EVENT_FEEDBACK_RATING_SCHEMA.filter((r) => r.group === "speakers").map((r) => r.key)
+);
 
 const LEGACY_FEEDBACK_RATING_LABELS: Record<string, string> = {
   planning_organization: "Planning & organization (legacy)",
@@ -279,18 +292,18 @@ const LEGACY_FEEDBACK_RATING_LABELS: Record<string, string> = {
 };
 
 const FEEDBACK_TEXT_FIELD_DEFS = [
-  { key: "speakerImpact", label: "Which speaker impacted you the most and why?", step: 3, required: true, maxLength: 4000 },
-  { key: "biggestTakeaway", label: "What is your biggest takeaway from the conference?", step: 3, required: true, maxLength: 4000 },
-  { key: "likedMost", label: "What did you like the most about the conference this year?", step: 3, required: true, maxLength: 4000, column: "highlights" as const },
+  { key: "speakerImpact", label: "Which speaker impacted you the most and why?", step: 5, required: true, maxLength: 4000 },
+  { key: "biggestTakeaway", label: "What is your biggest takeaway from the conference?", step: 5, required: true, maxLength: 4000 },
+  { key: "likedMost", label: "What did you like the most about the conference this year?", step: 5, required: true, maxLength: 4000, column: "highlights" as const },
   {
     key: "suggestions",
     label: "Do you have any suggestions for us to improve in the next conferences?",
-    step: 3,
+    step: 5,
     required: true,
     maxLength: 8000,
     column: "suggestions" as const,
   },
-  { key: "testimonial", label: "Short testimonial of your experience at the conference", step: 3, required: true, maxLength: 4000 },
+  { key: "testimonial", label: "Short testimonial of your experience at the conference", step: 5, required: true, maxLength: 4000 },
 ] as const;
 
 const FEEDBACK_STOPWORDS = new Set(
@@ -304,16 +317,20 @@ function feedbackSchemaPayload(venue?: string | null) {
   const ratings = EVENT_FEEDBACK_RATING_SCHEMA.map((row) => ({
     key: row.key,
     label: row.key === "hotel_venue" && hotelVenue ? `Hotel & venue (${hotelVenue})` : row.label,
+    subtitle: "subtitle" in row ? row.subtitle : undefined,
     step: row.step,
+    group: row.group,
   }));
   return {
-    formTitle: "PAMA Conference Feedback",
+    formTitle: "PAMACON Conference Evaluation",
     formIntro:
-      "We'd love to hear about your experience — aligned with our standard delegate survey. Ratings use 1 (dissatisfied) to 5 (highly satisfied).",
+      "Rate each session and speaker from the program (1 = dissatisfied, 5 = highly satisfied). Follows the official program flow: Day 1 breakout, Day 2 talks, then overall logistics.",
     steps: [
       { id: 1, label: "About you" },
-      { id: 2, label: "Conference experiences" },
-      { id: 3, label: "Reflections & testimonial" },
+      { id: 2, label: "Day 1 — May 13" },
+      { id: 3, label: "Day 2 — Talks & speakers" },
+      { id: 4, label: "Overall & venue" },
+      { id: 5, label: "Reflections" },
     ],
     ratings,
     profileFields: [
@@ -481,7 +498,15 @@ function buildFeedbackSuggestionInsights(
     ["hotel", ["hotel_venue"]],
     ["room", ["hotel_venue"]],
     ["venue", ["hotel_venue"]],
-    ["speaker", ["conference_proper"]],
+    ["speaker", ["conference_proper", "talk_nilo", "keynote_pages"]],
+    ["nicdao", ["workshop_nicdao"]],
+    ["pages", ["keynote_pages"]],
+    ["dimaliuat", ["talk_dimaliuat", "panel"]],
+    ["velasquez", ["talk_velasquez"]],
+    ["panel", ["panel"]],
+    ["ledesma", ["keynote_ledesma"]],
+    ["nilo", ["talk_nilo"]],
+    ["ai", ["talk_nilo"]],
     ["session", ["coffee_sessions", "conference_proper"]],
     ["conference", ["conference_proper"]],
     ["program", ["conference_proper"]],
@@ -551,6 +576,227 @@ function buildFeedbackSuggestionInsights(
     weakestDimensions: weakest,
     priorityActions: priorityActions.slice(0, 6),
   };
+}
+
+type FeedbackAverageRow = {
+  key: string;
+  label: string;
+  average: number;
+  count: number;
+  legacy?: boolean;
+};
+
+function buildFeedbackExecutiveSummary(
+  averages: FeedbackAverageRow[],
+  responseCount: number,
+  overallAverage: number
+) {
+  const current = averages.filter((a) => !a.legacy && a.count > 0);
+  const sum = current.reduce((s, a) => s + a.average, 0);
+  const composite = current.length ? Math.round((sum / current.length) * 100) / 100 : overallAverage;
+  const sorted = [...current].sort((a, b) => b.average - a.average);
+  const logisticsKeys = new Set(["hotel_venue", "fellowship_night", "conference_proper"]);
+  const speakerKeys = SPEAKER_FEEDBACK_KEYS;
+  const logistics = current.filter((a) => logisticsKeys.has(a.key));
+  const speakers = current.filter((a) => speakerKeys.has(a.key));
+  const experience = current.filter((a) => !logisticsKeys.has(a.key) && !speakerKeys.has(a.key));
+  const avgGroup = (arr: FeedbackAverageRow[]) =>
+    arr.length ? Math.round((arr.reduce((s, a) => s + a.average, 0) / arr.length) * 100) / 100 : 0;
+  return {
+    responseCount,
+    compositeSatisfaction: composite,
+    logisticsAverage: avgGroup(logistics),
+    speakersAverage: avgGroup(speakers),
+    experienceAverage: avgGroup(experience),
+    conferenceProperAverage: overallAverage,
+    strongest: sorted[0] ? { label: sorted[0].label, average: sorted[0].average } : null,
+    weakest: sorted.length ? { label: sorted[sorted.length - 1].label, average: sorted[sorted.length - 1].average } : null,
+  };
+}
+
+function buildPamaconYearAheadPlan(
+  eventTitle: string,
+  executiveSummary: ReturnType<typeof buildFeedbackExecutiveSummary>,
+  suggestionInsights: ReturnType<typeof buildFeedbackSuggestionInsights>,
+  speakerSnippets: string[]
+) {
+  const strengths: string[] = [];
+  const improvements: string[] = [];
+  if (executiveSummary.strongest) {
+    strengths.push(`${executiveSummary.strongest.label} rated highest (${executiveSummary.strongest.average.toFixed(2)}/5).`);
+  }
+  if (executiveSummary.experienceAverage >= 4) {
+    strengths.push(`Core conference experiences average ${executiveSummary.experienceAverage.toFixed(2)}/5 across ${executiveSummary.responseCount} delegates.`);
+  }
+  if (executiveSummary.weakest) {
+    improvements.push(`Focus planning on ${executiveSummary.weakest.label} (${executiveSummary.weakest.average.toFixed(2)}/5).`);
+  }
+  if (executiveSummary.logisticsAverage > 0 && executiveSummary.logisticsAverage < 4) {
+    improvements.push(`Venue and logistics scored ${executiveSummary.logisticsAverage.toFixed(2)}/5 — review hotel, F&B, and on-site coordination.`);
+  }
+  if (suggestionInsights.unlocked && suggestionInsights.summaryLines?.length) {
+    for (const line of suggestionInsights.summaryLines.slice(0, 2)) strengths.push(line);
+  }
+  if (speakerSnippets.length) {
+    strengths.push(`Delegates highlighted speakers in open responses (e.g. “${speakerSnippets[0].slice(0, 80)}…”).`);
+  }
+
+  const themeSuggestion =
+    executiveSummary.compositeSatisfaction >= 4.2
+      ? "Elevate what worked — deepen delegate engagement and showcase success stories from this year."
+      : "Rebuild the delegate journey — tighten program flow, logistics, and communication from registration through fellowship night.";
+
+  const actionItems: { rank: number; title: string; rationale: string; horizon: string }[] = [];
+  let rank = 1;
+  if (suggestionInsights.unlocked && suggestionInsights.priorityActions?.length) {
+    for (const a of suggestionInsights.priorityActions.slice(0, 5)) {
+      actionItems.push({
+        rank: rank++,
+        title: a.title,
+        rationale: a.rationale,
+        horizon: "next_pamacon",
+      });
+    }
+  } else {
+    actionItems.push({
+      rank: 1,
+      title: "Complete debrief once 40+ surveys are in",
+      rationale: "Priority themes and keyword analysis unlock at 40 responses for richer planning input.",
+      horizon: "next_pamacon",
+    });
+    if (executiveSummary.weakest) {
+      actionItems.push({
+        rank: 2,
+        title: `Early workstream: ${executiveSummary.weakest.label.split("(")[0].trim()}`,
+        rationale: `Currently the lowest-rated survey dimension at ${executiveSummary.weakest.average.toFixed(2)}/5.`,
+        horizon: "next_pamacon",
+      });
+    }
+  }
+  actionItems.push({
+    rank: rank++,
+    title: "Publish evaluation link early in the closing session",
+    rationale: "Maximize response rate while memories are fresh — link: /evaluation on the delegate portal.",
+    horizon: "next_pamacon",
+  });
+
+  const narrative = [
+    `# PAMACON planning insights — ${eventTitle}`,
+    "",
+    "## Executive snapshot",
+    `- ${executiveSummary.responseCount} delegate responses`,
+    `- Composite satisfaction: ${executiveSummary.compositeSatisfaction.toFixed(2)} / 5`,
+    `- Conference proper: ${executiveSummary.conferenceProperAverage.toFixed(2)} / 5`,
+    "",
+    "## Suggested theme direction",
+    themeSuggestion,
+    "",
+    "## Strengths",
+    ...strengths.map((s) => `- ${s}`),
+    "",
+    "## Improvements",
+    ...(improvements.length ? improvements.map((s) => `- ${s}`) : ["- Collect more responses for deeper qualitative themes."]),
+    "",
+    "## Action items for next PAMACON",
+    ...actionItems.map((a) => `${a.rank}. **${a.title}** — ${a.rationale}`),
+  ].join("\n");
+
+  return { themeSuggestion, strengths, improvements, actionItems, narrative };
+}
+
+function parseActionItemsFromAiReport(report: string) {
+  const items: { rank: number; title: string; rationale: string; horizon: string }[] = [];
+  const lines = report.split(/\n/);
+  for (const line of lines) {
+    const m = line.match(/^\s*(\d+)[.)]\s*\*?\*?([^*]+?)\*?\*?\s*[—–-]\s*(.+)$/);
+    if (m) {
+      items.push({
+        rank: Number(m[1]),
+        title: m[2].trim(),
+        rationale: m[3].trim(),
+        horizon: "next_pamacon",
+      });
+    }
+  }
+  return items.slice(0, 8);
+}
+
+async function callGeminiFeedbackStrategy(
+  apiKey: string,
+  model: string,
+  prompt: string,
+  retryCount = 0
+): Promise<string> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.4, maxOutputTokens: 2048 },
+    }),
+  });
+  if (!response.ok) {
+    if (retryCount < 3 && (response.status === 429 || response.status >= 500)) {
+      await new Promise((r) => setTimeout(r, Math.pow(2, retryCount) * 1000));
+      return callGeminiFeedbackStrategy(apiKey, model, prompt, retryCount + 1);
+    }
+    throw new Error(`Gemini API error (${response.status})`);
+  }
+  const result = (await response.json()) as {
+    candidates?: { content?: { parts?: { text?: string }[] } }[];
+  };
+  const text = result.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+  if (!text) throw new Error("Empty Gemini response.");
+  return text;
+}
+
+function buildFeedbackAiPrompt(
+  eventTitle: string,
+  executiveSummary: ReturnType<typeof buildFeedbackExecutiveSummary>,
+  averages: FeedbackAverageRow[],
+  suggestionInsights: ReturnType<typeof buildFeedbackSuggestionInsights>,
+  recentSuggestions: string[],
+  recentTestimonials: string[]
+) {
+  const ratingLines = averages
+    .filter((a) => a.count > 0 && !a.legacy)
+    .map((a) => `- ${a.label}: ${a.average.toFixed(2)}/5 (n=${a.count})`)
+    .join("\n");
+  const comments = [...recentSuggestions.slice(0, 8), ...recentTestimonials.slice(0, 5)].join(" | ");
+  const priorityHint = suggestionInsights.unlocked
+    ? `Priority hints: ${(suggestionInsights.priorityActions || []).map((p) => p.title).join("; ")}`
+    : "Fewer than 40 responses — note limited statistical confidence.";
+
+  return `You are an expert convention analyst for AIA PAMA Conference (PAMACON).
+
+Review delegate feedback for "${eventTitle}" and produce a planning report for the NEXT year's PAMACON.
+
+Survey data:
+- Responses: ${executiveSummary.responseCount}
+- Composite satisfaction: ${executiveSummary.compositeSatisfaction.toFixed(2)}/5
+- Conference proper: ${executiveSummary.conferenceProperAverage.toFixed(2)}/5
+- Experience average: ${executiveSummary.experienceAverage.toFixed(2)}/5
+- Logistics (hotel/venue): ${executiveSummary.logisticsAverage.toFixed(2)}/5
+
+Ratings by dimension:
+${ratingLines}
+
+${priorityHint}
+
+Sample written feedback: ${comments || "(none yet)"}
+
+Format your response in English with these sections:
+## Executive Summary
+## Strengths
+## Areas for Improvement
+## Suggested Theme for Next PAMACON
+## Recommended Action Items for Next PAMACON
+
+For action items use numbered lines like:
+1. **Title** — One sentence rationale focused on next year's conference planning.
+
+Be specific, professional, and concise.`;
 }
 
 function mapFeedbackRow(row: Record<string, unknown> | null | undefined) {
@@ -2368,6 +2614,8 @@ app.get("/api/events/:eventId/feedback/analytics", requireRole(["admin", "staff"
     .map((t) => (t.length > 360 ? `${t.slice(0, 357)}…` : t));
 
   const suggestionInsights = buildFeedbackSuggestionInsights(responseCount, parsedRows);
+  const filteredAverages = averages.filter((a) => a.count > 0).sort((a, b) => (a.legacy === b.legacy ? 0 : a.legacy ? 1 : -1));
+  const executiveSummary = buildFeedbackExecutiveSummary(filteredAverages, responseCount, overallAverage);
 
   return c.json({
     event: { id: event.id, title: event.title, startDate: event.start_date, endDate: event.end_date, venue: event.venue },
@@ -2375,11 +2623,135 @@ app.get("/api/events/:eventId/feedback/analytics", requireRole(["admin", "staff"
     responseCount,
     overallAverage,
     overallLabel: "Conference proper (avg)",
-    averages: averages.filter((a) => a.count > 0).sort((a, b) => (a.legacy === b.legacy ? 0 : a.legacy ? 1 : -1)),
+    averages: filteredAverages,
     distributions,
     recentSuggestions,
     recentTestimonials,
     suggestionInsights,
+    executiveSummary,
+    evaluationSurveyUrl: "/evaluation",
+    generatedAt: new Date().toISOString(),
+  });
+});
+
+app.post("/api/events/:eventId/feedback/ai-strategy", requireRole(["admin", "staff"]), async (c) => {
+  const eventId = c.req.param("eventId");
+  const event = await c.env.DB.prepare("SELECT id, title, venue FROM events WHERE id = ?").bind(eventId).first<Record<string, unknown>>();
+  if (!event) throw new HTTPException(404, { message: "Event not found." });
+
+  const res = await c.env.DB.prepare(
+    "SELECT scores_json, responses_json, highlights, suggestions FROM event_feedback WHERE event_id = ? ORDER BY updated_at DESC"
+  )
+    .bind(eventId)
+    .all<Record<string, unknown>>();
+  const rows = (res.results || []) as Record<string, unknown>[];
+  const responseCount = rows.length;
+  if (responseCount < 1) {
+    throw new HTTPException(400, { message: "At least one feedback response is required before generating AI strategy." });
+  }
+
+  const distributions: Record<string, Record<number, number>> = {};
+  for (const def of EVENT_FEEDBACK_RATING_SCHEMA) {
+    distributions[def.key] = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  }
+  const parsedRows: {
+    scores: Record<string, number>;
+    suggestions: string;
+    highlights: string;
+    speakerImpact: string;
+    biggestTakeaway: string;
+    testimonial: string;
+  }[] = [];
+  let conferenceSum = 0;
+  let conferenceN = 0;
+
+  for (const r of rows) {
+    const scores = parseMetadataJson(r.scores_json) as Record<string, number>;
+    const responses = parseStoredFeedbackResponses(r);
+    parsedRows.push({
+      scores,
+      suggestions: String(r.suggestions || ""),
+      highlights: String(r.highlights || ""),
+      speakerImpact: responses.speakerImpact,
+      biggestTakeaway: responses.biggestTakeaway,
+      testimonial: responses.testimonial,
+    });
+    for (const [key, v0] of Object.entries(scores)) {
+      const v = Math.round(Number(v0));
+      if (v < 1 || v > 5) continue;
+      if (key === "conference_proper") {
+        conferenceSum += v;
+        conferenceN += 1;
+      }
+    }
+  }
+
+  const overallAverage = conferenceN ? Math.round((conferenceSum / conferenceN) * 100) / 100 : 0;
+  const ratingKeys = new Set([...EVENT_FEEDBACK_RATING_SCHEMA.map((d) => d.key)]);
+  const averages: FeedbackAverageRow[] = [...ratingKeys].map((key) => {
+    let sum = 0;
+    let n = 0;
+    for (const row of parsedRows) {
+      const v = Math.round(Number(row.scores[key]));
+      if (v >= 1 && v <= 5) {
+        sum += v;
+        n += 1;
+      }
+    }
+    const cur = EVENT_FEEDBACK_RATING_SCHEMA.find((d) => d.key === key);
+    let label = cur?.label ?? feedbackLabelForKey(key);
+    if (key === "hotel_venue" && event.venue) label = `Hotel & venue (${event.venue})`;
+    return { key, label, average: n ? Math.round((sum / n) * 100) / 100 : 0, count: n, legacy: !cur };
+  });
+  const filteredAverages = averages.filter((a) => a.count > 0);
+  const suggestionInsights = buildFeedbackSuggestionInsights(responseCount, parsedRows);
+  const executiveSummary = buildFeedbackExecutiveSummary(filteredAverages, responseCount, overallAverage);
+  const recentSuggestions = rows.map((r) => String(r.suggestions || "").trim()).filter((t) => t.length > 5);
+  const recentTestimonials = rows.map((r) => parseStoredFeedbackResponses(r).testimonial.trim()).filter((t) => t.length > 5);
+  const speakerSnippets = parsedRows.map((r) => r.speakerImpact).filter((t) => t.length > 10);
+
+  const eventTitle = String(event.title || "PAMACON");
+  const apiKey = String(c.env.GEMINI_API_KEY || "").trim();
+  const model = String(c.env.GEMINI_MODEL || "gemini-2.0-flash").trim();
+
+  if (apiKey) {
+    try {
+      const prompt = buildFeedbackAiPrompt(
+        eventTitle,
+        executiveSummary,
+        filteredAverages,
+        suggestionInsights,
+        recentSuggestions,
+        recentTestimonials
+      );
+      const report = await callGeminiFeedbackStrategy(apiKey, model, prompt);
+      const actionItems = parseActionItemsFromAiReport(report);
+      return c.json({
+        source: "gemini",
+        model,
+        report,
+        themeSuggestion: null,
+        strengths: [],
+        improvements: [],
+        actionItems: actionItems.length ? actionItems : buildPamaconYearAheadPlan(eventTitle, executiveSummary, suggestionInsights, speakerSnippets).actionItems,
+        executiveSummary,
+        generatedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.error("Gemini strategy generation failed:", err);
+    }
+  }
+
+  const rules = buildPamaconYearAheadPlan(eventTitle, executiveSummary, suggestionInsights, speakerSnippets);
+  return c.json({
+    source: "rules",
+    model: null,
+    report: rules.narrative,
+    themeSuggestion: rules.themeSuggestion,
+    strengths: rules.strengths,
+    improvements: rules.improvements,
+    actionItems: rules.actionItems,
+    executiveSummary,
     generatedAt: new Date().toISOString(),
   });
 });

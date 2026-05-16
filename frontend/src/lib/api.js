@@ -373,3 +373,7 @@ export function putMyEventFeedback(eventId, payload) {
 export function getEventFeedbackAnalytics(eventId) {
   return request(`/api/events/${eventId}/feedback/analytics`);
 }
+
+export function generateEventFeedbackAiStrategy(eventId) {
+  return request(`/api/events/${eventId}/feedback/ai-strategy`, { method: "POST" });
+}

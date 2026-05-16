@@ -142,7 +142,7 @@ export default function AttendeeEvaluationPage({
             <div className="text-sm text-violet-950">
               <p className="font-semibold">Committee: view aggregated results</p>
               <p className="mt-1 text-violet-800/90 leading-relaxed">
-                Open the admin workspace → <strong>Attendee feedback</strong> for charts, coffee-session breakdown, testimonials, and priority themes (40+ responses).
+                Open the admin workspace → <strong>Event evaluation</strong> for charts, written feedback, AI strategy, and next-year action items.
               </p>
               <Link to="/portal" className="mt-3 inline-flex min-h-[44px] items-center rounded-xl bg-violet-700 px-4 text-sm font-semibold text-white hover:bg-violet-800">
                 Open admin portal
