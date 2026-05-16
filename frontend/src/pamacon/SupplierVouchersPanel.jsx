@@ -41,16 +41,21 @@ export function VoucherDetailDialog({ voucher, signature, receipt, onClose }) {
     <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
       <div className="bg-white rounded-[32px] max-w-2xl w-full max-h-[90vh] overflow-y-auto p-8 space-y-5 shadow-2xl relative">
         {isConfirmed && v.date_received ? (
-          <PaidStamp dateReceived={v.date_received} className="absolute top-6 right-6" />
+          <PaidStamp dateReceived={v.date_received} className="absolute top-24 left-1/2 -translate-x-1/2 sm:left-auto sm:translate-x-0 sm:top-28 sm:right-8 pointer-events-none" />
         ) : null}
-        <div className="flex justify-between items-start pr-28">
+        <div className="flex justify-between items-start gap-4 relative z-20">
           <div>
             <p className="text-[10px] font-black uppercase text-slate-400">Payment voucher</p>
             <h3 className="font-black text-slate-900 text-lg font-mono">{v.voucher_number}</h3>
             <p className="text-xs font-mono text-slate-500">Ref: {v.payment_reference || v.voucher_number}</p>
             <p className="text-sm text-slate-600">{v.supplier_name}</p>
           </div>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-700 text-2xl leading-none">
+          <button
+            type="button"
+            onClick={onClose}
+            className="shrink-0 inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-100 hover:text-slate-900 text-2xl leading-none"
+            aria-label="Close"
+          >
             ×
           </button>
         </div>
@@ -135,6 +140,16 @@ export function VoucherDetailDialog({ voucher, signature, receipt, onClose }) {
             )}
           </div>
         ) : null}
+
+        <div className="sticky bottom-0 border-t border-slate-100 bg-white pt-4 pb-1 -mx-2 px-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full min-h-[48px] rounded-2xl bg-slate-900 text-white font-black text-xs uppercase tracking-wide hover:bg-black"
+          >
+            Close
+          </button>
+        </div>
       </div>
     </div>
   );
