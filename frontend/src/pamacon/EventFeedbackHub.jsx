@@ -101,20 +101,6 @@ export default function EventFeedbackHub({ eventId, eventTitle, onError }) {
         </div>
       </div>
 
-      {(data.coffeeSessionBreakdown || []).length > 0 ? (
-        <div className="bg-white rounded-[28px] border shadow-sm p-6 sm:p-8">
-          <h4 className="text-lg font-semibold text-slate-900 mb-2">Coffee session attendance</h4>
-          <ul className="space-y-2">
-            {data.coffeeSessionBreakdown.map((row) => (
-              <li key={row.value} className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/80 px-4 py-2.5 text-sm">
-                <span className="text-slate-800 font-medium">{row.label}</span>
-                <span className="shrink-0 font-black text-red-700 tabular-nums">{row.count}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
       <div>
         <div className="flex items-center gap-2 mb-4">
           <BarChart3 className="text-slate-500" size={20} aria-hidden />

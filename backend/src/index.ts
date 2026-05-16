@@ -257,19 +257,9 @@ function findSyncCandidate(
   );
 }
 
-const COFFEE_SESSION_OPTIONS = [
-  { value: "culture", label: "Building Culture/Engagement — Mgr. Belmar" },
-  { value: "recruitment", label: "Recruitment — Mgr. Henry" },
-  { value: "activation", label: "Activation — Mgr. Maricel" },
-  { value: "mdrt", label: "MDRT Development — Mgr. Iza" },
-  { value: "none", label: "Wasn't able to attend" },
-] as const;
-
-const COFFEE_SESSION_VALUES = new Set<string>(COFFEE_SESSION_OPTIONS.map((o) => o.value));
-
 /** Numeric ratings harmonized with the PAMA Con Google feedback form. */
 const EVENT_FEEDBACK_RATING_SCHEMA = [
-  { key: "coffee_sessions", label: "Coffee sessions", step: 2 },
+  { key: "coffee_sessions", label: "Day 1 Breakout Sessions", step: 2 },
   { key: "welcome_dinner", label: "Welcome Dinner", step: 2 },
   { key: "conference_proper", label: "Conference proper", step: 2 },
   { key: "fellowship_night", label: "Fellowship Night", step: 2 },
@@ -321,16 +311,14 @@ function feedbackSchemaPayload(venue?: string | null) {
     formIntro:
       "We'd love to hear about your experience — aligned with our standard delegate survey. Ratings use 1 (dissatisfied) to 5 (highly satisfied).",
     steps: [
-      { id: 1, label: "About you & coffee sessions" },
+      { id: 1, label: "About you" },
       { id: 2, label: "Conference experiences" },
       { id: 3, label: "Reflections & testimonial" },
     ],
     ratings,
-    coffeeSessions: [...COFFEE_SESSION_OPTIONS],
     profileFields: [
-      { key: "displayName", label: "Name (Last Name, First Name)", step: 1, required: true, maxLength: 200 },
+      { key: "displayName", label: "Name (First Name Last Name)", step: 1, required: true, maxLength: 200 },
       { key: "agency", label: "Agency", step: 1, required: true, maxLength: 200 },
-      { key: "coffeeSession", label: "Which coffee session did you go to?", step: 1, required: true, type: "select" },
     ],
     textFields: FEEDBACK_TEXT_FIELD_DEFS.map(({ key, label, step, required, maxLength }) => ({
       key,
@@ -370,12 +358,8 @@ function parseFeedbackResponses(body: Record<string, unknown>) {
   const src = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : body;
   const displayName = String(src.displayName ?? body.displayName ?? "").trim().slice(0, 200);
   const agency = String(src.agency ?? body.agency ?? "").trim().slice(0, 200);
-  const coffeeSession = String(src.coffeeSession ?? body.coffeeSession ?? "").trim();
   if (!displayName) throw new HTTPException(400, { message: "Name is required." });
   if (!agency) throw new HTTPException(400, { message: "Agency is required." });
-  if (!coffeeSession || !COFFEE_SESSION_VALUES.has(coffeeSession)) {
-    throw new HTTPException(400, { message: "Please select which coffee session you attended." });
-  }
 
   const speakerImpact = String(src.speakerImpact ?? body.speakerImpact ?? "").trim().slice(0, 4000);
   const biggestTakeaway = String(src.biggestTakeaway ?? body.biggestTakeaway ?? "").trim().slice(0, 4000);
@@ -392,7 +376,6 @@ function parseFeedbackResponses(body: Record<string, unknown>) {
   return {
     displayName,
     agency,
-    coffeeSession,
     speakerImpact,
     biggestTakeaway,
     testimonial,
@@ -406,7 +389,6 @@ function parseStoredFeedbackResponses(row: Record<string, unknown>) {
   return {
     displayName: String(fromJson.displayName ?? ""),
     agency: String(fromJson.agency ?? ""),
-    coffeeSession: String(fromJson.coffeeSession ?? ""),
     speakerImpact: String(fromJson.speakerImpact ?? ""),
     biggestTakeaway: String(fromJson.biggestTakeaway ?? ""),
     testimonial: String(fromJson.testimonial ?? ""),
@@ -2253,7 +2235,6 @@ app.put("/api/events/:eventId/feedback/me", requireRole(["admin", "staff", "atte
   const responsesJson = JSON.stringify({
     displayName: parsed.displayName,
     agency: parsed.agency,
-    coffeeSession: parsed.coffeeSession,
     speakerImpact: parsed.speakerImpact,
     biggestTakeaway: parsed.biggestTakeaway,
     testimonial: parsed.testimonial,
@@ -2328,16 +2309,12 @@ app.get("/api/events/:eventId/feedback/analytics", requireRole(["admin", "staff"
     biggestTakeaway: string;
     testimonial: string;
   }[] = [];
-  const coffeeSessionCounts = new Map<string, number>();
   let conferenceSum = 0;
   let conferenceN = 0;
 
   for (const r of rows) {
     const scores = parseMetadataJson(r.scores_json) as Record<string, number>;
     const responses = parseStoredFeedbackResponses(r);
-    if (responses.coffeeSession) {
-      coffeeSessionCounts.set(responses.coffeeSession, (coffeeSessionCounts.get(responses.coffeeSession) || 0) + 1);
-    }
     parsedRows.push({
       scores,
       suggestions: String(r.suggestions || ""),
@@ -2378,14 +2355,6 @@ app.get("/api/events/:eventId/feedback/analytics", requireRole(["admin", "staff"
 
   const overallAverage = conferenceN ? Math.round((conferenceSum / conferenceN) * 100) / 100 : 0;
 
-  const coffeeSessionBreakdown = [...coffeeSessionCounts.entries()]
-    .map(([value, count]) => ({
-      value,
-      count,
-      label: COFFEE_SESSION_OPTIONS.find((o) => o.value === value)?.label ?? value,
-    }))
-    .sort((a, b) => b.count - a.count);
-
   const recentSuggestions = rows
     .map((r) => String(r.suggestions || "").trim())
     .filter((t) => t.length > 0)
@@ -2408,7 +2377,6 @@ app.get("/api/events/:eventId/feedback/analytics", requireRole(["admin", "staff"
     overallLabel: "Conference proper (avg)",
     averages: averages.filter((a) => a.count > 0).sort((a, b) => (a.legacy === b.legacy ? 0 : a.legacy ? 1 : -1)),
     distributions,
-    coffeeSessionBreakdown,
     recentSuggestions,
     recentTestimonials,
     suggestionInsights,

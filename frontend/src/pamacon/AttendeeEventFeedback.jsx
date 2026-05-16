@@ -90,7 +90,6 @@ export default function AttendeeEventFeedback({
         setResponses({
           displayName: r.displayName || formatDisplayName(profile) || "",
           agency: r.agency || "",
-          coffeeSession: r.coffeeSession || "",
           speakerImpact: r.speakerImpact || "",
           biggestTakeaway: r.biggestTakeaway || "",
           testimonial: r.testimonial || "",
@@ -121,9 +120,7 @@ export default function AttendeeEventFeedback({
 
   const step1Complete = useMemo(() => {
     return (
-      String(responses.displayName || "").trim().length > 0 &&
-      String(responses.agency || "").trim().length > 0 &&
-      String(responses.coffeeSession || "").trim().length > 0
+      String(responses.displayName || "").trim().length > 0 && String(responses.agency || "").trim().length > 0
     );
   }, [responses]);
 
@@ -232,7 +229,7 @@ export default function AttendeeEventFeedback({
         <div className="mt-5 space-y-4">
           <div>
             <label htmlFor="fb-name" className="block text-sm font-semibold text-slate-900">
-              Name (Last Name, First Name) <span className="text-red-600">*</span>
+              Name (First Name Last Name) <span className="text-red-600">*</span>
             </label>
             <input
               id="fb-name"
@@ -241,7 +238,7 @@ export default function AttendeeEventFeedback({
               value={responses.displayName}
               onChange={(e) => setResponses((p) => ({ ...p, displayName: e.target.value }))}
               className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium"
-              placeholder="e.g. Santos, Juan"
+              placeholder="e.g. Juan Santos"
             />
           </div>
           <div>
@@ -257,31 +254,6 @@ export default function AttendeeEventFeedback({
               className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium"
             />
           </div>
-          <fieldset className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <legend className="text-sm font-semibold text-slate-900 px-1">
-              Which coffee session did you go to? <span className="text-red-600">*</span>
-            </legend>
-            <div className="mt-3 space-y-2">
-              {(schema.coffeeSessions || []).map((opt) => (
-                <label
-                  key={opt.value}
-                  className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-2.5 text-sm transition-colors ${
-                    responses.coffeeSession === opt.value ? "border-red-300 bg-red-50" : "border-slate-100 hover:bg-slate-50"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="coffeeSession"
-                    className="mt-1"
-                    disabled={saving}
-                    checked={responses.coffeeSession === opt.value}
-                    onChange={() => setResponses((p) => ({ ...p, coffeeSession: opt.value }))}
-                  />
-                  <span className="text-slate-800 leading-snug">{opt.label}</span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
         </div>
       ) : null}
 

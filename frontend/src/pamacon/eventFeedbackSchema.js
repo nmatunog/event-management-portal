@@ -1,15 +1,7 @@
 /** Aligned with AIA PAMA Con feedback Google Form (coffee sessions, dinners, hotel, written prompts). */
 
-export const COFFEE_SESSION_OPTIONS = [
-  { value: "culture", label: "Building Culture/Engagement — Mgr. Belmar" },
-  { value: "recruitment", label: "Recruitment — Mgr. Henry" },
-  { value: "activation", label: "Activation — Mgr. Maricel" },
-  { value: "mdrt", label: "MDRT Development — Mgr. Iza" },
-  { value: "none", label: "Wasn't able to attend" },
-];
-
 export const FEEDBACK_STEP_LABELS = {
-  1: "About you & coffee sessions",
+  1: "About you",
   2: "Conference experiences",
   3: "Reflections & testimonial",
 };
@@ -24,7 +16,7 @@ export const FEEDBACK_RATING_KEYS = [
 ];
 
 export const FEEDBACK_RATING_LABELS = {
-  coffee_sessions: "Coffee sessions",
+  coffee_sessions: "Day 1 Breakout Sessions",
   welcome_dinner: "Welcome Dinner",
   conference_proper: "Conference proper",
   fellowship_night: "Fellowship Night",
@@ -46,7 +38,6 @@ export function defaultResponses() {
   return {
     displayName: "",
     agency: "",
-    coffeeSession: "",
     speakerImpact: "",
     biggestTakeaway: "",
     testimonial: "",
@@ -56,8 +47,8 @@ export function defaultResponses() {
 export function formatDisplayName(profile) {
   const last = String(profile?.lastName || "").trim();
   const first = String(profile?.firstName || "").trim();
-  if (last && first) return `${last}, ${first}`;
-  if (last || first) return [last, first].filter(Boolean).join(" ");
+  if (last && first) return `${first} ${last}`;
+  if (last || first) return [first, last].filter(Boolean).join(" ");
   return "";
 }
 
