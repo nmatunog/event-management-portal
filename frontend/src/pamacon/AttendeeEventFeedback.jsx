@@ -71,6 +71,7 @@ export default function AttendeeEventFeedback({
   const [responses, setResponses] = useState(defaultResponses);
   const [textExtras, setTextExtras] = useState({ likedMost: "", suggestions: "" });
   const [submitted, setSubmitted] = useState(false);
+  const [formClosed, setFormClosed] = useState(false);
 
   const maxStep = 3;
 
@@ -99,11 +100,13 @@ export default function AttendeeEventFeedback({
           suggestions: data.item.suggestions || "",
         });
         setSubmitted(true);
+        setFormClosed(true);
       } else {
         setScores(emptyScores);
         setResponses({ ...defaultResponses(), displayName: formatDisplayName(profile) });
         setTextExtras({ likedMost: "", suggestions: "" });
         setSubmitted(false);
+        setFormClosed(false);
       }
     } catch (e) {
       onNotify?.("error", e?.message || "Could not load feedback form.");
@@ -164,7 +167,8 @@ export default function AttendeeEventFeedback({
         },
       });
       setSubmitted(true);
-      onNotify?.("ok", submitted ? "Feedback updated. Thank you!" : "Thank you — your feedback was submitted.");
+      setFormClosed(true);
+      onNotify?.("ok", "Your feedback has been submitted! Thank you!");
     } catch (e) {
       onNotify?.("error", e?.message || "Could not save feedback.");
     } finally {
@@ -183,6 +187,36 @@ export default function AttendeeEventFeedback({
   }
 
   if (!schema?.ratings?.length) return null;
+
+  if (formClosed) {
+    return (
+      <section
+        id="event-feedback"
+        aria-labelledby="event-feedback-thanks-heading"
+        className="rounded-2xl sm:rounded-3xl border border-emerald-200 bg-gradient-to-b from-emerald-50/90 to-white p-8 sm:p-10 shadow-sm text-center"
+      >
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-600 text-white shadow-md shadow-emerald-600/25">
+          <CheckCircle2 className="h-8 w-8" aria-hidden />
+        </div>
+        <h2 id="event-feedback-thanks-heading" className="mt-5 text-xl sm:text-2xl font-bold text-slate-900">
+          Your feedback has been submitted! Thank you!
+        </h2>
+        <p className="mt-2 text-sm text-slate-600 leading-relaxed max-w-md mx-auto">
+          We appreciate you taking the time to share your conference experience.
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            setFormClosed(false);
+            setStep(1);
+          }}
+          className="mt-6 inline-flex min-h-[44px] items-center justify-center rounded-xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          Edit your feedback
+        </button>
+      </section>
+    );
+  }
 
   const isLastStep = step === maxStep;
 
