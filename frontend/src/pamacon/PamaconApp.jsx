@@ -1492,6 +1492,7 @@ export default function PamaconApp({
                 suppliers={suppliers}
                 canEdit={canEdit}
                 isAdmin={isAdmin}
+                isSuperuser={isSuperuser}
                 onError={onApiError}
                 onInfo={onApiInfo}
               />

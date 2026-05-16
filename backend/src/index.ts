@@ -121,6 +121,15 @@ function assertAdminOnly(c: Context<AppContext>) {
   }
 }
 
+/** Email must appear in `SUPERUSER_EMAILS` (Worker env). */
+function assertSuperuser(c: Context<AppContext>) {
+  const email = String(c.get("authUser")?.email ?? "").trim().toLowerCase();
+  const supers = parseCsvSet(c.env.SUPERUSER_EMAILS);
+  if (!email || !supers.has(email)) {
+    throw new HTTPException(403, { message: "Forbidden: only a configured superuser can delete payment vouchers." });
+  }
+}
+
 function asNumber(value: unknown, fallback = 0) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
@@ -1577,11 +1586,67 @@ app.patch("/api/invitations/respond/:token", async (c) => {
 const SIGNATURE_DATA_URL_MAX = 600_000;
 
 async function nextVoucherNumber(db: D1Database, eventId: string) {
-  const row = await db.prepare("SELECT COUNT(*) as c FROM supplier_payment_vouchers WHERE event_id = ?").bind(eventId).first<{ c: number }>();
-  const seq = (Number(row?.c) || 0) + 1;
   const d = new Date();
   const ymd = `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`;
-  return `EPV-${ymd}-${String(seq).padStart(4, "0")}`;
+  const prefix = `EPV-${ymd}-`;
+  const res = await db
+    .prepare("SELECT voucher_number FROM supplier_payment_vouchers WHERE event_id = ? AND voucher_number LIKE ?")
+    .bind(eventId, `${prefix}%`)
+    .all<{ voucher_number: string }>();
+  let maxSeq = 0;
+  for (const r of res.results || []) {
+    const m = String(r.voucher_number || "").match(/^EPV-(\d{8})-(\d{4})$/);
+    if (m && m[1] === ymd) {
+      const n = parseInt(m[2], 10);
+      if (Number.isFinite(n)) maxSeq = Math.max(maxSeq, n);
+    }
+  }
+  return `${prefix}${String(maxSeq + 1).padStart(4, "0")}`;
+}
+
+/** After inserts/deletes, compact EPV-YYYYMMDD-#### per day prefix for this event; sync payment_reference when it matched the old voucher number. */
+async function resequenceSupplierVoucherNumbersForEvent(db: D1Database, eventId: string) {
+  const res = await db
+    .prepare(
+      `SELECT id, voucher_number, payment_reference, created_at FROM supplier_payment_vouchers WHERE event_id = ? ORDER BY created_at ASC`
+    )
+    .bind(eventId)
+    .all<{ id: string; voucher_number: string; payment_reference: string | null; created_at: string }>();
+  const rows = (res.results || []) as { id: string; voucher_number: string; payment_reference: string | null; created_at: string }[];
+  const groups = new Map<string, typeof rows>();
+  for (const r of rows) {
+    const m = String(r.voucher_number || "").match(/^EPV-(\d{8})-(\d{4})$/);
+    if (!m) continue;
+    const ymd = m[1];
+    if (!groups.has(ymd)) groups.set(ymd, []);
+    groups.get(ymd)!.push(r);
+  }
+  const now = new Date().toISOString();
+  for (const [ymd, list] of groups) {
+    list.sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+    const snapshots = list.map((row) => {
+      const oldVn = String(row.voucher_number || "");
+      const oldRef = String(row.payment_reference ?? "").trim();
+      return {
+        id: row.id,
+        oldVn,
+        oldRef,
+        refSynced: !oldRef || oldRef === oldVn,
+      };
+    });
+    for (const s of snapshots) {
+      await db.prepare("UPDATE supplier_payment_vouchers SET voucher_number = ?, updated_at = ? WHERE id = ?").bind(`EPV-RESEQ-${s.id}`, now, s.id).run();
+    }
+    for (let i = 0; i < snapshots.length; i++) {
+      const s = snapshots[i];
+      const newVn = `EPV-${ymd}-${String(i + 1).padStart(4, "0")}`;
+      const newRef = s.refSynced ? newVn : s.oldRef || null;
+      await db
+        .prepare("UPDATE supplier_payment_vouchers SET voucher_number = ?, payment_reference = ?, updated_at = ? WHERE id = ?")
+        .bind(newVn, newRef, now, s.id)
+        .run();
+    }
+  }
 }
 
 function sanitizeImageDataUrl(raw: unknown, label = "Image") {
@@ -1826,11 +1891,12 @@ app.patch("/api/payment-vouchers/:id", requireRole(["admin", "staff"]), async (c
 });
 
 app.delete("/api/payment-vouchers/:id", requireRole(["admin", "staff"]), async (c) => {
+  assertSuperuser(c);
   const id = c.req.param("id");
-  const existing = await c.env.DB.prepare("SELECT status FROM supplier_payment_vouchers WHERE id = ?").bind(id).first<{ status: string }>();
-  if (!existing) throw new HTTPException(404, { message: "Voucher not found." });
-  if (existing.status === "confirmed") throw new HTTPException(400, { message: "Cannot delete a confirmed voucher." });
+  const existing = await c.env.DB.prepare("SELECT id, event_id FROM supplier_payment_vouchers WHERE id = ?").bind(id).first<{ id: string; event_id: string }>();
+  if (!existing?.event_id) throw new HTTPException(404, { message: "Voucher not found." });
   await c.env.DB.prepare("DELETE FROM supplier_payment_vouchers WHERE id = ?").bind(id).run();
+  await resequenceSupplierVoucherNumbersForEvent(c.env.DB, existing.event_id);
   return c.json({ ok: true });
 });
 

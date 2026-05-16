@@ -31,7 +31,7 @@ function SetupInput({ label, ...props }) {
   );
 }
 
-export default function PaymentVouchersHub({ eventId, suppliers, canEdit, isAdmin = false, onError, onInfo }) {
+export default function PaymentVouchersHub({ eventId, suppliers, canEdit, isAdmin = false, isSuperuser = false, onError, onInfo }) {
   const [vouchers, setVouchers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
@@ -134,10 +134,16 @@ export default function PaymentVouchersHub({ eventId, suppliers, canEdit, isAdmi
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("Delete this draft voucher?")) return;
+    if (
+      !window.confirm(
+        "Permanently delete this voucher from the database? This cannot be undone. Remaining EPV numbers for the same date prefix will be resequenced (and default payment references updated to match)."
+      )
+    )
+      return;
     try {
       await deletePaymentVoucher(id);
       await reload();
+      onInfo?.("Voucher deleted; EPV numbers resequenced where applicable.");
     } catch (e) {
       onError?.(e, "Failed to delete voucher.");
     }
@@ -330,23 +336,25 @@ export default function PaymentVouchersHub({ eventId, suppliers, canEdit, isAdmi
                           </button>
                         ) : null}
                         {canEdit && v.status !== "confirmed" && v.status !== "void" ? (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => void handleVoid(v.id)}
-                              className="inline-flex items-center gap-1 rounded-xl border border-amber-200 text-amber-800 px-3 py-1.5 text-[10px] font-black uppercase hover:bg-amber-50"
-                            >
-                              <XCircle size={14} />
-                              Void
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => void handleDelete(v.id)}
-                              className="inline-flex items-center gap-1 rounded-xl border border-rose-200 text-rose-700 px-3 py-1.5 text-[10px] font-black uppercase hover:bg-rose-50"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </>
+                          <button
+                            type="button"
+                            onClick={() => void handleVoid(v.id)}
+                            className="inline-flex items-center gap-1 rounded-xl border border-amber-200 text-amber-800 px-3 py-1.5 text-[10px] font-black uppercase hover:bg-amber-50"
+                          >
+                            <XCircle size={14} />
+                            Void
+                          </button>
+                        ) : null}
+                        {isSuperuser ? (
+                          <button
+                            type="button"
+                            title="Superuser only — removes row and resequences EPV numbers"
+                            onClick={() => void handleDelete(v.id)}
+                            className="inline-flex items-center gap-1 rounded-xl border border-rose-200 text-rose-700 px-3 py-1.5 text-[10px] font-black uppercase hover:bg-rose-50"
+                          >
+                            <Trash2 size={14} />
+                            Delete
+                          </button>
                         ) : null}
                       </div>
                     </td>
