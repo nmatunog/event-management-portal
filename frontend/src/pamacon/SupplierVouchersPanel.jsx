@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 import { Edit3, Eye, FileSignature, Link2 } from "lucide-react";
 import { formatPaidStampDate } from "../components/PaidStamp";
 import PaidStamp from "../components/PaidStamp";
+import ReceiptUpload from "../components/ReceiptUpload";
 import {
+  getPaymentVoucherReceipt,
   getPaymentVoucherSignature,
   getPaymentVouchers,
   patchPaymentVoucherDetails,
@@ -29,7 +31,7 @@ function inputClass(disabled) {
   return `w-full rounded-2xl border-2 border-slate-100 bg-slate-50 p-3.5 text-sm font-semibold ${disabled ? "opacity-50" : ""}`;
 }
 
-export function VoucherDetailDialog({ voucher, signature, onClose }) {
+export function VoucherDetailDialog({ voucher, signature, receipt, onClose }) {
   if (!voucher) return null;
   const v = voucher;
   const sig = signature;
@@ -44,7 +46,8 @@ export function VoucherDetailDialog({ voucher, signature, onClose }) {
         <div className="flex justify-between items-start pr-28">
           <div>
             <p className="text-[10px] font-black uppercase text-slate-400">Payment voucher</p>
-            <h3 className="font-black text-slate-900 text-lg">{v.voucher_number}</h3>
+            <h3 className="font-black text-slate-900 text-lg font-mono">{v.voucher_number}</h3>
+            <p className="text-xs font-mono text-slate-500">Ref: {v.payment_reference || v.voucher_number}</p>
             <p className="text-sm text-slate-600">{v.supplier_name}</p>
           </div>
           <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-700 text-2xl leading-none">
@@ -102,6 +105,16 @@ export function VoucherDetailDialog({ voucher, signature, onClose }) {
           </div>
         ) : null}
 
+        {receipt?.receiptDataUrl ? (
+          <div className="border-t border-slate-100 pt-4 space-y-2">
+            <p className="text-[10px] font-black uppercase text-slate-400">Official receipt on file</p>
+            {receipt.supplierReceiptNumber ? (
+              <p className="text-sm font-semibold">OR / Receipt no.: {receipt.supplierReceiptNumber}</p>
+            ) : null}
+            <img src={receipt.receiptDataUrl} alt="Official receipt" className="max-h-56 mx-auto border rounded-xl p-2 bg-white" />
+          </div>
+        ) : null}
+
         {isConfirmed && sig ? (
           <div className="border-t border-slate-100 pt-4 space-y-3">
             <p className="text-[10px] font-black uppercase text-slate-400">Supplier acknowledgment (stored)</p>
@@ -145,6 +158,8 @@ export function VoucherEditDialog({ voucher, suppliers, onClose, onSaved, onErro
       description: voucher.description || "",
       notes: voucher.notes || "",
       dateReceived: voucher.date_received || "",
+      supplierReceiptNumber: voucher.supplier_receipt_number || "",
+      receiptDataUrl: "",
     });
   }, [voucher]);
 
@@ -166,6 +181,8 @@ export function VoucherEditDialog({ voucher, suppliers, onClose, onSaved, onErro
         description: draft.description,
         notes: draft.notes,
         dateReceived: draft.dateReceived || null,
+        supplierReceiptNumber: draft.supplierReceiptNumber,
+        supplierReceiptDataUrl: draft.receiptDataUrl || null,
       });
       await onSaved?.();
       onClose();
@@ -223,8 +240,21 @@ export function VoucherEditDialog({ voucher, suppliers, onClose, onSaved, onErro
           <Field label="Payment method">
             <input className={inputClass(false)} value={draft.paymentMethod} onChange={(e) => setDraft({ ...draft, paymentMethod: e.target.value })} />
           </Field>
-          <Field label="Reference">
+          <Field label="Voucher no. (read-only)" className="sm:col-span-2">
+            <input className={inputClass(true)} value={voucher.voucher_number} disabled readOnly />
+          </Field>
+          <Field label="Payment reference">
             <input className={inputClass(false)} value={draft.paymentReference} onChange={(e) => setDraft({ ...draft, paymentReference: e.target.value })} />
+          </Field>
+          <Field label="Official receipt / OR no.">
+            <input
+              className={inputClass(false)}
+              value={draft.supplierReceiptNumber}
+              onChange={(e) => setDraft({ ...draft, supplierReceiptNumber: e.target.value })}
+            />
+          </Field>
+          <Field label="Receipt image" className="sm:col-span-2">
+            <ReceiptUpload value={draft.receiptDataUrl} onChange={(url) => setDraft({ ...draft, receiptDataUrl: url })} />
           </Field>
           <Field label="Payment date (issuer)">
             <input type="date" className={inputClass(false)} value={draft.paymentDate} onChange={(e) => setDraft({ ...draft, paymentDate: e.target.value })} />
@@ -267,6 +297,7 @@ export default function SupplierVouchersPanel({
   const [loading, setLoading] = useState(false);
   const [viewVoucher, setViewVoucher] = useState(null);
   const [viewSignature, setViewSignature] = useState(null);
+  const [viewReceipt, setViewReceipt] = useState(null);
   const [editVoucher, setEditVoucher] = useState(null);
 
   const reload = useCallback(async () => {
@@ -289,13 +320,18 @@ export default function SupplierVouchersPanel({
   const openView = async (v) => {
     setViewVoucher(v);
     setViewSignature(null);
-    if (v.status === "confirmed" || v.has_signature) {
-      try {
+    setViewReceipt(null);
+    try {
+      if (v.status === "confirmed" || v.has_signature) {
         const sig = await getPaymentVoucherSignature(v.id);
         setViewSignature(sig);
-      } catch (e) {
-        onError?.(e, "Failed to load stored acknowledgment.");
       }
+      if (v.has_receipt) {
+        const rec = await getPaymentVoucherReceipt(v.id);
+        setViewReceipt(rec);
+      }
+    } catch (e) {
+      onError?.(e, "Failed to load stored acknowledgment.");
     }
   };
 
@@ -322,10 +358,11 @@ export default function SupplierVouchersPanel({
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b text-left">
-                <th className="p-3 text-[10px] font-black uppercase text-slate-400">Voucher</th>
+                <th className="p-3 text-[10px] font-black uppercase text-slate-400">Voucher / ref</th>
                 <th className="p-3 text-[10px] font-black uppercase text-slate-400">Supplier</th>
                 <th className="p-3 text-[10px] font-black uppercase text-slate-400">Amount</th>
                 <th className="p-3 text-[10px] font-black uppercase text-slate-400">Date paid</th>
+                <th className="p-3 text-[10px] font-black uppercase text-slate-400">Receipt</th>
                 <th className="p-3 text-[10px] font-black uppercase text-slate-400">Status</th>
                 <th className="p-3 text-[10px] font-black uppercase text-slate-400">Actions</th>
               </tr>
@@ -333,12 +370,16 @@ export default function SupplierVouchersPanel({
             <tbody>
               {rows.map((v) => (
                 <tr key={v.id} className="border-b last:border-0 hover:bg-slate-50/80">
-                  <td className="p-3 font-mono text-xs font-bold">{v.voucher_number}</td>
+                  <td className="p-3 font-mono text-xs font-bold">
+                    <div>{v.voucher_number}</div>
+                    <div className="text-[10px] text-slate-500 font-normal">{v.payment_reference}</div>
+                  </td>
                   <td className="p-3 font-semibold">{v.supplier_name}</td>
                   <td className="p-3 font-black">₱{(Number(v.amount) || 0).toLocaleString()}</td>
                   <td className="p-3 text-xs font-semibold text-slate-600">
                     {v.date_received ? formatPaidStampDate(v.date_received) : "—"}
                   </td>
+                  <td className="p-3 text-xs">{v.has_receipt ? "Yes" : "—"}</td>
                   <td className="p-3">
                     <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${STATUS_STYLES[v.status] || ""}`}>{v.status}</span>
                   </td>
@@ -385,7 +426,16 @@ export default function SupplierVouchersPanel({
         </div>
       )}
 
-      <VoucherDetailDialog voucher={viewVoucher} signature={viewSignature} onClose={() => { setViewVoucher(null); setViewSignature(null); }} />
+      <VoucherDetailDialog
+        voucher={viewVoucher}
+        signature={viewSignature}
+        receipt={viewReceipt}
+        onClose={() => {
+          setViewVoucher(null);
+          setViewSignature(null);
+          setViewReceipt(null);
+        }}
+      />
       <VoucherEditDialog
         voucher={editVoucher}
         suppliers={suppliers}

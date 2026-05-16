@@ -3,6 +3,7 @@ import { Award, Calendar, Camera, ChevronDown, ClipboardCheck, Clock3, Film, Ima
 import { useEffect, useMemo, useState } from "react";
 import { ATTENDEE_POSTER_MAX, DEFAULT_PAMACON_CONFIG, DEFAULT_ATTENDEE_PORTAL, PAMACON_TITLE } from "./defaultConfig";
 import AttendeeDetailsForm from "./AttendeeDetailsForm";
+import AttendeeEventFeedback from "./AttendeeEventFeedback";
 
 function youtubeEmbedSrc(url) {
   if (!url || typeof url !== "string") return null;
@@ -29,13 +30,18 @@ function isRockOfAgesFellowship(item) {
 export default function ParticipantPortal({
   config = DEFAULT_PAMACON_CONFIG,
   eventRow,
+  eventId,
+  attendeeSyncHints = {},
   authEmail,
   profile,
   onSaveProfile,
   profileSaving,
   onLogout,
+  onApiInfo,
+  onApiError,
 }) {
   const title = eventRow?.title || PAMACON_TITLE;
+  const resolvedEventId = eventId || eventRow?.id || "";
   const theme = config?.theme || DEFAULT_PAMACON_CONFIG.theme;
   const venue = eventRow?.venue || "Waterfront Cebu Hotel and Casino";
   const start = eventRow?.start_date || "2026-05-13";
@@ -141,6 +147,12 @@ export default function ParticipantPortal({
             >
               Home
             </Link>
+            <a
+              href="#event-feedback"
+              className="inline-flex items-center justify-center min-h-[44px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 shadow-sm"
+            >
+              Feedback
+            </a>
             <a
               href="#attendee-details"
               className="inline-flex items-center justify-center min-h-[44px] rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 shadow-sm"
@@ -496,6 +508,19 @@ export default function ParticipantPortal({
             </div>
           </div>
         </section>
+
+        {resolvedEventId ? (
+          <AttendeeEventFeedback
+            eventId={resolvedEventId}
+            authEmail={authEmail}
+            attendeeSyncHints={attendeeSyncHints}
+            profile={profile}
+            onNotify={(kind, msg) => {
+              if (kind === "ok") onApiInfo?.(msg);
+              else onApiError?.({ message: msg }, msg);
+            }}
+          />
+        ) : null}
 
         <AttendeeDetailsForm
           profile={profile}

@@ -162,6 +162,13 @@ export function deleteSponsor(sponsorId) {
   return request(`/api/sponsors/${sponsorId}`, { method: "DELETE" });
 }
 
+export function patchSponsor(sponsorId, payload) {
+  return request(`/api/sponsors/${sponsorId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function getExpenses(eventId) {
   return request(`/api/events/${eventId}/expenses`);
 }
@@ -300,8 +307,16 @@ export function createPaymentVoucher(eventId, payload) {
   });
 }
 
+export function getEventExpenseReport(eventId) {
+  return request(`/api/events/${eventId}/expense-report`);
+}
+
 export function getPaymentVoucher(voucherId) {
   return request(`/api/payment-vouchers/${voucherId}`);
+}
+
+export function getPaymentVoucherReceipt(voucherId) {
+  return request(`/api/payment-vouchers/${voucherId}/receipt`);
 }
 
 export function patchPaymentVoucherDetails(voucherId, payload) {
@@ -342,4 +357,19 @@ export function supplierVoucherPublicUrl(token) {
     return `${window.location.origin}/supplier-voucher/${token}`;
   }
   return `/supplier-voucher/${token}`;
+}
+
+export function getMyEventFeedback(eventId) {
+  return request(`/api/events/${eventId}/feedback/me`);
+}
+
+export function putMyEventFeedback(eventId, payload) {
+  return request(`/api/events/${eventId}/feedback/me`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getEventFeedbackAnalytics(eventId) {
+  return request(`/api/events/${eventId}/feedback/analytics`);
 }

@@ -248,6 +248,265 @@ function findSyncCandidate(
   );
 }
 
+const EVENT_FEEDBACK_SCHEMA = [
+  {
+    key: "planning_organization",
+    label: "Planning & organization before the event",
+    step: 1,
+  },
+  {
+    key: "marketing_communications",
+    label: "Marketing & communications (announcements, reminders, channels)",
+    step: 1,
+  },
+  {
+    key: "registration_fees",
+    label: "Registration process & conference fees (clarity, fairness, support)",
+    step: 1,
+  },
+  {
+    key: "scheduling_program",
+    label: "Scheduling & program flow (pacing, breaks, timing)",
+    step: 1,
+  },
+  {
+    key: "speakers_content",
+    label: "Speakers & session content (relevance, depth, delivery)",
+    step: 2,
+  },
+  {
+    key: "food_beverage",
+    label: "Food & beverages (quality, variety, service)",
+    step: 2,
+  },
+  {
+    key: "hotel_venue",
+    label: "Hotel & venue (comfort, signage, suitability)",
+    step: 2,
+  },
+  {
+    key: "staff_service",
+    label: "Staff & volunteer service (helpfulness, professionalism)",
+    step: 3,
+  },
+  {
+    key: "technology_av",
+    label: "Technology & A/V (sound, screens, digital tools)",
+    step: 3,
+  },
+  {
+    key: "overall_experience",
+    label: "Overall experience for the whole convention",
+    step: 3,
+  },
+] as const;
+
+const FEEDBACK_STOPWORDS = new Set(
+  `a an the and or but if to of in on for with as at by from up out about into over after before under again further then once here there when where why how all any both each few more most other some such no nor not only own same so than too very can will just don should now ve re ll d m t s isn wasn weren doesn didn wasn had has have having be been being is am are was were do does did doing get got getting go went going make made making take took taking come came coming use used using would could should may might must shall per our your their they them we us you it its this that these those wasnt werent dont doesnt didnt im`.split(
+    /\s+/
+  )
+);
+
+function feedbackSchemaPayload() {
+  return EVENT_FEEDBACK_SCHEMA.map((row) => ({ key: row.key, label: row.label, step: row.step }));
+}
+
+function feedbackLabelForKey(key: string) {
+  return EVENT_FEEDBACK_SCHEMA.find((r) => r.key === key)?.label ?? key;
+}
+
+function parseFeedbackScores(body: Record<string, unknown>) {
+  const raw = body.scores;
+  if (!raw || typeof raw !== "object") {
+    throw new HTTPException(400, { message: "scores object is required." });
+  }
+  const src = raw as Record<string, unknown>;
+  const out: Record<string, number> = {};
+  for (const row of EVENT_FEEDBACK_SCHEMA) {
+    const n = Math.round(Number(src[row.key]));
+    if (!Number.isFinite(n) || n < 1 || n > 5) {
+      throw new HTTPException(400, { message: `Each rating must be a whole number from 1 to 5 (${row.key}).` });
+    }
+    out[row.key] = n;
+  }
+  return out;
+}
+
+function tokenizeFeedbackText(text: string) {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s']/g, " ")
+    .split(/\s+/)
+    .map((w) => w.replace(/^'+|'+$/g, ""))
+    .filter((w) => w.length > 2 && !FEEDBACK_STOPWORDS.has(w));
+}
+
+function topFeedbackKeywords(texts: string[], limit: number) {
+  const freq = new Map<string, number>();
+  for (const block of texts) {
+    const seen = new Set<string>();
+    for (const w of tokenizeFeedbackText(block)) {
+      if (seen.has(w)) continue;
+      seen.add(w);
+      freq.set(w, (freq.get(w) || 0) + 1);
+    }
+  }
+  return [...freq.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([word, count]) => ({ word, count }));
+}
+
+function buildFeedbackSuggestionInsights(
+  responseCount: number,
+  rows: { scores: Record<string, number>; suggestions: string; highlights: string }[]
+) {
+  if (responseCount < 40) {
+    return {
+      unlocked: false,
+      responseCount,
+      nextMilestone: 40,
+      message: "Thematic summaries and priority hints unlock automatically once there are at least 40 submitted feedback responses.",
+    };
+  }
+  const combinedTexts: string[] = [];
+  for (const r of rows) {
+    const s = String(r.suggestions || "").trim();
+    const h = String(r.highlights || "").trim();
+    if (s) combinedTexts.push(s);
+    if (h) combinedTexts.push(h);
+  }
+  const topKeywords = topFeedbackKeywords(combinedTexts, 12);
+
+  const dimTotals = new Map<string, { sum: number; n: number }>();
+  for (const row of EVENT_FEEDBACK_SCHEMA) {
+    dimTotals.set(row.key, { sum: 0, n: 0 });
+  }
+  for (const r of rows) {
+    for (const row of EVENT_FEEDBACK_SCHEMA) {
+      const v = r.scores[row.key];
+      if (typeof v !== "number") continue;
+      const cur = dimTotals.get(row.key)!;
+      cur.sum += v;
+      cur.n += 1;
+    }
+  }
+  const dimAvgs = [...dimTotals.entries()]
+    .map(([key, { sum, n }]) => ({
+      key,
+      label: feedbackLabelForKey(key),
+      avg: n ? sum / n : 0,
+      n,
+    }))
+    .sort((a, b) => a.avg - b.avg);
+
+  const weakest = dimAvgs.slice(0, 4).filter((d) => d.n > 0);
+
+  const keywordBoost = new Map<string, string[]>([
+    ["food", ["food_beverage"]],
+    ["meal", ["food_beverage"]],
+    ["lunch", ["food_beverage"]],
+    ["dinner", ["food_beverage"]],
+    ["hotel", ["hotel_venue"]],
+    ["room", ["hotel_venue"]],
+    ["venue", ["hotel_venue"]],
+    ["sound", ["technology_av"]],
+    ["audio", ["technology_av"]],
+    ["mic", ["technology_av"]],
+    ["screen", ["technology_av"]],
+    ["schedule", ["scheduling_program"]],
+    ["time", ["scheduling_program"]],
+    ["late", ["scheduling_program"]],
+    ["speaker", ["speakers_content"]],
+    ["session", ["speakers_content"]],
+    ["staff", ["staff_service"]],
+    ["volunteer", ["staff_service"]],
+    ["registration", ["registration_fees"]],
+    ["fee", ["registration_fees"]],
+    ["payment", ["registration_fees"]],
+    ["email", ["marketing_communications"]],
+    ["communication", ["marketing_communications"]],
+    ["organiz", ["planning_organization"]],
+  ]);
+
+  const boostedKeys = new Set<string>();
+  for (const { word } of topKeywords.slice(0, 6)) {
+    for (const [needle, keys] of keywordBoost.entries()) {
+      if (word.includes(needle)) {
+        keys.forEach((k) => boostedKeys.add(k));
+      }
+    }
+  }
+
+  const priorityActions: { rank: number; title: string; rationale: string }[] = [];
+  let rank = 1;
+  for (const d of weakest.slice(0, 3)) {
+    priorityActions.push({
+      rank: rank++,
+      title: `Strengthen ${d.label.split("(")[0].trim()}`,
+      rationale: `Average ${d.avg.toFixed(2)} / 5 across ${responseCount} responses — one of the lowest-rated areas.`,
+    });
+  }
+  for (const key of boostedKeys) {
+    const hit = dimAvgs.find((d) => d.key === key);
+    if (!hit) continue;
+    if (priorityActions.some((p) => p.title.includes(hit.label.slice(0, 18)))) continue;
+    priorityActions.push({
+      rank: rank++,
+      title: `Validate ${hit.label.split("(")[0].trim()} against written comments`,
+      rationale: `Delegates repeatedly used words related to this area in open feedback.`,
+    });
+    if (priorityActions.length >= 6) break;
+  }
+  if (topKeywords.length && priorityActions.length < 6) {
+    const k = topKeywords.slice(0, 3).map((x) => x.word);
+    priorityActions.push({
+      rank: rank++,
+      title: "Thematic review of open-ended comments",
+      rationale: `Recurring words include: ${k.join(", ")}. Use these as prompts for a short leadership debrief.`,
+    });
+  }
+
+  const summaryLines: string[] = [];
+  if (topKeywords.length) {
+    summaryLines.push(
+      `Most-mentioned themes in written feedback: ${topKeywords
+        .slice(0, 5)
+        .map((t) => `${t.word} (${t.count})`)
+        .join(", ")}.`
+    );
+  }
+  if (weakest.length) {
+    summaryLines.push(
+      `Lowest-rated areas on the numeric survey: ${weakest
+        .slice(0, 3)
+        .map((d) => `${d.label.split("(")[0].trim()} (${d.avg.toFixed(2)}/5)`)
+        .join("; ")}.`
+    );
+  }
+
+  return {
+    unlocked: true,
+    responseCount,
+    summaryLines,
+    topKeywords,
+    weakestDimensions: weakest,
+    priorityActions: priorityActions.slice(0, 6),
+  };
+}
+
+function mapFeedbackRow(row: Record<string, unknown> | null | undefined) {
+  if (!row?.id) return null;
+  return {
+    id: row.id,
+    scores: parseMetadataJson(row.scores_json) as Record<string, number>,
+    highlights: String(row.highlights ?? ""),
+    suggestions: String(row.suggestions ?? ""),
+    updatedAt: row.updated_at,
+    createdAt: row.created_at,
+  };
+}
+
 function statusRank(value: unknown) {
   const s = String(value || "").trim().toLowerCase();
   if (s === "checked-in") return 3;
@@ -1090,6 +1349,61 @@ app.delete("/api/sponsors/:id", requireRole(["admin", "staff"]), async (c) => {
   return c.json({ ok: true });
 });
 
+app.patch("/api/sponsors/:id", requireRole(["admin", "staff"]), async (c) => {
+  const id = c.req.param("id");
+  const body = await c.req.json();
+  const existing = await c.env.DB.prepare("SELECT * FROM sponsors WHERE id = ?").bind(id).first<Record<string, unknown>>();
+  if (!existing) throw new HTTPException(404, { message: "Sponsor not found." });
+
+  let remarks = existing.remarks as string | null;
+  let paid = Number(existing.paid) === 1 ? 1 : 0;
+
+  if (body.status !== undefined) {
+    const status = String(body.status).trim().toLowerCase();
+    if (status === "collected") {
+      remarks = "Collected";
+      paid = 1;
+    } else if (status === "uncollected") {
+      remarks = "Uncollected";
+      paid = 0;
+    } else {
+      throw new HTTPException(400, { message: 'Status must be "collected" or "uncollected".' });
+    }
+  } else {
+    if (body.remarks !== undefined) remarks = String(body.remarks ?? "").trim() || null;
+    if (body.paid !== undefined) paid = body.paid ? 1 : 0;
+    if (body.collected !== undefined) {
+      const collected = body.collected === true || body.collected === 1;
+      remarks = collected ? "Collected" : "Uncollected";
+      paid = collected ? 1 : 0;
+    }
+  }
+
+  await c.env.DB.prepare(
+    `UPDATE sponsors SET
+      company = COALESCE(?, company),
+      tier = COALESCE(?, tier),
+      amount = COALESCE(?, amount),
+      paid = ?,
+      booth = COALESCE(?, booth),
+      remarks = ?
+    WHERE id = ?`
+  )
+    .bind(
+      body.company !== undefined ? String(body.company) : null,
+      body.tier !== undefined ? String(body.tier) : null,
+      body.amount !== undefined ? asNumber(body.amount, 0) : null,
+      paid,
+      body.booth !== undefined ? (body.booth ? String(body.booth) : null) : null,
+      remarks,
+      id
+    )
+    .run();
+
+  const item = await c.env.DB.prepare("SELECT * FROM sponsors WHERE id = ?").bind(id).first();
+  return c.json({ item });
+});
+
 app.get("/api/events/:eventId/expenses", async (c) => {
   const eventId = c.req.param("eventId");
   const res = await c.env.DB.prepare("SELECT * FROM expenses WHERE event_id = ? ORDER BY created_at DESC").bind(eventId).all();
@@ -1262,21 +1576,24 @@ app.patch("/api/invitations/respond/:token", async (c) => {
 
 const SIGNATURE_DATA_URL_MAX = 600_000;
 
-function nextVoucherNumber() {
+async function nextVoucherNumber(db: D1Database, eventId: string) {
+  const row = await db.prepare("SELECT COUNT(*) as c FROM supplier_payment_vouchers WHERE event_id = ?").bind(eventId).first<{ c: number }>();
+  const seq = (Number(row?.c) || 0) + 1;
   const d = new Date();
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  const suffix = crypto.randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase();
-  return `EPV-${y}${m}${day}-${suffix}`;
+  const ymd = `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`;
+  return `EPV-${ymd}-${String(seq).padStart(4, "0")}`;
+}
+
+function sanitizeImageDataUrl(raw: unknown, label = "Image") {
+  const s = String(raw ?? "").trim();
+  if (!s) return null;
+  if (!s.startsWith("data:image/")) throw new HTTPException(400, { message: `${label} must be a valid image.` });
+  if (s.length > SIGNATURE_DATA_URL_MAX) throw new HTTPException(400, { message: `${label} is too large. Please use a smaller file.` });
+  return s;
 }
 
 function sanitizeSignatureDataUrl(raw: unknown) {
-  const s = String(raw ?? "").trim();
-  if (!s) return null;
-  if (!s.startsWith("data:image/")) throw new HTTPException(400, { message: "Signature must be a valid image." });
-  if (s.length > SIGNATURE_DATA_URL_MAX) throw new HTTPException(400, { message: "Signature image is too large. Please use a smaller image or redraw." });
-  return s;
+  return sanitizeImageDataUrl(raw, "Signature");
 }
 
 function publicVoucherPayload(row: Record<string, unknown>) {
@@ -1298,6 +1615,8 @@ function publicVoucherPayload(row: Record<string, unknown>) {
     confirmedAt: row.confirmed_at,
     dateReceived: row.date_received,
     hasSignature: Boolean(row.signature_data_url),
+    hasReceipt: Boolean(row.supplier_receipt_data_url),
+    supplierReceiptNumber: row.supplier_receipt_number ?? null,
     eventTitle: row.event_title ?? null,
   };
 }
@@ -1308,9 +1627,11 @@ app.get("/api/events/:eventId/payment-vouchers", requireRole(["admin", "staff"])
     `SELECT v.id, v.event_id, v.expense_id, v.token, v.voucher_number, v.status, v.supplier_name, v.payee_email,
             v.payee_contact, v.amount, v.currency, v.payment_method, v.payment_reference, v.payment_date,
             v.description, v.notes, v.signature_method, v.signer_name, v.signer_title, v.signed_at,
-            v.confirmed_receipt, v.receipt_notes, v.date_received, v.created_by_email, v.sent_at, v.viewed_at, v.confirmed_at,
+            v.confirmed_receipt, v.receipt_notes, v.date_received, v.supplier_receipt_number,
+            v.created_by_email, v.sent_at, v.viewed_at, v.confirmed_at, v.receipt_uploaded_at,
             v.created_at, v.updated_at,
-            CASE WHEN v.signature_data_url IS NOT NULL AND v.signature_data_url != '' THEN 1 ELSE 0 END AS has_signature
+            CASE WHEN v.signature_data_url IS NOT NULL AND v.signature_data_url != '' THEN 1 ELSE 0 END AS has_signature,
+            CASE WHEN v.supplier_receipt_data_url IS NOT NULL AND v.supplier_receipt_data_url != '' THEN 1 ELSE 0 END AS has_receipt
      FROM supplier_payment_vouchers v
      WHERE v.event_id = ?
      ORDER BY v.created_at DESC`
@@ -1321,7 +1642,8 @@ app.get("/api/events/:eventId/payment-vouchers", requireRole(["admin", "staff"])
 });
 
 app.post("/api/events/:eventId/payment-vouchers", requireRole(["admin", "staff"]), async (c) => {
-  const eventId = c.req.param("eventId");
+  const eventId = c.req.param("eventId") ?? "";
+  if (!eventId) throw new HTTPException(400, { message: "eventId is required." });
   const body = await c.req.json();
   const actor = c.get("authUser");
   const supplierName = String(body.supplierName ?? body.supplier ?? "").trim();
@@ -1337,7 +1659,8 @@ app.post("/api/events/:eventId/payment-vouchers", requireRole(["admin", "staff"]
 
   const id = crypto.randomUUID();
   const token = crypto.randomUUID();
-  const voucherNumber = nextVoucherNumber();
+  const voucherNumber = await nextVoucherNumber(c.env.DB, eventId);
+  const paymentReference = String(body.paymentReference ?? "").trim() || voucherNumber;
   await c.env.DB.prepare(
     `INSERT INTO supplier_payment_vouchers (
       id, event_id, expense_id, token, voucher_number, status, supplier_name, payee_email, payee_contact,
@@ -1357,7 +1680,7 @@ app.post("/api/events/:eventId/payment-vouchers", requireRole(["admin", "staff"]
       amount,
       String(body.currency ?? "PHP").trim() || "PHP",
       String(body.paymentMethod ?? "").trim() || null,
-      String(body.paymentReference ?? "").trim() || null,
+      paymentReference,
       String(body.paymentDate ?? "").trim() || null,
       String(body.description ?? "").trim() || null,
       String(body.notes ?? "").trim() || null,
@@ -1412,7 +1735,9 @@ app.patch("/api/payment-vouchers/:id", requireRole(["admin", "staff"]), async (c
     body.description !== undefined ||
     body.notes !== undefined ||
     body.expenseId !== undefined ||
-    body.dateReceived !== undefined;
+    body.dateReceived !== undefined ||
+    body.supplierReceiptNumber !== undefined ||
+    body.supplierReceiptDataUrl !== undefined;
 
   if (hasDetailUpdate) {
     assertAdminOnly(c);
@@ -1441,6 +1766,20 @@ app.patch("/api/payment-vouchers/:id", requireRole(["admin", "staff"]), async (c
       dateReceived = dr || null;
     }
 
+    let supplierReceiptDataUrl = existing.supplier_receipt_data_url as string | null;
+    if (body.supplierReceiptDataUrl !== undefined) {
+      const raw = body.supplierReceiptDataUrl;
+      supplierReceiptDataUrl = raw === null || raw === "" ? null : sanitizeImageDataUrl(raw, "Receipt");
+    }
+    const supplierReceiptNumber =
+      body.supplierReceiptNumber !== undefined
+        ? String(body.supplierReceiptNumber ?? "").trim() || null
+        : (existing.supplier_receipt_number as string | null);
+    const receiptUploadedAt =
+      body.supplierReceiptDataUrl !== undefined && supplierReceiptDataUrl
+        ? new Date().toISOString()
+        : (existing.receipt_uploaded_at as string | null);
+
     await c.env.DB.prepare(
       `UPDATE supplier_payment_vouchers SET
         expense_id = ?,
@@ -1454,6 +1793,9 @@ app.patch("/api/payment-vouchers/:id", requireRole(["admin", "staff"]), async (c
         description = ?,
         notes = ?,
         date_received = ?,
+        supplier_receipt_data_url = ?,
+        supplier_receipt_number = ?,
+        receipt_uploaded_at = ?,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = ?`
     )
@@ -1469,6 +1811,9 @@ app.patch("/api/payment-vouchers/:id", requireRole(["admin", "staff"]), async (c
         body.description !== undefined ? String(body.description ?? "").trim() || null : existing.description,
         body.notes !== undefined ? String(body.notes ?? "").trim() || null : existing.notes,
         dateReceived,
+        supplierReceiptDataUrl,
+        supplierReceiptNumber,
+        receiptUploadedAt,
         id
       )
       .run();
@@ -1541,6 +1886,8 @@ app.patch("/api/payment-vouchers/public/:token/confirm", async (c) => {
 
   const receiptNotes = String(body.receiptNotes ?? "").trim() || null;
   const signerTitle = String(body.signerTitle ?? "").trim() || null;
+  const supplierReceiptNumber = String(body.supplierReceiptNumber ?? "").trim() || null;
+  const supplierReceiptDataUrl = body.receiptDataUrl ? sanitizeImageDataUrl(body.receiptDataUrl, "Receipt") : null;
   const dateReceived = String(body.dateReceived ?? "").trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateReceived)) {
     throw new HTTPException(400, { message: "Date received is required (YYYY-MM-DD)." });
@@ -1557,12 +1904,28 @@ app.patch("/api/payment-vouchers/public/:token/confirm", async (c) => {
       signer_title = ?,
       receipt_notes = ?,
       date_received = ?,
+      supplier_receipt_number = ?,
+      supplier_receipt_data_url = ?,
+      receipt_uploaded_at = ?,
       signed_at = ?,
       confirmed_at = ?,
       updated_at = CURRENT_TIMESTAMP
     WHERE token = ?`
   )
-    .bind(signatureMethod, signatureDataUrl, signerName, signerTitle, receiptNotes, dateReceived, now, now, token)
+    .bind(
+      signatureMethod,
+      signatureDataUrl,
+      signerName,
+      signerTitle,
+      receiptNotes,
+      dateReceived,
+      supplierReceiptNumber,
+      supplierReceiptDataUrl,
+      supplierReceiptDataUrl ? now : null,
+      now,
+      now,
+      token
+    )
     .run();
 
   const updated = await c.env.DB.prepare(
@@ -1572,6 +1935,84 @@ app.patch("/api/payment-vouchers/public/:token/confirm", async (c) => {
     .first<Record<string, unknown>>();
 
   return c.json({ ok: true, voucher: publicVoucherPayload(updated ?? row) });
+});
+
+app.get("/api/events/:eventId/expense-report", requireRole(["admin", "staff"]), async (c) => {
+  const eventId = c.req.param("eventId");
+  const event = await c.env.DB.prepare("SELECT id, title, start_date, end_date, venue FROM events WHERE id = ?").bind(eventId).first<Record<string, unknown>>();
+  if (!event) throw new HTTPException(404, { message: "Event not found." });
+
+  const expenses = await c.env.DB.prepare(
+    "SELECT id, supplier, category, amount, expense_type, approved, created_at FROM expenses WHERE event_id = ? ORDER BY category ASC, supplier ASC"
+  )
+    .bind(eventId)
+    .all();
+
+  const vouchers = await c.env.DB.prepare(
+    `SELECT id, expense_id, voucher_number, payment_reference, status, supplier_name, amount, payment_method,
+            payment_date, date_received, description, supplier_receipt_number, confirmed_at,
+            CASE WHEN supplier_receipt_data_url IS NOT NULL AND supplier_receipt_data_url != '' THEN 1 ELSE 0 END AS has_receipt,
+            CASE WHEN signature_data_url IS NOT NULL AND signature_data_url != '' THEN 1 ELSE 0 END AS has_signature
+     FROM supplier_payment_vouchers WHERE event_id = ? ORDER BY voucher_number ASC`
+  )
+    .bind(eventId)
+    .all();
+
+  const expenseRows = expenses.results ?? [];
+  const voucherRows = vouchers.results ?? [];
+  const expenseTotal = expenseRows.reduce((s, r) => s + (Number((r as Record<string, unknown>).amount) || 0), 0);
+  const confirmedVouchers = voucherRows.filter((r) => (r as Record<string, unknown>).status === "confirmed");
+  const voucherPaidTotal = confirmedVouchers.reduce((s, r) => s + (Number((r as Record<string, unknown>).amount) || 0), 0);
+
+  const byCategory = new Map<string, { budgeted: number; voucherPaid: number; count: number }>();
+  for (const r of expenseRows) {
+    const row = r as Record<string, unknown>;
+    const cat = String(row.category || "Uncategorized");
+    const prev = byCategory.get(cat) ?? { budgeted: 0, voucherPaid: 0, count: 0 };
+    prev.budgeted += Number(row.amount) || 0;
+    prev.count += 1;
+    byCategory.set(cat, prev);
+  }
+  for (const v of confirmedVouchers) {
+    const row = v as Record<string, unknown>;
+    const linked = expenseRows.find((e) => (e as Record<string, unknown>).id === row.expense_id) as Record<string, unknown> | undefined;
+    const cat = String(linked?.category || "Payments (unlinked)");
+    const prev = byCategory.get(cat) ?? { budgeted: 0, voucherPaid: 0, count: 0 };
+    prev.voucherPaid += Number(row.amount) || 0;
+    byCategory.set(cat, prev);
+  }
+
+  return c.json({
+    event: { id: event.id, title: event.title, startDate: event.start_date, endDate: event.end_date, venue: event.venue },
+    expenses: expenseRows,
+    vouchers: voucherRows,
+    summary: {
+      expenseLineCount: expenseRows.length,
+      expenseLedgerTotal: expenseTotal,
+      voucherCount: voucherRows.length,
+      confirmedVoucherCount: confirmedVouchers.length,
+      voucherPaidTotal,
+      receiptsOnFile: voucherRows.filter((r) => Number((r as Record<string, unknown>).has_receipt) === 1).length,
+      byCategory: [...byCategory.entries()].map(([category, v]) => ({ category, ...v })),
+    },
+    generatedAt: new Date().toISOString(),
+  });
+});
+
+app.get("/api/payment-vouchers/:id/receipt", requireRole(["admin", "staff"]), async (c) => {
+  const id = c.req.param("id");
+  const row = await c.env.DB.prepare(
+    "SELECT supplier_receipt_data_url, supplier_receipt_number, receipt_uploaded_at, voucher_number FROM supplier_payment_vouchers WHERE id = ?"
+  )
+    .bind(id)
+    .first<Record<string, unknown>>();
+  if (!row) throw new HTTPException(404, { message: "Voucher not found." });
+  return c.json({
+    receiptDataUrl: row.supplier_receipt_data_url ?? null,
+    supplierReceiptNumber: row.supplier_receipt_number ?? null,
+    receiptUploadedAt: row.receipt_uploaded_at ?? null,
+    voucherNumber: row.voucher_number ?? null,
+  });
 });
 
 app.get("/api/payment-vouchers/:id/signature", requireRole(["admin", "staff"]), async (c) => {
@@ -1597,6 +2038,143 @@ app.get("/api/payment-vouchers/:id/signature", requireRole(["admin", "staff"]), 
     supplierName: row.supplier_name ?? null,
     amount: row.amount ?? null,
     status: row.status,
+  });
+});
+
+app.get("/api/events/:eventId/feedback/me", requireRole(["admin", "staff", "attendee"]), async (c) => {
+  const eventId = c.req.param("eventId");
+  const email = String(c.get("authUser")?.email || "").trim().toLowerCase();
+  if (!email) throw new HTTPException(400, { message: "Signed-in email is required." });
+  const event = await c.env.DB.prepare("SELECT id FROM events WHERE id = ?").bind(eventId).first();
+  if (!event) throw new HTTPException(404, { message: "Event not found." });
+  const row = await c.env.DB.prepare("SELECT * FROM event_feedback WHERE event_id = ? AND respondent_email = ?")
+    .bind(eventId, email)
+    .first<Record<string, unknown>>();
+  return c.json({ schema: feedbackSchemaPayload(), item: mapFeedbackRow(row) });
+});
+
+app.put("/api/events/:eventId/feedback/me", requireRole(["admin", "staff", "attendee"]), async (c) => {
+  const eventId = c.req.param("eventId");
+  const email = String(c.get("authUser")?.email || "").trim().toLowerCase();
+  if (!email) throw new HTTPException(400, { message: "Signed-in email is required." });
+  const event = await c.env.DB.prepare("SELECT id FROM events WHERE id = ?").bind(eventId).first();
+  if (!event) throw new HTTPException(404, { message: "Event not found." });
+  const body = (await c.req.json()) as Record<string, unknown>;
+  const scores = parseFeedbackScores(body);
+  const highlights = String(body.highlights ?? "").trim().slice(0, 4000);
+  const suggestions = String(body.suggestions ?? "").trim().slice(0, 8000);
+  const profile = body.profile && typeof body.profile === "object" ? (body.profile as Record<string, unknown>) : {};
+  const seededRegistrationId = String(body.seededRegistrationId ?? "").trim();
+  const seededDelegateName = String(body.seededDelegateName ?? "").trim();
+  const rowsRes = await c.env.DB.prepare("SELECT * FROM registrations WHERE event_id = ? ORDER BY created_at ASC").bind(eventId).all<any>();
+  const candidate = findSyncCandidate((rowsRes.results || []) as any[], email, { seededRegistrationId, seededDelegateName, profile });
+  const registrationId = candidate?.id ? String(candidate.id) : null;
+
+  const existing = await c.env.DB.prepare("SELECT id FROM event_feedback WHERE event_id = ? AND respondent_email = ?")
+    .bind(eventId, email)
+    .first<{ id: string }>();
+  const now = new Date().toISOString();
+  const scoresJson = JSON.stringify(scores);
+  if (existing?.id) {
+    await c.env.DB
+      .prepare(
+        `UPDATE event_feedback SET
+          scores_json = ?,
+          highlights = ?,
+          suggestions = ?,
+          registration_id = COALESCE(?, registration_id),
+          updated_at = ?
+        WHERE id = ?`
+      )
+      .bind(scoresJson, highlights || null, suggestions || null, registrationId, now, existing.id)
+      .run();
+    const row = await c.env.DB.prepare("SELECT * FROM event_feedback WHERE id = ?").bind(existing.id).first<Record<string, unknown>>();
+    return c.json({ ok: true, item: mapFeedbackRow(row) });
+  }
+  const id = crypto.randomUUID();
+  await c.env.DB
+    .prepare(
+      `INSERT INTO event_feedback (id, event_id, registration_id, respondent_email, scores_json, highlights, suggestions, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+    .bind(id, eventId, registrationId, email, scoresJson, highlights || null, suggestions || null, now, now)
+    .run();
+  const row = await c.env.DB.prepare("SELECT * FROM event_feedback WHERE id = ?").bind(id).first<Record<string, unknown>>();
+  return c.json({ ok: true, item: mapFeedbackRow(row) }, 201);
+});
+
+app.get("/api/events/:eventId/feedback/analytics", requireRole(["admin", "staff"]), async (c) => {
+  const eventId = c.req.param("eventId");
+  const event = await c.env.DB.prepare("SELECT id, title, start_date, end_date FROM events WHERE id = ?").bind(eventId).first<Record<string, unknown>>();
+  if (!event) throw new HTTPException(404, { message: "Event not found." });
+  const res = await c.env.DB
+    .prepare(
+      "SELECT id, scores_json, highlights, suggestions, created_at, updated_at FROM event_feedback WHERE event_id = ? ORDER BY updated_at DESC"
+    )
+    .bind(eventId)
+    .all<Record<string, unknown>>();
+  const rows = (res.results || []) as Record<string, unknown>[];
+  const responseCount = rows.length;
+
+  const distributions: Record<string, Record<number, number>> = {};
+  for (const def of EVENT_FEEDBACK_SCHEMA) {
+    distributions[def.key] = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  }
+
+  const parsedRows: { scores: Record<string, number>; suggestions: string; highlights: string }[] = [];
+  let overallSum = 0;
+  let overallN = 0;
+
+  for (const r of rows) {
+    const scores = parseMetadataJson(r.scores_json) as Record<string, number>;
+    parsedRows.push({
+      scores,
+      suggestions: String(r.suggestions || ""),
+      highlights: String(r.highlights || ""),
+    });
+    for (const def of EVENT_FEEDBACK_SCHEMA) {
+      const v = Math.round(Number(scores[def.key]));
+      if (v >= 1 && v <= 5) {
+        distributions[def.key][v] += 1;
+        if (def.key === "overall_experience") {
+          overallSum += v;
+          overallN += 1;
+        }
+      }
+    }
+  }
+
+  const averages = EVENT_FEEDBACK_SCHEMA.map((def) => {
+    let sum = 0;
+    let n = 0;
+    for (let star = 1; star <= 5; star++) {
+      const c = distributions[def.key][star] || 0;
+      sum += star * c;
+      n += c;
+    }
+    return { key: def.key, label: def.label, step: def.step, average: n ? Math.round((sum / n) * 100) / 100 : 0, count: n };
+  });
+
+  const overallAverage = overallN ? Math.round((overallSum / overallN) * 100) / 100 : 0;
+
+  const recentSuggestions = rows
+    .map((r) => String(r.suggestions || "").trim())
+    .filter((t) => t.length > 0)
+    .slice(0, 40)
+    .map((t) => (t.length > 360 ? `${t.slice(0, 357)}…` : t));
+
+  const suggestionInsights = buildFeedbackSuggestionInsights(responseCount, parsedRows);
+
+  return c.json({
+    event: { id: event.id, title: event.title, startDate: event.start_date, endDate: event.end_date },
+    schema: feedbackSchemaPayload(),
+    responseCount,
+    overallAverage,
+    averages,
+    distributions,
+    recentSuggestions,
+    suggestionInsights,
+    generatedAt: new Date().toISOString(),
   });
 });
 

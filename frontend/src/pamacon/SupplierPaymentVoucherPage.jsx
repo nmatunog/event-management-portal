@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { CheckCircle2, FileText, Loader2 } from "lucide-react";
 import PaidStamp, { formatPaidStampDate } from "../components/PaidStamp";
+import ReceiptUpload from "../components/ReceiptUpload";
 import SignaturePad from "../components/SignaturePad";
 import { confirmPublicPaymentVoucher, getPublicPaymentVoucher } from "../lib/api";
 import { reencodeImageDataUrlAsJpeg } from "../lib/imageCompress";
@@ -30,6 +31,8 @@ export default function SupplierPaymentVoucherPage() {
   const [signatureMethod, setSignatureMethod] = useState("draw");
   const [useTypedSignature, setUseTypedSignature] = useState(false);
   const [dateReceived, setDateReceived] = useState(todayIsoDate);
+  const [supplierReceiptNumber, setSupplierReceiptNumber] = useState("");
+  const [receiptDataUrl, setReceiptDataUrl] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -87,6 +90,8 @@ export default function SupplierPaymentVoucherPage() {
         signatureMethod: useTypedSignature ? "typed" : signatureMethod,
         signatureDataUrl: useTypedSignature ? undefined : payloadSignature,
         dateReceived: String(dateReceived).trim(),
+        supplierReceiptNumber: String(supplierReceiptNumber).trim() || undefined,
+        receiptDataUrl: receiptDataUrl || undefined,
       });
       setVoucher(res.voucher);
       setDone(true);
@@ -141,7 +146,11 @@ export default function SupplierPaymentVoucherPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm sm:pr-36">
             <div>
               <p className="text-[10px] font-black uppercase text-slate-400">Voucher no.</p>
-              <p className="font-bold text-slate-800">{voucher?.voucherNumber || "—"}</p>
+              <p className="font-mono font-bold text-slate-800">{voucher?.voucherNumber || "—"}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-black uppercase text-slate-400">Payment reference</p>
+              <p className="font-mono font-bold text-slate-800">{voucher?.paymentReference || voucher?.voucherNumber || "—"}</p>
             </div>
             <div>
               <p className="text-[10px] font-black uppercase text-slate-400">Supplier</p>
@@ -263,6 +272,18 @@ export default function SupplierPaymentVoucherPage() {
                 placeholder="Invoice number, bank account, or other reference"
               />
             </label>
+
+            <label className="space-y-2 block max-w-xs">
+              <span className="block text-[10px] font-black uppercase text-slate-400">Official receipt / OR number (optional)</span>
+              <input
+                className="w-full rounded-2xl border-2 border-slate-100 bg-slate-50 p-3.5 text-sm font-semibold"
+                value={supplierReceiptNumber}
+                onChange={(e) => setSupplierReceiptNumber(e.target.value)}
+                placeholder="e.g. OR-12345"
+              />
+            </label>
+
+            <ReceiptUpload value={receiptDataUrl} onChange={setReceiptDataUrl} label="Upload official receipt image (optional)" />
 
             <label className="flex items-center gap-3 cursor-pointer">
               <input

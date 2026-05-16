@@ -3,6 +3,7 @@ import { Check, Copy, Edit3, Eye, FileSignature, Link2, Plus, Trash2, XCircle } 
 import {
   createPaymentVoucher,
   deletePaymentVoucher,
+  getPaymentVoucherReceipt,
   getPaymentVoucherSignature,
   getPaymentVouchers,
   supplierVoucherPublicUrl,
@@ -37,6 +38,7 @@ export default function PaymentVouchersHub({ eventId, suppliers, canEdit, isAdmi
   const [copiedId, setCopiedId] = useState("");
   const [viewVoucher, setViewVoucher] = useState(null);
   const [viewSignature, setViewSignature] = useState(null);
+  const [viewReceipt, setViewReceipt] = useState(null);
   const [editVoucher, setEditVoucher] = useState(null);
   const [draft, setDraft] = useState({
     expenseId: "",
@@ -111,7 +113,7 @@ export default function PaymentVouchersHub({ eventId, suppliers, canEdit, isAdmi
       const url = supplierVoucherPublicUrl(res.item?.token);
       try {
         await navigator.clipboard.writeText(url);
-        onInfo?.(`Voucher ${res.item?.voucher_number} created. Link copied.`);
+        onInfo?.(`Voucher ${res.item?.voucher_number} (ref ${res.item?.payment_reference}) created. Link copied.`);
       } catch {
         onInfo?.(`Voucher ${res.item?.voucher_number} created.`);
       }
@@ -144,13 +146,18 @@ export default function PaymentVouchersHub({ eventId, suppliers, canEdit, isAdmi
   const openView = async (v) => {
     setViewVoucher(v);
     setViewSignature(null);
-    if (v.status === "confirmed" || v.has_signature) {
-      try {
+    setViewReceipt(null);
+    try {
+      if (v.status === "confirmed" || v.has_signature) {
         const sig = await getPaymentVoucherSignature(v.id);
         setViewSignature(sig);
-      } catch (e) {
-        onError?.(e, "Failed to load stored acknowledgment.");
       }
+      if (v.has_receipt) {
+        const rec = await getPaymentVoucherReceipt(v.id);
+        setViewReceipt(rec);
+      }
+    } catch (e) {
+      onError?.(e, "Failed to load stored acknowledgment.");
     }
   };
 
@@ -259,10 +266,11 @@ export default function PaymentVouchersHub({ eventId, suppliers, canEdit, isAdmi
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-slate-50 text-left">
-                <th className="p-4 text-[10px] font-black uppercase text-slate-400">Voucher</th>
+                <th className="p-4 text-[10px] font-black uppercase text-slate-400">Voucher / ref</th>
                 <th className="p-4 text-[10px] font-black uppercase text-slate-400">Supplier</th>
                 <th className="p-4 text-[10px] font-black uppercase text-slate-400">Amount</th>
                 <th className="p-4 text-[10px] font-black uppercase text-slate-400">Date paid</th>
+                <th className="p-4 text-[10px] font-black uppercase text-slate-400">Receipt</th>
                 <th className="p-4 text-[10px] font-black uppercase text-slate-400">Status</th>
                 <th className="p-4 text-[10px] font-black uppercase text-slate-400">Actions</th>
               </tr>
@@ -270,19 +278,23 @@ export default function PaymentVouchersHub({ eventId, suppliers, canEdit, isAdmi
             <tbody>
               {vouchers.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="p-8 text-center text-slate-500">
+                  <td colSpan={7} className="p-8 text-center text-slate-500">
                     No payment vouchers yet. Create one to send a confirmation link to a supplier.
                   </td>
                 </tr>
               ) : (
                 vouchers.map((v) => (
                   <tr key={v.id} className="border-b last:border-0 hover:bg-slate-50/80">
-                    <td className="p-4 font-mono text-xs font-bold text-slate-700">{v.voucher_number}</td>
+                    <td className="p-4 font-mono text-xs font-bold text-slate-700">
+                      <div>{v.voucher_number}</div>
+                      <div className="text-[10px] text-slate-500 font-normal">{v.payment_reference}</div>
+                    </td>
                     <td className="p-4 font-semibold text-slate-800">{v.supplier_name}</td>
                     <td className="p-4 font-black">₱{(Number(v.amount) || 0).toLocaleString()}</td>
                     <td className="p-4 text-slate-600 font-semibold text-xs">
                       {v.date_received ? formatPaidStampDate(v.date_received) : "—"}
                     </td>
+                    <td className="p-4 text-xs">{v.has_receipt ? "Yes" : "—"}</td>
                     <td className="p-4">
                       <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-md ${STATUS_STYLES[v.status] || STATUS_STYLES.sent}`}>
                         {v.status}
@@ -349,9 +361,11 @@ export default function PaymentVouchersHub({ eventId, suppliers, canEdit, isAdmi
       <VoucherDetailDialog
         voucher={viewVoucher}
         signature={viewSignature}
+        receipt={viewReceipt}
         onClose={() => {
           setViewVoucher(null);
           setViewSignature(null);
+          setViewReceipt(null);
         }}
       />
       <VoucherEditDialog

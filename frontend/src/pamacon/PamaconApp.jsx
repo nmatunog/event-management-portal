@@ -37,10 +37,14 @@ import {
   UserCheck,
   Download,
   FileSignature,
+  CheckCircle2,
+  MessageSquare,
 } from "lucide-react";
 import ParticipantPortal from "./ParticipantPortal";
 import PaymentVouchersHub from "./PaymentVouchersHub";
 import SupplierVouchersPanel from "./SupplierVouchersPanel";
+import EventExpenseReport from "./EventExpenseReport";
+import EventFeedbackHub from "./EventFeedbackHub";
 import {
   createEvent,
   createExpense,
@@ -52,6 +56,7 @@ import {
   patchExpense,
   deleteSpeaker,
   deleteSponsor,
+  patchSponsor,
   getEvents,
   getExpenses,
   getRegistrations,
@@ -308,6 +313,7 @@ function AdminHomeOverview({
   const delegatesToGo = Math.max(0, breakEvenDelegates - (Number(regCount) || 0));
 
   const shortcuts = [
+    { id: "feedback", title: "Attendee feedback", desc: "Ratings & improvement themes", icon: MessageSquare, group: "Insights" },
     { id: "registration", title: "Delegates", desc: "Payments & roles", icon: Users, group: "People" },
     { id: "accommodation", title: "Rooming", desc: "Pairs & solo rooms", icon: Hotel, group: "People" },
     { id: "sponsorship", title: "Sponsorship", desc: "Partners & tiers", icon: Handshake, group: "Partners" },
@@ -419,12 +425,16 @@ const SECTION_COPY = {
   expenses: { title: "Budget vs actual", subtitle: "Expense lines against limits" },
   setup: { title: "Event setup", subtitle: "Targets, rates, and projections" },
   profile: { title: "View profile", subtitle: "Personal account information" },
+  feedback: { title: "Attendee feedback", subtitle: "Ratings, themes, and improvement ideas" },
 };
 
 const NAV_GROUPS = [
   {
     label: "Start here",
-    items: [{ id: "dashboard", label: "Overview", icon: Layout }],
+    items: [
+      { id: "dashboard", label: "Overview", icon: Layout },
+      { id: "feedback", label: "Attendee feedback", icon: MessageSquare },
+    ],
   },
   {
     label: "People & rooms",
@@ -1215,11 +1225,15 @@ export default function PamaconApp({
       <ParticipantPortal
         config={config}
         eventRow={eventRecord}
+        eventId={eventRecord?.id}
+        attendeeSyncHints={attendeeSyncHints}
         authEmail={authEmail}
         profile={profile}
         onSaveProfile={onSaveProfile}
         profileSaving={profileSaving}
         onLogout={onLogout}
+        onApiInfo={onApiInfo}
+        onApiError={onApiError}
       />
     );
   }
@@ -1247,11 +1261,15 @@ export default function PamaconApp({
           <ParticipantPortal
             config={config}
             eventRow={eventRecord}
+            eventId={eventRecord?.id}
+            attendeeSyncHints={attendeeSyncHints}
             authEmail={authEmail}
             profile={profile}
             onSaveProfile={onSaveProfile}
             profileSaving={profileSaving}
             onLogout={onLogout}
+            onApiInfo={onApiInfo}
+            onApiError={onApiError}
           />
         </div>
       </div>
@@ -1389,6 +1407,9 @@ export default function PamaconApp({
                 onNavigate={setActiveTab}
               />
             )}
+            {activeTab === "feedback" && (
+              <EventFeedbackHub eventId={eventId} eventTitle={eventRecord?.title} onError={onApiError} />
+            )}
             {activeTab === "registration" && (
               <RegistrantsLedger
                 eventId={eventId}
@@ -1437,6 +1458,7 @@ export default function PamaconApp({
                 canEdit={canEdit}
                 onReload={reloadAll}
                 onError={onApiError}
+                onInfo={onApiInfo}
               />
             )}
             {activeTab === "speakers" && (
@@ -1477,6 +1499,7 @@ export default function PamaconApp({
             {activeTab === "expenses" && (
               <div className="space-y-8">
                 <ExpenseDashboard config={config} suppliers={suppliers} />
+                <EventExpenseReport eventId={eventId} onError={onApiError} />
                 <SupplierVouchersPanel
                   eventId={eventId}
                   suppliers={suppliers}
@@ -3638,9 +3661,12 @@ function AccommodationView({ config, registrants, onPair, onToggleSolo, canEdit 
   );
 }
 
-function SponsorshipHub({ sponsors, totalRevenue, eventId, canEdit, onReload, onError }) {
+function SponsorshipHub({ sponsors, totalRevenue, eventId, canEdit, onReload, onError, onInfo }) {
   const [newS, setNewS] = useState({ company: "", tier: "Gold", amount: 0, remarks: "Uncollected" });
   const [isAdding, setIsAdding] = useState(false);
+  const [updatingId, setUpdatingId] = useState("");
+
+  const isCollected = (s) => Boolean(s.paid) || String(s.remarks || "").trim().toLowerCase() === "collected";
 
   const saveNew = async () => {
     if (!newS.company || !eventId) return;
@@ -3666,6 +3692,19 @@ function SponsorshipHub({ sponsors, totalRevenue, eventId, canEdit, onReload, on
       await onReload();
     } catch (e) {
       onError?.(e, "Failed to delete sponsor.");
+    }
+  };
+
+  const setCollectionStatus = async (sponsor, collected) => {
+    setUpdatingId(sponsor.id);
+    try {
+      await patchSponsor(sponsor.id, { status: collected ? "collected" : "uncollected" });
+      await onReload();
+      onInfo?.(collected ? `${sponsor.company} marked as collected.` : `${sponsor.company} marked as uncollected.`);
+    } catch (e) {
+      onError?.(e, "Failed to update sponsor status.");
+    } finally {
+      setUpdatingId("");
     }
   };
 
@@ -3743,16 +3782,40 @@ function SponsorshipHub({ sponsors, totalRevenue, eventId, canEdit, onReload, on
               <span className="text-[9px] font-black uppercase px-2 py-0.5 bg-red-50 text-red-600 rounded border border-red-100">{s.tier}</span>
               <span
                 className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border ${
-                  s.remarks === "Collected" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
+                  isCollected(s) ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-amber-50 text-amber-700 border-amber-100"
                 }`}
               >
-                {s.remarks}
+                {isCollected(s) ? "Collected" : "Uncollected"}
               </span>
             </div>
             <div className="pt-6 mt-6 border-t border-slate-50 flex justify-between items-center">
               <span className="text-[10px] font-black text-slate-400">Total Contribution</span>
               <span className="text-2xl font-black">₱{(Number(s.amount) || 0).toLocaleString()}</span>
             </div>
+            {canEdit ? (
+              <div className="mt-4 pt-4 border-t border-slate-50">
+                {isCollected(s) ? (
+                  <button
+                    type="button"
+                    disabled={updatingId === s.id}
+                    onClick={() => void setCollectionStatus(s, false)}
+                    className="w-full rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-[10px] font-black uppercase text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+                  >
+                    Mark uncollected
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={updatingId === s.id}
+                    onClick={() => void setCollectionStatus(s, true)}
+                    className="w-full inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-2.5 text-[10px] font-black uppercase text-white hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    <CheckCircle2 size={14} aria-hidden />
+                    {updatingId === s.id ? "Updating…" : "Mark collected"}
+                  </button>
+                )}
+              </div>
+            ) : null}
           </div>
         ))}
       </div>
