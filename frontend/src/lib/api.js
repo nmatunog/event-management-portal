@@ -370,6 +370,22 @@ export function putMyEventFeedback(eventId, payload) {
   });
 }
 
+/** Public evaluation — no sign-in; match by first + last name. */
+export function getPublicEventFeedback(eventId, { firstName = "", lastName = "" } = {}) {
+  const qs = new URLSearchParams();
+  if (firstName) qs.set("firstName", firstName);
+  if (lastName) qs.set("lastName", lastName);
+  const q = qs.toString();
+  return request(`/api/events/${eventId}/feedback/public${q ? `?${q}` : ""}`);
+}
+
+export function submitPublicEventFeedback(eventId, payload) {
+  return request(`/api/events/${eventId}/feedback/public`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function getEventFeedbackAnalytics(eventId) {
   return request(`/api/events/${eventId}/feedback/analytics`);
 }

@@ -72,12 +72,19 @@ export default function AttendeeEvaluationPage({
               >
                 Admin portal
               </Link>
-            ) : (
+            ) : authEmail ? (
               <Link
                 to="/portal"
                 className="inline-flex items-center justify-center min-h-[44px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
               >
                 Attendee hub
+              </Link>
+            ) : (
+              <Link
+                to="/sign-in?next=%2Fevaluation"
+                className="inline-flex items-center justify-center min-h-[44px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Sign in
               </Link>
             )}
             {typeof onLogout === "function" ? (
@@ -103,7 +110,7 @@ export default function AttendeeEvaluationPage({
             <div className="min-w-0">
               <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Conference evaluation</h1>
               <p className="mt-2 text-sm text-slate-600 leading-relaxed">
-                Share your feedback on sessions, meals, hotel, and the overall experience. Sign in is required so we can link one response per delegate.
+                Share your feedback on sessions, meals, hotel, and the overall experience. No account needed — enter your first and family name as registered for PAMACON.
                 {authEmail ? (
                   <>
                     {" "}

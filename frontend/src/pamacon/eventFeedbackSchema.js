@@ -119,7 +119,8 @@ export function defaultRatingScores() {
 
 export function defaultResponses() {
   return {
-    displayName: "",
+    firstName: "",
+    lastName: "",
     agency: "",
     speakerImpact: "",
     biggestTakeaway: "",
@@ -127,12 +128,14 @@ export function defaultResponses() {
   };
 }
 
+export function formatGreetingName(firstName, lastName) {
+  return [String(firstName || "").trim(), String(lastName || "").trim()].filter(Boolean).join(" ");
+}
+
 export function formatDisplayName(profile) {
   const last = String(profile?.lastName || "").trim();
   const first = String(profile?.firstName || "").trim();
-  if (last && first) return `${first} ${last}`;
-  if (last || first) return [first, last].filter(Boolean).join(" ");
-  return "";
+  return formatGreetingName(first, last);
 }
 
 export function ratingsForStep(schemaRatings, stepNum) {

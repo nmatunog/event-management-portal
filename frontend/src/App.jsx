@@ -386,7 +386,7 @@ export default function App() {
     }
   };
 
-  const evaluationShell = session ? (
+  const evaluationShell = (
     <div className="relative min-h-screen">
       {apiBanner && (
         <button
@@ -406,17 +406,17 @@ export default function App() {
       )}
       <div className={apiBanner ? "pt-12" : ""}>
         <AttendeeEvaluationPage
-          authEmail={authUser?.email ?? session.user?.email ?? ""}
-          profile={profile}
-          attendeeSyncHints={attendeeSyncHints}
-          canManage={canManage}
-          onLogout={handleLogout}
+          authEmail={session ? authUser?.email ?? session.user?.email ?? "" : ""}
+          profile={session ? profile : {}}
+          attendeeSyncHints={session ? attendeeSyncHints : {}}
+          canManage={session ? canManage : false}
+          onLogout={session ? handleLogout : undefined}
           onApiInfo={showApiInfo}
           onApiError={showApiError}
         />
       </div>
     </div>
-  ) : null;
+  );
 
   const checkInShell = session ? (
     <div className="relative min-h-screen">
@@ -509,10 +509,7 @@ export default function App() {
       />
       <Route path="/supplier-voucher/:token" element={<SupplierPaymentVoucherPage />} />
       <Route path="/portal" element={session ? portalShell : <Navigate to="/sign-in?next=%2Fportal" replace />} />
-      <Route
-        path="/evaluation"
-        element={session ? evaluationShell : <Navigate to="/sign-in?next=%2Fevaluation" replace />}
-      />
+      <Route path="/evaluation" element={evaluationShell} />
       <Route
         path="/check-in"
         element={session ? checkInShell : <Navigate to="/sign-in?next=%2Fcheck-in" replace />}

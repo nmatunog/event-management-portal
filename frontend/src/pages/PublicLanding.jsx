@@ -276,7 +276,7 @@ export default function PublicLanding() {
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Post-event</p>
             <h2 className="mt-1 font-extrabold text-zinc-900 text-sm uppercase tracking-wide">Evaluation survey</h2>
             <p className="mt-2 text-zinc-600 text-sm font-medium leading-relaxed">
-              Share feedback on sessions, meals, and the hotel. Sign in when you open the link.
+              Share feedback on sessions, meals, and the hotel. Enter your name — no account required.
             </p>
             <Link to="/evaluation" className="mt-2 inline-flex items-center text-xs font-bold text-amber-800 hover:text-amber-900 hover:underline">
               Open evaluation survey

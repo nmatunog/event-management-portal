@@ -101,7 +101,7 @@ function OverviewTab({ data }) {
             <h4 className="text-2xl sm:text-3xl font-black uppercase tracking-tight">Convention metrics</h4>
             <p className="text-white/50 text-xs font-bold uppercase tracking-widest mt-2">Delegate evaluation survey</p>
             <p className="text-sm text-white/70 mt-3 max-w-md">
-              Data from <span className="font-mono text-white/90">{data.evaluationSurveyUrl || "/evaluation"}</span> — one response per signed-in delegate.
+              Data from <span className="font-mono text-white/90">{data.evaluationSurveyUrl || "/evaluation"}</span> — matched delegates and guest submissions by name.
             </p>
           </div>
           <div className="flex flex-wrap justify-center gap-3">

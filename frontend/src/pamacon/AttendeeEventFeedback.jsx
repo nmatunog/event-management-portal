@@ -16,12 +16,13 @@ import {
   Users2,
   UtensilsCrossed,
 } from "lucide-react";
-import { getMyEventFeedback, putMyEventFeedback } from "../lib/api";
+import { getMyEventFeedback, getPublicEventFeedback, putMyEventFeedback, submitPublicEventFeedback } from "../lib/api";
 import {
   FEEDBACK_RATING_SECTIONS,
   defaultRatingScores,
   defaultResponses,
   formatDisplayName,
+  formatGreetingName,
   ratingsForStep,
 } from "./eventFeedbackSchema";
 
@@ -167,48 +168,67 @@ export default function AttendeeEventFeedback({
   const [textExtras, setTextExtras] = useState({ likedMost: "", suggestions: "" });
   const [submitted, setSubmitted] = useState(false);
   const [formClosed, setFormClosed] = useState(false);
+  const [matchInfo, setMatchInfo] = useState(null);
+  const [lookupBusy, setLookupBusy] = useState(false);
 
+  const isLoggedIn = Boolean(String(authEmail || "").trim());
+  const greetingName = formatGreetingName(responses.firstName, responses.lastName);
   const maxStep = 5;
+
+  const applyFeedbackItem = useCallback((data, emptyScores) => {
+    if (!data?.item?.scores) return false;
+    setScores({ ...emptyScores, ...data.item.scores });
+    const r = data.item.responses || {};
+    setResponses((prev) => ({
+      ...prev,
+      firstName: r.firstName || prev.firstName,
+      lastName: r.lastName || prev.lastName,
+      agency: r.agency || prev.agency,
+      speakerImpact: r.speakerImpact || "",
+      biggestTakeaway: r.biggestTakeaway || "",
+      testimonial: r.testimonial || "",
+    }));
+    setTextExtras({
+      likedMost: data.item.likedMost || data.item.highlights || "",
+      suggestions: data.item.suggestions || "",
+    });
+    if (data.match) setMatchInfo(data.match);
+    setSubmitted(true);
+    return true;
+  }, []);
 
   const load = useCallback(async () => {
     if (!eventId) return;
     setLoading(true);
     try {
-      const data = await getMyEventFeedback(eventId);
+      const data = isLoggedIn ? await getMyEventFeedback(eventId) : await getPublicEventFeedback(eventId);
       const sch = data.schema || null;
       setSchema(sch);
       const ratingKeys = (sch?.ratings || []).map((r) => r.key);
       const emptyScores = ratingKeys.length ? Object.fromEntries(ratingKeys.map((k) => [k, 0])) : defaultRatingScores();
 
-      if (data.item?.scores) {
-        setScores({ ...emptyScores, ...data.item.scores });
-        const r = data.item.responses || {};
-        setResponses({
-          displayName: r.displayName || formatDisplayName(profile) || "",
-          agency: r.agency || "",
-          speakerImpact: r.speakerImpact || "",
-          biggestTakeaway: r.biggestTakeaway || "",
-          testimonial: r.testimonial || "",
-        });
-        setTextExtras({
-          likedMost: data.item.likedMost || data.item.highlights || "",
-          suggestions: data.item.suggestions || "",
-        });
-        setSubmitted(true);
+      const baseResponses = {
+        ...defaultResponses(),
+        firstName: String(profile?.firstName || "").trim(),
+        lastName: String(profile?.lastName || "").trim(),
+      };
+
+      if (applyFeedbackItem(data, emptyScores)) {
         setFormClosed(true);
       } else {
         setScores(emptyScores);
-        setResponses({ ...defaultResponses(), displayName: formatDisplayName(profile) });
+        setResponses(baseResponses);
         setTextExtras({ likedMost: "", suggestions: "" });
         setSubmitted(false);
         setFormClosed(false);
+        setMatchInfo(null);
       }
     } catch (e) {
       onNotify?.("error", e?.message || "Could not load feedback form.");
     } finally {
       setLoading(false);
     }
-  }, [eventId, onNotify, profile]);
+  }, [eventId, isLoggedIn, onNotify, profile, applyFeedbackItem]);
 
   useEffect(() => {
     void load();
@@ -226,9 +246,42 @@ export default function AttendeeEventFeedback({
   );
 
   const step1Complete = useMemo(
-    () => String(responses.displayName || "").trim() && String(responses.agency || "").trim(),
+    () =>
+      String(responses.firstName || "").trim() &&
+      String(responses.lastName || "").trim() &&
+      String(responses.agency || "").trim(),
     [responses]
   );
+
+  const handleContinueFromStep1 = async () => {
+    if (!step1Complete || !eventId) return;
+    if (isLoggedIn) {
+      setStep(2);
+      return;
+    }
+    setLookupBusy(true);
+    try {
+      const data = await getPublicEventFeedback(eventId, {
+        firstName: responses.firstName,
+        lastName: responses.lastName,
+      });
+      setMatchInfo(data.match || null);
+      const agencyPrefill = data.match?.agencyFromRegistration || data.match?.agencyPrefill;
+      if (agencyPrefill && !String(responses.agency || "").trim()) {
+        setResponses((p) => ({ ...p, agency: agencyPrefill }));
+      }
+      const ratingKeys = (schema?.ratings || []).map((r) => r.key);
+      const emptyScores = ratingKeys.length ? Object.fromEntries(ratingKeys.map((k) => [k, 0])) : defaultRatingScores();
+      if (data.item?.scores) {
+        applyFeedbackItem(data, emptyScores);
+      }
+      setStep(2);
+    } catch (e) {
+      onNotify?.("error", e?.message || "Could not verify your name.");
+    } finally {
+      setLookupBusy(false);
+    }
+  };
 
   const step5Complete = useMemo(
     () =>
@@ -250,23 +303,29 @@ export default function AttendeeEventFeedback({
     if (!eventId || !step5Complete) return;
     setSaving(true);
     try {
-      await putMyEventFeedback(eventId, {
+      const payload = {
         scores,
         responses: { ...responses, likedMost: textExtras.likedMost, suggestions: textExtras.suggestions },
         likedMost: textExtras.likedMost,
         highlights: textExtras.likedMost,
         suggestions: textExtras.suggestions,
+        firstName: responses.firstName,
+        lastName: responses.lastName,
         seededRegistrationId: attendeeSyncHints.seededRegistrationId,
         seededDelegateName: attendeeSyncHints.seededDelegateName,
         profile: {
-          firstName: profile.firstName,
-          lastName: profile.lastName,
+          firstName: responses.firstName || profile.firstName,
+          lastName: responses.lastName || profile.lastName,
           nickname: profile.nickname,
         },
-      });
+      };
+      const result = isLoggedIn
+        ? await putMyEventFeedback(eventId, payload)
+        : await submitPublicEventFeedback(eventId, payload);
+      if (result?.match) setMatchInfo(result.match);
       setSubmitted(true);
       setFormClosed(true);
-      onNotify?.("ok", "Your feedback has been submitted! Thank you!");
+      onNotify?.("ok", `Your feedback has been submitted! Thank you${greetingName ? `, ${greetingName}` : ""}!`);
     } catch (e) {
       onNotify?.("error", e?.message || "Could not save feedback.");
     } finally {
@@ -296,9 +355,13 @@ export default function AttendeeEventFeedback({
           <CheckCircle2 className="h-8 w-8" aria-hidden />
         </div>
         <h2 id="event-feedback-thanks-heading" className="mt-5 text-xl sm:text-2xl font-bold text-slate-900">
-          Your feedback has been submitted! Thank you!
+          {greetingName ? `Thank you, ${greetingName}!` : "Your feedback has been submitted! Thank you!"}
         </h2>
-        <p className="mt-2 text-sm text-slate-600 max-w-md mx-auto">We appreciate you rating the sessions and sharing your experience.</p>
+        <p className="mt-2 text-sm text-slate-600 max-w-md mx-auto">
+          {matchInfo?.registrationMatched
+            ? "We matched your name to our delegate list and saved your evaluation."
+            : "Your evaluation was saved and included in the conference ratings."}
+        </p>
         <button
           type="button"
           onClick={() => {
@@ -331,8 +394,15 @@ export default function AttendeeEventFeedback({
             {schema.formTitle || "PAMACON Conference Evaluation"}
           </h2>
           <p className="mt-1 text-sm text-slate-600 leading-relaxed">
-            {schema.formIntro}{" "}
-            <span className="font-semibold text-slate-800">{authEmail}</span>
+            {schema.formIntro}
+            {isLoggedIn ? (
+              <>
+                {" "}
+                Signed in as <span className="font-semibold text-slate-800">{authEmail}</span>.
+              </>
+            ) : (
+              <> No account or sign-in required — enter your name as registered for PAMACON.</>
+            )}
           </p>
         </div>
       </div>
@@ -360,32 +430,72 @@ export default function AttendeeEventFeedback({
 
       {step === 1 ? (
         <div className="mt-5 space-y-4">
-          <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm space-y-4">
-            <label htmlFor="fb-name" className="block text-sm font-semibold text-slate-900">
-              Name (First Name Last Name) <span className="text-red-600">*</span>
-            </label>
-            <input
-              id="fb-name"
-              type="text"
-              disabled={saving}
-              value={responses.displayName}
-              onChange={(e) => setResponses((p) => ({ ...p, displayName: e.target.value }))}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-medium"
-              placeholder="e.g. Juan Santos"
-            />
-            <label htmlFor="fb-agency" className="block text-sm font-semibold text-slate-900">
-              Agency <span className="text-red-600">*</span>
-            </label>
-            <input
-              id="fb-agency"
-              type="text"
-              disabled={saving}
-              value={responses.agency}
-              onChange={(e) => setResponses((p) => ({ ...p, agency: e.target.value }))}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-medium"
-            />
+          {greetingName ? (
+            <p className="rounded-xl border border-red-100 bg-red-50/80 px-4 py-3 text-sm text-red-900">
+              Hello, <span className="font-bold">{greetingName}</span> — please confirm your details below.
+            </p>
+          ) : null}
+          <div className="rounded-[28px] border border-slate-100 bg-white p-5 sm:p-6 shadow-sm space-y-4">
+            <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">Delegate identification</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="fb-first" className="block text-sm font-semibold text-slate-900">
+                  First name <span className="text-red-600">*</span>
+                </label>
+                <input
+                  id="fb-first"
+                  type="text"
+                  autoComplete="given-name"
+                  disabled={saving || lookupBusy}
+                  value={responses.firstName}
+                  onChange={(e) => setResponses((p) => ({ ...p, firstName: e.target.value }))}
+                  className="mt-1.5 w-full rounded-xl border-2 border-slate-100 bg-slate-50 px-3 py-3 text-sm font-semibold focus:border-red-400 focus:outline-none"
+                  placeholder="e.g. Juan"
+                />
+              </div>
+              <div>
+                <label htmlFor="fb-last" className="block text-sm font-semibold text-slate-900">
+                  Family name / Last name <span className="text-red-600">*</span>
+                </label>
+                <input
+                  id="fb-last"
+                  type="text"
+                  autoComplete="family-name"
+                  disabled={saving || lookupBusy}
+                  value={responses.lastName}
+                  onChange={(e) => setResponses((p) => ({ ...p, lastName: e.target.value }))}
+                  className="mt-1.5 w-full rounded-xl border-2 border-slate-100 bg-slate-50 px-3 py-3 text-sm font-semibold focus:border-red-400 focus:outline-none"
+                  placeholder="e.g. Santos"
+                />
+              </div>
+            </div>
+            <div>
+              <label htmlFor="fb-agency" className="block text-sm font-semibold text-slate-900">
+                Agency <span className="text-red-600">*</span>
+              </label>
+              <input
+                id="fb-agency"
+                type="text"
+                disabled={saving || lookupBusy}
+                value={responses.agency}
+                onChange={(e) => setResponses((p) => ({ ...p, agency: e.target.value }))}
+                className="mt-1.5 w-full rounded-xl border-2 border-slate-100 bg-slate-50 px-3 py-3 text-sm font-semibold focus:border-red-400 focus:outline-none"
+                placeholder="Your agency name"
+              />
+            </div>
+            {!isLoggedIn ? (
+              <p className="text-xs text-slate-500 leading-relaxed">
+                We will try to match your name to the delegate list. If there is no match, your feedback is still saved and counted.
+              </p>
+            ) : null}
           </div>
         </div>
+      ) : null}
+
+      {step >= 2 && step <= 4 && matchInfo?.registrationMatched ? (
+        <p className="mt-4 text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2">
+          Matched to delegate registration{matchInfo.registrationName ? `: ${matchInfo.registrationName}` : ""}.
+        </p>
       ) : null}
 
       {step >= 2 && step <= 4 ? <RatingStepContent stepNum={step} schema={schema} scores={scores} setScores={setScores} saving={saving} /> : null}
@@ -454,11 +564,11 @@ export default function AttendeeEventFeedback({
         {!isLastStep ? (
           <button
             type="button"
-            disabled={saving || !stepComplete(step)}
-            onClick={() => setStep((s) => Math.min(maxStep, s + 1))}
+            disabled={saving || lookupBusy || !stepComplete(step)}
+            onClick={() => void (step === 1 ? handleContinueFromStep1() : setStep((s) => Math.min(maxStep, s + 1)))}
             className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-red-600 px-5 text-sm font-semibold text-white shadow-md hover:bg-red-700 disabled:opacity-40"
           >
-            Continue
+            {lookupBusy ? "Checking name…" : "Continue"}
             <ChevronRight className="h-4 w-4" aria-hidden />
           </button>
         ) : (

@@ -184,7 +184,11 @@ export default function SignInPage({
         <section className="w-full max-w-lg mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
           <p className="text-[11px] font-black uppercase tracking-wide text-red-800">Conference evaluation</p>
           <p className="mt-1 text-sm text-red-950 leading-relaxed">
-            Sign in with your delegate email and password to open the evaluation survey. One response per account.
+            Sign-in is optional. You can{" "}
+            <Link to="/evaluation" className="font-semibold underline hover:text-red-800">
+              open the evaluation survey without an account
+            </Link>{" "}
+            by entering your first and family name.
           </p>
         </section>
       ) : null}

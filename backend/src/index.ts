@@ -228,6 +228,31 @@ function applyClaimFlags(meta: Record<string, unknown>, body: Record<string, unk
   if (body.tshirtClaimed !== undefined) meta.tshirtClaimed = Boolean(body.tshirtClaimed);
 }
 
+function findRegistrationByName(rows: any[], firstName: string, lastName: string) {
+  const profile = { firstName, lastName };
+  return findSyncCandidate(rows, "", { profile });
+}
+
+function guestFeedbackRespondentEmail(eventId: string, firstName: string, lastName: string) {
+  const f = normalizeName(firstName);
+  const l = normalizeName(lastName);
+  return `guest:${eventId}:${f}:${l}`;
+}
+
+function resolveFeedbackRespondentEmail(
+  eventId: string,
+  firstName: string,
+  lastName: string,
+  registration: Record<string, unknown> | null | undefined
+) {
+  if (registration) {
+    const meta = parseMetadataJson(registration.metadata_json);
+    const email = String(meta.attendeeClaimEmail ?? meta.email ?? "").trim().toLowerCase();
+    if (email && email.includes("@")) return email;
+  }
+  return guestFeedbackRespondentEmail(eventId, firstName, lastName);
+}
+
 function findSyncCandidate(
   rows: any[],
   email: string,
@@ -334,7 +359,8 @@ function feedbackSchemaPayload(venue?: string | null) {
     ],
     ratings,
     profileFields: [
-      { key: "displayName", label: "Name (First Name Last Name)", step: 1, required: true, maxLength: 200 },
+      { key: "firstName", label: "First name", step: 1, required: true, maxLength: 100 },
+      { key: "lastName", label: "Family name / Last name", step: 1, required: true, maxLength: 100 },
       { key: "agency", label: "Agency", step: 1, required: true, maxLength: 200 },
     ],
     textFields: FEEDBACK_TEXT_FIELD_DEFS.map(({ key, label, step, required, maxLength }) => ({
@@ -373,9 +399,13 @@ function parseFeedbackScores(body: Record<string, unknown>) {
 function parseFeedbackResponses(body: Record<string, unknown>) {
   const raw = body.responses;
   const src = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : body;
-  const displayName = String(src.displayName ?? body.displayName ?? "").trim().slice(0, 200);
+  const firstName = String(src.firstName ?? body.firstName ?? "").trim().slice(0, 100);
+  const lastName = String(src.lastName ?? body.lastName ?? "").trim().slice(0, 100);
+  const displayNameRaw = String(src.displayName ?? body.displayName ?? "").trim();
+  const displayName = (displayNameRaw || [firstName, lastName].filter(Boolean).join(" ")).slice(0, 200);
   const agency = String(src.agency ?? body.agency ?? "").trim().slice(0, 200);
-  if (!displayName) throw new HTTPException(400, { message: "Name is required." });
+  if (!firstName) throw new HTTPException(400, { message: "First name is required." });
+  if (!lastName) throw new HTTPException(400, { message: "Family name / last name is required." });
   if (!agency) throw new HTTPException(400, { message: "Agency is required." });
 
   const speakerImpact = String(src.speakerImpact ?? body.speakerImpact ?? "").trim().slice(0, 4000);
@@ -391,6 +421,8 @@ function parseFeedbackResponses(body: Record<string, unknown>) {
   if (!testimonial) throw new HTTPException(400, { message: "Testimonial is required." });
 
   return {
+    firstName,
+    lastName,
     displayName,
     agency,
     speakerImpact,
@@ -403,8 +435,13 @@ function parseFeedbackResponses(body: Record<string, unknown>) {
 
 function parseStoredFeedbackResponses(row: Record<string, unknown>) {
   const fromJson = parseMetadataJson(row.responses_json);
+  const firstName = String(fromJson.firstName ?? "").trim();
+  const lastName = String(fromJson.lastName ?? "").trim();
+  const displayName = String(fromJson.displayName ?? "").trim() || [firstName, lastName].filter(Boolean).join(" ");
   return {
-    displayName: String(fromJson.displayName ?? ""),
+    firstName,
+    lastName,
+    displayName,
     agency: String(fromJson.agency ?? ""),
     speakerImpact: String(fromJson.speakerImpact ?? ""),
     biggestTakeaway: String(fromJson.biggestTakeaway ?? ""),
@@ -2457,6 +2494,150 @@ app.get("/api/payment-vouchers/:id/signature", requireRole(["admin", "staff"]), 
   });
 });
 
+async function upsertEventFeedbackForDelegate(
+  c: Context<AppContext>,
+  eventId: string,
+  body: Record<string, unknown>,
+  opts: { authEmail?: string | null } = {}
+) {
+  const event = await c.env.DB.prepare("SELECT id, venue FROM events WHERE id = ?").bind(eventId).first<{ id: string; venue?: string }>();
+  if (!event) throw new HTTPException(404, { message: "Event not found." });
+
+  const scores = parseFeedbackScores(body);
+  const parsed = parseFeedbackResponses(body);
+  const rowsRes = await c.env.DB.prepare("SELECT * FROM registrations WHERE event_id = ? ORDER BY created_at ASC").bind(eventId).all<any>();
+  const rows = (rowsRes.results || []) as any[];
+
+  const profile =
+    body.profile && typeof body.profile === "object" ? (body.profile as Record<string, unknown>) : { firstName: parsed.firstName, lastName: parsed.lastName };
+  const seededRegistrationId = String(body.seededRegistrationId ?? "").trim();
+  const seededDelegateName = String(body.seededDelegateName ?? "").trim();
+  const authEmail = String(opts.authEmail ?? "").trim().toLowerCase();
+
+  let registration = findRegistrationByName(rows, parsed.firstName, parsed.lastName);
+  if (!registration && authEmail) {
+    registration = findSyncCandidate(rows, authEmail, { seededRegistrationId, seededDelegateName, profile });
+  }
+
+  const respondentEmail = authEmail || resolveFeedbackRespondentEmail(eventId, parsed.firstName, parsed.lastName, registration);
+  const registrationId = registration?.id ? String(registration.id) : null;
+
+  let agency = parsed.agency;
+  if (registration && !agency) {
+    const meta = parseMetadataJson(registration.metadata_json);
+    agency = String(meta.agency ?? meta.company ?? registration.attendee_type ?? "").trim() || agency;
+  }
+
+  const responsesJson = JSON.stringify({
+    firstName: parsed.firstName,
+    lastName: parsed.lastName,
+    displayName: parsed.displayName,
+    agency,
+    speakerImpact: parsed.speakerImpact,
+    biggestTakeaway: parsed.biggestTakeaway,
+    testimonial: parsed.testimonial,
+    registrationMatched: Boolean(registration),
+  });
+  const highlights = parsed.likedMost;
+  const suggestions = parsed.suggestions;
+  const now = new Date().toISOString();
+  const scoresJson = JSON.stringify(scores);
+
+  const existing = await c.env.DB.prepare("SELECT id FROM event_feedback WHERE event_id = ? AND respondent_email = ?")
+    .bind(eventId, respondentEmail)
+    .first<{ id: string }>();
+
+  if (existing?.id) {
+    await c.env.DB
+      .prepare(
+        `UPDATE event_feedback SET
+          scores_json = ?,
+          responses_json = ?,
+          highlights = ?,
+          suggestions = ?,
+          registration_id = COALESCE(?, registration_id),
+          updated_at = ?
+        WHERE id = ?`
+      )
+      .bind(scoresJson, responsesJson, highlights || null, suggestions || null, registrationId, now, existing.id)
+      .run();
+    const row = await c.env.DB.prepare("SELECT * FROM event_feedback WHERE id = ?").bind(existing.id).first<Record<string, unknown>>();
+    return {
+      item: mapFeedbackRow(row),
+      created: false,
+      match: {
+        registrationMatched: Boolean(registration),
+        greetingName: parsed.displayName,
+        agencyPrefill: agency,
+      },
+    };
+  }
+
+  const id = crypto.randomUUID();
+  await c.env.DB
+    .prepare(
+      `INSERT INTO event_feedback (id, event_id, registration_id, respondent_email, scores_json, responses_json, highlights, suggestions, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+    .bind(id, eventId, registrationId, respondentEmail, scoresJson, responsesJson, highlights || null, suggestions || null, now, now)
+    .run();
+  const row = await c.env.DB.prepare("SELECT * FROM event_feedback WHERE id = ?").bind(id).first<Record<string, unknown>>();
+  return {
+    item: mapFeedbackRow(row),
+    created: true,
+    match: {
+      registrationMatched: Boolean(registration),
+      greetingName: parsed.displayName,
+      agencyPrefill: agency,
+    },
+  };
+}
+
+app.get("/api/events/:eventId/feedback/public", async (c) => {
+  const eventId = c.req.param("eventId");
+  const firstName = String(c.req.query("firstName") ?? "").trim();
+  const lastName = String(c.req.query("lastName") ?? "").trim();
+  const event = await c.env.DB.prepare("SELECT id, title, venue FROM events WHERE id = ?").bind(eventId).first<Record<string, unknown>>();
+  if (!event) throw new HTTPException(404, { message: "Event not found." });
+
+  let item = null;
+  let match: Record<string, unknown> = { registrationMatched: false, greetingName: "" };
+
+  if (firstName && lastName) {
+    const rowsRes = await c.env.DB.prepare("SELECT * FROM registrations WHERE event_id = ? ORDER BY created_at ASC").bind(eventId).all<any>();
+    const registration = findRegistrationByName((rowsRes.results || []) as any[], firstName, lastName);
+    const respondentEmail = resolveFeedbackRespondentEmail(eventId, firstName, lastName, registration);
+    const row = await c.env.DB.prepare("SELECT * FROM event_feedback WHERE event_id = ? AND respondent_email = ?")
+      .bind(eventId, respondentEmail)
+      .first<Record<string, unknown>>();
+    item = mapFeedbackRow(row);
+    const greetingName = [firstName, lastName].filter(Boolean).join(" ");
+    match = {
+      registrationMatched: Boolean(registration),
+      greetingName,
+      registrationName: registration ? String(registration.full_name ?? "") : null,
+    };
+    if (registration) {
+      const meta = parseMetadataJson(registration.metadata_json);
+      match.agencyFromRegistration = String(meta.agency ?? meta.company ?? "").trim() || null;
+    }
+  }
+
+  return c.json({
+    schema: feedbackSchemaPayload(event.venue as string | undefined),
+    event: { id: event.id, title: event.title, venue: event.venue },
+    item,
+    match,
+  });
+});
+
+app.put("/api/events/:eventId/feedback/public", async (c) => {
+  const eventId = c.req.param("eventId");
+  const body = (await c.req.json()) as Record<string, unknown>;
+  const result = await upsertEventFeedbackForDelegate(c, eventId, body, { authEmail: null });
+  return c.json({ ok: true, ...result }, result.created ? 201 : 200);
+});
+
 app.get("/api/events/:eventId/feedback/me", requireRole(["admin", "staff", "attendee"]), async (c) => {
   const eventId = c.req.param("eventId");
   const email = String(c.get("authUser")?.email || "").trim().toLowerCase();
@@ -2473,59 +2654,9 @@ app.put("/api/events/:eventId/feedback/me", requireRole(["admin", "staff", "atte
   const eventId = c.req.param("eventId");
   const email = String(c.get("authUser")?.email || "").trim().toLowerCase();
   if (!email) throw new HTTPException(400, { message: "Signed-in email is required." });
-  const event = await c.env.DB.prepare("SELECT id FROM events WHERE id = ?").bind(eventId).first();
-  if (!event) throw new HTTPException(404, { message: "Event not found." });
   const body = (await c.req.json()) as Record<string, unknown>;
-  const scores = parseFeedbackScores(body);
-  const parsed = parseFeedbackResponses(body);
-  const responsesJson = JSON.stringify({
-    displayName: parsed.displayName,
-    agency: parsed.agency,
-    speakerImpact: parsed.speakerImpact,
-    biggestTakeaway: parsed.biggestTakeaway,
-    testimonial: parsed.testimonial,
-  });
-  const highlights = parsed.likedMost;
-  const suggestions = parsed.suggestions;
-  const profile = body.profile && typeof body.profile === "object" ? (body.profile as Record<string, unknown>) : {};
-  const seededRegistrationId = String(body.seededRegistrationId ?? "").trim();
-  const seededDelegateName = String(body.seededDelegateName ?? "").trim();
-  const rowsRes = await c.env.DB.prepare("SELECT * FROM registrations WHERE event_id = ? ORDER BY created_at ASC").bind(eventId).all<any>();
-  const candidate = findSyncCandidate((rowsRes.results || []) as any[], email, { seededRegistrationId, seededDelegateName, profile });
-  const registrationId = candidate?.id ? String(candidate.id) : null;
-
-  const existing = await c.env.DB.prepare("SELECT id FROM event_feedback WHERE event_id = ? AND respondent_email = ?")
-    .bind(eventId, email)
-    .first<{ id: string }>();
-  const now = new Date().toISOString();
-  const scoresJson = JSON.stringify(scores);
-  if (existing?.id) {
-    await c.env.DB
-      .prepare(
-        `UPDATE event_feedback SET
-          scores_json = ?,
-          responses_json = ?,
-          highlights = ?,
-          suggestions = ?,
-          registration_id = COALESCE(?, registration_id),
-          updated_at = ?
-        WHERE id = ?`
-      )
-      .bind(scoresJson, responsesJson, highlights || null, suggestions || null, registrationId, now, existing.id)
-      .run();
-    const row = await c.env.DB.prepare("SELECT * FROM event_feedback WHERE id = ?").bind(existing.id).first<Record<string, unknown>>();
-    return c.json({ ok: true, item: mapFeedbackRow(row) });
-  }
-  const id = crypto.randomUUID();
-  await c.env.DB
-    .prepare(
-      `INSERT INTO event_feedback (id, event_id, registration_id, respondent_email, scores_json, responses_json, highlights, suggestions, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-    .bind(id, eventId, registrationId, email, scoresJson, responsesJson, highlights || null, suggestions || null, now, now)
-    .run();
-  const row = await c.env.DB.prepare("SELECT * FROM event_feedback WHERE id = ?").bind(id).first<Record<string, unknown>>();
-  return c.json({ ok: true, item: mapFeedbackRow(row) }, 201);
+  const result = await upsertEventFeedbackForDelegate(c, eventId, body, { authEmail: email });
+  return c.json({ ok: true, ...result });
 });
 
 app.get("/api/events/:eventId/feedback/analytics", requireRole(["admin", "staff"]), async (c) => {
