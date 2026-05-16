@@ -257,57 +257,50 @@ function findSyncCandidate(
   );
 }
 
-const EVENT_FEEDBACK_SCHEMA = [
+const COFFEE_SESSION_OPTIONS = [
+  { value: "culture", label: "Building Culture/Engagement — Mgr. Belmar" },
+  { value: "recruitment", label: "Recruitment — Mgr. Henry" },
+  { value: "activation", label: "Activation — Mgr. Maricel" },
+  { value: "mdrt", label: "MDRT Development — Mgr. Iza" },
+  { value: "none", label: "Wasn't able to attend" },
+] as const;
+
+const COFFEE_SESSION_VALUES = new Set<string>(COFFEE_SESSION_OPTIONS.map((o) => o.value));
+
+/** Numeric ratings harmonized with the PAMA Con Google feedback form. */
+const EVENT_FEEDBACK_RATING_SCHEMA = [
+  { key: "coffee_sessions", label: "Coffee sessions", step: 2 },
+  { key: "welcome_dinner", label: "Welcome Dinner", step: 2 },
+  { key: "conference_proper", label: "Conference proper", step: 2 },
+  { key: "fellowship_night", label: "Fellowship Night", step: 2 },
+  { key: "hotel_venue", label: "Hotel & venue", step: 2 },
+] as const;
+
+const LEGACY_FEEDBACK_RATING_LABELS: Record<string, string> = {
+  planning_organization: "Planning & organization (legacy)",
+  marketing_communications: "Marketing & communications (legacy)",
+  registration_fees: "Registration & fees (legacy)",
+  scheduling_program: "Scheduling & program (legacy)",
+  speakers_content: "Speakers & content (legacy)",
+  food_beverage: "Food & beverages (legacy)",
+  staff_service: "Staff & service (legacy)",
+  technology_av: "Technology & A/V (legacy)",
+  overall_experience: "Overall experience (legacy)",
+};
+
+const FEEDBACK_TEXT_FIELD_DEFS = [
+  { key: "speakerImpact", label: "Which speaker impacted you the most and why?", step: 3, required: true, maxLength: 4000 },
+  { key: "biggestTakeaway", label: "What is your biggest takeaway from the conference?", step: 3, required: true, maxLength: 4000 },
+  { key: "likedMost", label: "What did you like the most about the conference this year?", step: 3, required: true, maxLength: 4000, column: "highlights" as const },
   {
-    key: "planning_organization",
-    label: "Planning & organization before the event",
-    step: 1,
-  },
-  {
-    key: "marketing_communications",
-    label: "Marketing & communications (announcements, reminders, channels)",
-    step: 1,
-  },
-  {
-    key: "registration_fees",
-    label: "Registration process & conference fees (clarity, fairness, support)",
-    step: 1,
-  },
-  {
-    key: "scheduling_program",
-    label: "Scheduling & program flow (pacing, breaks, timing)",
-    step: 1,
-  },
-  {
-    key: "speakers_content",
-    label: "Speakers & session content (relevance, depth, delivery)",
-    step: 2,
-  },
-  {
-    key: "food_beverage",
-    label: "Food & beverages (quality, variety, service)",
-    step: 2,
-  },
-  {
-    key: "hotel_venue",
-    label: "Hotel & venue (comfort, signage, suitability)",
-    step: 2,
-  },
-  {
-    key: "staff_service",
-    label: "Staff & volunteer service (helpfulness, professionalism)",
+    key: "suggestions",
+    label: "Do you have any suggestions for us to improve in the next conferences?",
     step: 3,
+    required: true,
+    maxLength: 8000,
+    column: "suggestions" as const,
   },
-  {
-    key: "technology_av",
-    label: "Technology & A/V (sound, screens, digital tools)",
-    step: 3,
-  },
-  {
-    key: "overall_experience",
-    label: "Overall experience for the whole convention",
-    step: 3,
-  },
+  { key: "testimonial", label: "Short testimonial of your experience at the conference", step: 3, required: true, maxLength: 4000 },
 ] as const;
 
 const FEEDBACK_STOPWORDS = new Set(
@@ -316,12 +309,43 @@ const FEEDBACK_STOPWORDS = new Set(
   )
 );
 
-function feedbackSchemaPayload() {
-  return EVENT_FEEDBACK_SCHEMA.map((row) => ({ key: row.key, label: row.label, step: row.step }));
+function feedbackSchemaPayload(venue?: string | null) {
+  const hotelVenue = String(venue || "").trim();
+  const ratings = EVENT_FEEDBACK_RATING_SCHEMA.map((row) => ({
+    key: row.key,
+    label: row.key === "hotel_venue" && hotelVenue ? `Hotel & venue (${hotelVenue})` : row.label,
+    step: row.step,
+  }));
+  return {
+    formTitle: "PAMA Conference Feedback",
+    formIntro:
+      "We'd love to hear about your experience — aligned with our standard delegate survey. Ratings use 1 (dissatisfied) to 5 (highly satisfied).",
+    steps: [
+      { id: 1, label: "About you & coffee sessions" },
+      { id: 2, label: "Conference experiences" },
+      { id: 3, label: "Reflections & testimonial" },
+    ],
+    ratings,
+    coffeeSessions: [...COFFEE_SESSION_OPTIONS],
+    profileFields: [
+      { key: "displayName", label: "Name (Last Name, First Name)", step: 1, required: true, maxLength: 200 },
+      { key: "agency", label: "Agency", step: 1, required: true, maxLength: 200 },
+      { key: "coffeeSession", label: "Which coffee session did you go to?", step: 1, required: true, type: "select" },
+    ],
+    textFields: FEEDBACK_TEXT_FIELD_DEFS.map(({ key, label, step, required, maxLength }) => ({
+      key,
+      label,
+      step,
+      required,
+      maxLength,
+    })),
+  };
 }
 
 function feedbackLabelForKey(key: string) {
-  return EVENT_FEEDBACK_SCHEMA.find((r) => r.key === key)?.label ?? key;
+  const cur = EVENT_FEEDBACK_RATING_SCHEMA.find((r) => r.key === key);
+  if (cur) return cur.label;
+  return LEGACY_FEEDBACK_RATING_LABELS[key] ?? key;
 }
 
 function parseFeedbackScores(body: Record<string, unknown>) {
@@ -331,7 +355,7 @@ function parseFeedbackScores(body: Record<string, unknown>) {
   }
   const src = raw as Record<string, unknown>;
   const out: Record<string, number> = {};
-  for (const row of EVENT_FEEDBACK_SCHEMA) {
+  for (const row of EVENT_FEEDBACK_RATING_SCHEMA) {
     const n = Math.round(Number(src[row.key]));
     if (!Number.isFinite(n) || n < 1 || n > 5) {
       throw new HTTPException(400, { message: `Each rating must be a whole number from 1 to 5 (${row.key}).` });
@@ -339,6 +363,54 @@ function parseFeedbackScores(body: Record<string, unknown>) {
     out[row.key] = n;
   }
   return out;
+}
+
+function parseFeedbackResponses(body: Record<string, unknown>) {
+  const raw = body.responses;
+  const src = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : body;
+  const displayName = String(src.displayName ?? body.displayName ?? "").trim().slice(0, 200);
+  const agency = String(src.agency ?? body.agency ?? "").trim().slice(0, 200);
+  const coffeeSession = String(src.coffeeSession ?? body.coffeeSession ?? "").trim();
+  if (!displayName) throw new HTTPException(400, { message: "Name is required." });
+  if (!agency) throw new HTTPException(400, { message: "Agency is required." });
+  if (!coffeeSession || !COFFEE_SESSION_VALUES.has(coffeeSession)) {
+    throw new HTTPException(400, { message: "Please select which coffee session you attended." });
+  }
+
+  const speakerImpact = String(src.speakerImpact ?? body.speakerImpact ?? "").trim().slice(0, 4000);
+  const biggestTakeaway = String(src.biggestTakeaway ?? body.biggestTakeaway ?? "").trim().slice(0, 4000);
+  const testimonial = String(src.testimonial ?? body.testimonial ?? "").trim().slice(0, 4000);
+  const likedMost = String(src.likedMost ?? body.likedMost ?? body.highlights ?? "").trim().slice(0, 4000);
+  const suggestions = String(src.suggestions ?? body.suggestions ?? "").trim().slice(0, 8000);
+
+  if (!speakerImpact) throw new HTTPException(400, { message: "Speaker impact response is required." });
+  if (!biggestTakeaway) throw new HTTPException(400, { message: "Biggest takeaway is required." });
+  if (!likedMost) throw new HTTPException(400, { message: "What you liked most is required." });
+  if (!suggestions) throw new HTTPException(400, { message: "Suggestions for improvement are required." });
+  if (!testimonial) throw new HTTPException(400, { message: "Testimonial is required." });
+
+  return {
+    displayName,
+    agency,
+    coffeeSession,
+    speakerImpact,
+    biggestTakeaway,
+    testimonial,
+    likedMost,
+    suggestions,
+  };
+}
+
+function parseStoredFeedbackResponses(row: Record<string, unknown>) {
+  const fromJson = parseMetadataJson(row.responses_json);
+  return {
+    displayName: String(fromJson.displayName ?? ""),
+    agency: String(fromJson.agency ?? ""),
+    coffeeSession: String(fromJson.coffeeSession ?? ""),
+    speakerImpact: String(fromJson.speakerImpact ?? ""),
+    biggestTakeaway: String(fromJson.biggestTakeaway ?? ""),
+    testimonial: String(fromJson.testimonial ?? ""),
+  };
 }
 
 function tokenizeFeedbackText(text: string) {
@@ -368,7 +440,14 @@ function topFeedbackKeywords(texts: string[], limit: number) {
 
 function buildFeedbackSuggestionInsights(
   responseCount: number,
-  rows: { scores: Record<string, number>; suggestions: string; highlights: string }[]
+  rows: {
+    scores: Record<string, number>;
+    suggestions: string;
+    highlights: string;
+    speakerImpact?: string;
+    biggestTakeaway?: string;
+    testimonial?: string;
+  }[]
 ) {
   if (responseCount < 40) {
     return {
@@ -380,22 +459,23 @@ function buildFeedbackSuggestionInsights(
   }
   const combinedTexts: string[] = [];
   for (const r of rows) {
-    const s = String(r.suggestions || "").trim();
-    const h = String(r.highlights || "").trim();
-    if (s) combinedTexts.push(s);
-    if (h) combinedTexts.push(h);
+    for (const t of [r.suggestions, r.highlights, r.speakerImpact, r.biggestTakeaway, r.testimonial]) {
+      const s = String(t || "").trim();
+      if (s) combinedTexts.push(s);
+    }
   }
   const topKeywords = topFeedbackKeywords(combinedTexts, 12);
 
   const dimTotals = new Map<string, { sum: number; n: number }>();
-  for (const row of EVENT_FEEDBACK_SCHEMA) {
+  for (const row of EVENT_FEEDBACK_RATING_SCHEMA) {
     dimTotals.set(row.key, { sum: 0, n: 0 });
   }
   for (const r of rows) {
-    for (const row of EVENT_FEEDBACK_SCHEMA) {
-      const v = r.scores[row.key];
-      if (typeof v !== "number") continue;
-      const cur = dimTotals.get(row.key)!;
+    for (const [key, v0] of Object.entries(r.scores)) {
+      const v = Math.round(Number(v0));
+      if (!Number.isFinite(v) || v < 1 || v > 5) continue;
+      if (!dimTotals.has(key)) dimTotals.set(key, { sum: 0, n: 0 });
+      const cur = dimTotals.get(key)!;
       cur.sum += v;
       cur.n += 1;
     }
@@ -412,30 +492,17 @@ function buildFeedbackSuggestionInsights(
   const weakest = dimAvgs.slice(0, 4).filter((d) => d.n > 0);
 
   const keywordBoost = new Map<string, string[]>([
-    ["food", ["food_beverage"]],
-    ["meal", ["food_beverage"]],
-    ["lunch", ["food_beverage"]],
-    ["dinner", ["food_beverage"]],
+    ["coffee", ["coffee_sessions"]],
+    ["dinner", ["welcome_dinner", "fellowship_night"]],
+    ["fellowship", ["fellowship_night"]],
+    ["welcome", ["welcome_dinner"]],
     ["hotel", ["hotel_venue"]],
     ["room", ["hotel_venue"]],
     ["venue", ["hotel_venue"]],
-    ["sound", ["technology_av"]],
-    ["audio", ["technology_av"]],
-    ["mic", ["technology_av"]],
-    ["screen", ["technology_av"]],
-    ["schedule", ["scheduling_program"]],
-    ["time", ["scheduling_program"]],
-    ["late", ["scheduling_program"]],
-    ["speaker", ["speakers_content"]],
-    ["session", ["speakers_content"]],
-    ["staff", ["staff_service"]],
-    ["volunteer", ["staff_service"]],
-    ["registration", ["registration_fees"]],
-    ["fee", ["registration_fees"]],
-    ["payment", ["registration_fees"]],
-    ["email", ["marketing_communications"]],
-    ["communication", ["marketing_communications"]],
-    ["organiz", ["planning_organization"]],
+    ["speaker", ["conference_proper"]],
+    ["session", ["coffee_sessions", "conference_proper"]],
+    ["conference", ["conference_proper"]],
+    ["program", ["conference_proper"]],
   ]);
 
   const boostedKeys = new Set<string>();
@@ -506,9 +573,12 @@ function buildFeedbackSuggestionInsights(
 
 function mapFeedbackRow(row: Record<string, unknown> | null | undefined) {
   if (!row?.id) return null;
+  const responses = parseStoredFeedbackResponses(row);
   return {
     id: row.id,
     scores: parseMetadataJson(row.scores_json) as Record<string, number>,
+    responses,
+    likedMost: String(row.highlights ?? ""),
     highlights: String(row.highlights ?? ""),
     suggestions: String(row.suggestions ?? ""),
     updatedAt: row.updated_at,
@@ -2111,12 +2181,12 @@ app.get("/api/events/:eventId/feedback/me", requireRole(["admin", "staff", "atte
   const eventId = c.req.param("eventId");
   const email = String(c.get("authUser")?.email || "").trim().toLowerCase();
   if (!email) throw new HTTPException(400, { message: "Signed-in email is required." });
-  const event = await c.env.DB.prepare("SELECT id FROM events WHERE id = ?").bind(eventId).first();
+  const event = await c.env.DB.prepare("SELECT id, venue FROM events WHERE id = ?").bind(eventId).first<{ id: string; venue?: string }>();
   if (!event) throw new HTTPException(404, { message: "Event not found." });
   const row = await c.env.DB.prepare("SELECT * FROM event_feedback WHERE event_id = ? AND respondent_email = ?")
     .bind(eventId, email)
     .first<Record<string, unknown>>();
-  return c.json({ schema: feedbackSchemaPayload(), item: mapFeedbackRow(row) });
+  return c.json({ schema: feedbackSchemaPayload(event.venue), item: mapFeedbackRow(row) });
 });
 
 app.put("/api/events/:eventId/feedback/me", requireRole(["admin", "staff", "attendee"]), async (c) => {
@@ -2127,8 +2197,17 @@ app.put("/api/events/:eventId/feedback/me", requireRole(["admin", "staff", "atte
   if (!event) throw new HTTPException(404, { message: "Event not found." });
   const body = (await c.req.json()) as Record<string, unknown>;
   const scores = parseFeedbackScores(body);
-  const highlights = String(body.highlights ?? "").trim().slice(0, 4000);
-  const suggestions = String(body.suggestions ?? "").trim().slice(0, 8000);
+  const parsed = parseFeedbackResponses(body);
+  const responsesJson = JSON.stringify({
+    displayName: parsed.displayName,
+    agency: parsed.agency,
+    coffeeSession: parsed.coffeeSession,
+    speakerImpact: parsed.speakerImpact,
+    biggestTakeaway: parsed.biggestTakeaway,
+    testimonial: parsed.testimonial,
+  });
+  const highlights = parsed.likedMost;
+  const suggestions = parsed.suggestions;
   const profile = body.profile && typeof body.profile === "object" ? (body.profile as Record<string, unknown>) : {};
   const seededRegistrationId = String(body.seededRegistrationId ?? "").trim();
   const seededDelegateName = String(body.seededDelegateName ?? "").trim();
@@ -2146,13 +2225,14 @@ app.put("/api/events/:eventId/feedback/me", requireRole(["admin", "staff", "atte
       .prepare(
         `UPDATE event_feedback SET
           scores_json = ?,
+          responses_json = ?,
           highlights = ?,
           suggestions = ?,
           registration_id = COALESCE(?, registration_id),
           updated_at = ?
         WHERE id = ?`
       )
-      .bind(scoresJson, highlights || null, suggestions || null, registrationId, now, existing.id)
+      .bind(scoresJson, responsesJson, highlights || null, suggestions || null, registrationId, now, existing.id)
       .run();
     const row = await c.env.DB.prepare("SELECT * FROM event_feedback WHERE id = ?").bind(existing.id).first<Record<string, unknown>>();
     return c.json({ ok: true, item: mapFeedbackRow(row) });
@@ -2160,10 +2240,10 @@ app.put("/api/events/:eventId/feedback/me", requireRole(["admin", "staff", "atte
   const id = crypto.randomUUID();
   await c.env.DB
     .prepare(
-      `INSERT INTO event_feedback (id, event_id, registration_id, respondent_email, scores_json, highlights, suggestions, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO event_feedback (id, event_id, registration_id, respondent_email, scores_json, responses_json, highlights, suggestions, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
-    .bind(id, eventId, registrationId, email, scoresJson, highlights || null, suggestions || null, now, now)
+    .bind(id, eventId, registrationId, email, scoresJson, responsesJson, highlights || null, suggestions || null, now, now)
     .run();
   const row = await c.env.DB.prepare("SELECT * FROM event_feedback WHERE id = ?").bind(id).first<Record<string, unknown>>();
   return c.json({ ok: true, item: mapFeedbackRow(row) }, 201);
@@ -2171,11 +2251,12 @@ app.put("/api/events/:eventId/feedback/me", requireRole(["admin", "staff", "atte
 
 app.get("/api/events/:eventId/feedback/analytics", requireRole(["admin", "staff"]), async (c) => {
   const eventId = c.req.param("eventId");
-  const event = await c.env.DB.prepare("SELECT id, title, start_date, end_date FROM events WHERE id = ?").bind(eventId).first<Record<string, unknown>>();
+  const event = await c.env.DB.prepare("SELECT id, title, start_date, end_date, venue FROM events WHERE id = ?").bind(eventId).first<Record<string, unknown>>();
   if (!event) throw new HTTPException(404, { message: "Event not found." });
+
   const res = await c.env.DB
     .prepare(
-      "SELECT id, scores_json, highlights, suggestions, created_at, updated_at FROM event_feedback WHERE event_id = ? ORDER BY updated_at DESC"
+      "SELECT id, scores_json, responses_json, highlights, suggestions, created_at, updated_at FROM event_feedback WHERE event_id = ? ORDER BY updated_at DESC"
     )
     .bind(eventId)
     .all<Record<string, unknown>>();
@@ -2183,62 +2264,101 @@ app.get("/api/events/:eventId/feedback/analytics", requireRole(["admin", "staff"
   const responseCount = rows.length;
 
   const distributions: Record<string, Record<number, number>> = {};
-  for (const def of EVENT_FEEDBACK_SCHEMA) {
+  for (const def of EVENT_FEEDBACK_RATING_SCHEMA) {
     distributions[def.key] = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
   }
 
-  const parsedRows: { scores: Record<string, number>; suggestions: string; highlights: string }[] = [];
-  let overallSum = 0;
-  let overallN = 0;
+  const parsedRows: {
+    scores: Record<string, number>;
+    suggestions: string;
+    highlights: string;
+    speakerImpact: string;
+    biggestTakeaway: string;
+    testimonial: string;
+  }[] = [];
+  const coffeeSessionCounts = new Map<string, number>();
+  let conferenceSum = 0;
+  let conferenceN = 0;
 
   for (const r of rows) {
     const scores = parseMetadataJson(r.scores_json) as Record<string, number>;
+    const responses = parseStoredFeedbackResponses(r);
+    if (responses.coffeeSession) {
+      coffeeSessionCounts.set(responses.coffeeSession, (coffeeSessionCounts.get(responses.coffeeSession) || 0) + 1);
+    }
     parsedRows.push({
       scores,
       suggestions: String(r.suggestions || ""),
       highlights: String(r.highlights || ""),
+      speakerImpact: responses.speakerImpact,
+      biggestTakeaway: responses.biggestTakeaway,
+      testimonial: responses.testimonial,
     });
-    for (const def of EVENT_FEEDBACK_SCHEMA) {
-      const v = Math.round(Number(scores[def.key]));
-      if (v >= 1 && v <= 5) {
-        distributions[def.key][v] += 1;
-        if (def.key === "overall_experience") {
-          overallSum += v;
-          overallN += 1;
-        }
+    for (const [key, v0] of Object.entries(scores)) {
+      const v = Math.round(Number(v0));
+      if (v < 1 || v > 5) continue;
+      if (!distributions[key]) distributions[key] = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+      distributions[key][v] += 1;
+      if (key === "conference_proper") {
+        conferenceSum += v;
+        conferenceN += 1;
       }
     }
   }
 
-  const averages = EVENT_FEEDBACK_SCHEMA.map((def) => {
+  const ratingKeys = new Set([...EVENT_FEEDBACK_RATING_SCHEMA.map((d) => d.key), ...Object.keys(distributions)]);
+  const averages = [...ratingKeys].map((key) => {
+    const dist = distributions[key] || { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
     let sum = 0;
     let n = 0;
     for (let star = 1; star <= 5; star++) {
-      const c = distributions[def.key][star] || 0;
-      sum += star * c;
-      n += c;
+      const count = dist[star] || 0;
+      sum += star * count;
+      n += count;
     }
-    return { key: def.key, label: def.label, step: def.step, average: n ? Math.round((sum / n) * 100) / 100 : 0, count: n };
+    const cur = EVENT_FEEDBACK_RATING_SCHEMA.find((d) => d.key === key);
+    let label = cur?.label ?? feedbackLabelForKey(key);
+    if (key === "hotel_venue" && event.venue) {
+      label = `Hotel & venue (${event.venue})`;
+    }
+    return { key, label, step: cur?.step ?? 2, average: n ? Math.round((sum / n) * 100) / 100 : 0, count: n, legacy: !cur };
   });
 
-  const overallAverage = overallN ? Math.round((overallSum / overallN) * 100) / 100 : 0;
+  const overallAverage = conferenceN ? Math.round((conferenceSum / conferenceN) * 100) / 100 : 0;
+
+  const coffeeSessionBreakdown = [...coffeeSessionCounts.entries()]
+    .map(([value, count]) => ({
+      value,
+      count,
+      label: COFFEE_SESSION_OPTIONS.find((o) => o.value === value)?.label ?? value,
+    }))
+    .sort((a, b) => b.count - a.count);
 
   const recentSuggestions = rows
     .map((r) => String(r.suggestions || "").trim())
     .filter((t) => t.length > 0)
-    .slice(0, 40)
+    .slice(0, 25)
+    .map((t) => (t.length > 360 ? `${t.slice(0, 357)}…` : t));
+
+  const recentTestimonials = rows
+    .map((r) => parseStoredFeedbackResponses(r).testimonial.trim())
+    .filter((t) => t.length > 0)
+    .slice(0, 15)
     .map((t) => (t.length > 360 ? `${t.slice(0, 357)}…` : t));
 
   const suggestionInsights = buildFeedbackSuggestionInsights(responseCount, parsedRows);
 
   return c.json({
-    event: { id: event.id, title: event.title, startDate: event.start_date, endDate: event.end_date },
-    schema: feedbackSchemaPayload(),
+    event: { id: event.id, title: event.title, startDate: event.start_date, endDate: event.end_date, venue: event.venue },
+    schema: feedbackSchemaPayload(event.venue as string | undefined),
     responseCount,
     overallAverage,
-    averages,
+    overallLabel: "Conference proper (avg)",
+    averages: averages.filter((a) => a.count > 0).sort((a, b) => (a.legacy === b.legacy ? 0 : a.legacy ? 1 : -1)),
     distributions,
+    coffeeSessionBreakdown,
     recentSuggestions,
+    recentTestimonials,
     suggestionInsights,
     generatedAt: new Date().toISOString(),
   });

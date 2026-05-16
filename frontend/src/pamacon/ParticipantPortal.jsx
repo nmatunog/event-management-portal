@@ -1,9 +1,8 @@
 import { Link } from "react-router-dom";
-import { Award, Calendar, Camera, ChevronDown, ClipboardCheck, Clock3, Film, ImageIcon, LogOut, MapPin, Music, Sparkles, Star, User, Utensils } from "lucide-react";
+import { Award, Calendar, Camera, ChevronDown, ClipboardCheck, ClipboardList, Clock3, Film, ImageIcon, LogOut, MapPin, Music, Sparkles, Star, User, Utensils } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ATTENDEE_POSTER_MAX, DEFAULT_PAMACON_CONFIG, DEFAULT_ATTENDEE_PORTAL, PAMACON_TITLE } from "./defaultConfig";
 import AttendeeDetailsForm from "./AttendeeDetailsForm";
-import AttendeeEventFeedback from "./AttendeeEventFeedback";
 
 function youtubeEmbedSrc(url) {
   if (!url || typeof url !== "string") return null;
@@ -41,7 +40,6 @@ export default function ParticipantPortal({
   onApiError,
 }) {
   const title = eventRow?.title || PAMACON_TITLE;
-  const resolvedEventId = eventId || eventRow?.id || "";
   const theme = config?.theme || DEFAULT_PAMACON_CONFIG.theme;
   const venue = eventRow?.venue || "Waterfront Cebu Hotel and Casino";
   const start = eventRow?.start_date || "2026-05-13";
@@ -147,12 +145,13 @@ export default function ParticipantPortal({
             >
               Home
             </Link>
-            <a
-              href="#event-feedback"
-              className="inline-flex items-center justify-center min-h-[44px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 shadow-sm"
+            <Link
+              to="/evaluation"
+              className="inline-flex items-center justify-center gap-1.5 min-h-[44px] rounded-xl border border-red-200 bg-red-50 px-3.5 py-2 text-sm font-semibold text-red-800 hover:bg-red-100 shadow-sm"
             >
-              Feedback
-            </a>
+              <ClipboardList size={16} aria-hidden />
+              Evaluation survey
+            </Link>
             <a
               href="#attendee-details"
               className="inline-flex items-center justify-center min-h-[44px] rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 shadow-sm"
@@ -214,6 +213,16 @@ export default function ParticipantPortal({
                 <p className="text-sm sm:text-base text-slate-700 leading-relaxed max-w-2xl">
                   Dive into the posters, feel the buzz in the welcome video, then tell us how you&apos;re traveling — shirt size, Cebu dates, and any extra-day tours you&apos;re dreaming about.
                   Every detail you share helps the team welcome you with open arms (and the right-sized tee).
+                </p>
+                <Link
+                  to="/evaluation"
+                  className="mt-4 inline-flex w-full sm:w-auto items-center justify-center gap-2 min-h-[48px] rounded-2xl bg-red-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-red-600/25 hover:bg-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
+                >
+                  <ClipboardList size={18} aria-hidden />
+                  Complete the conference evaluation survey
+                </Link>
+                <p className="mt-2 text-xs text-slate-500">
+                  You can also open this survey anytime from a shared link — sign in with your delegate email when prompted.
                 </p>
               </div>
             </div>
@@ -508,19 +517,6 @@ export default function ParticipantPortal({
             </div>
           </div>
         </section>
-
-        {resolvedEventId ? (
-          <AttendeeEventFeedback
-            eventId={resolvedEventId}
-            authEmail={authEmail}
-            attendeeSyncHints={attendeeSyncHints}
-            profile={profile}
-            onNotify={(kind, msg) => {
-              if (kind === "ok") onApiInfo?.(msg);
-              else onApiError?.({ message: msg }, msg);
-            }}
-          />
-        ) : null}
 
         <AttendeeDetailsForm
           profile={profile}

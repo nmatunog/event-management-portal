@@ -4,6 +4,7 @@ import { claimSeededRegistration, getAuthMe, getEvents, setAccessToken, syncMyRe
 import { supabase } from "./lib/supabaseClient";
 import PamaconApp from "./pamacon/PamaconApp";
 import AttendeeSelfCheckInPage from "./pamacon/AttendeeSelfCheckInPage.jsx";
+import AttendeeEvaluationPage from "./pamacon/AttendeeEvaluationPage.jsx";
 import PublicLanding from "./pages/PublicLanding.jsx";
 import SignInPage from "./pages/SignInPage.jsx";
 import SupplierPaymentVoucherPage from "./pamacon/SupplierPaymentVoucherPage.jsx";
@@ -385,6 +386,38 @@ export default function App() {
     }
   };
 
+  const evaluationShell = session ? (
+    <div className="relative min-h-screen">
+      {apiBanner && (
+        <button
+          type="button"
+          className={`absolute top-0 left-0 right-0 z-[200] px-4 py-2 text-sm font-semibold border-b text-left w-full ${
+            apiBanner.type === "warn"
+              ? "border-amber-200 bg-amber-50 text-amber-800"
+              : apiBanner.type === "ok"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+              : "border-rose-200 bg-rose-50 text-rose-700"
+          }`}
+          onClick={() => setApiBanner(null)}
+          title="Dismiss"
+        >
+          {apiBanner.message}
+        </button>
+      )}
+      <div className={apiBanner ? "pt-12" : ""}>
+        <AttendeeEvaluationPage
+          authEmail={authUser?.email ?? session.user?.email ?? ""}
+          profile={profile}
+          attendeeSyncHints={attendeeSyncHints}
+          canManage={canManage}
+          onLogout={handleLogout}
+          onApiInfo={showApiInfo}
+          onApiError={showApiError}
+        />
+      </div>
+    </div>
+  ) : null;
+
   const checkInShell = session ? (
     <div className="relative min-h-screen">
       {apiBanner && (
@@ -475,7 +508,11 @@ export default function App() {
         }
       />
       <Route path="/supplier-voucher/:token" element={<SupplierPaymentVoucherPage />} />
-      <Route path="/portal" element={session ? portalShell : <Navigate to="/sign-in" replace />} />
+      <Route path="/portal" element={session ? portalShell : <Navigate to="/sign-in?next=%2Fportal" replace />} />
+      <Route
+        path="/evaluation"
+        element={session ? evaluationShell : <Navigate to="/sign-in?next=%2Fevaluation" replace />}
+      />
       <Route
         path="/check-in"
         element={session ? checkInShell : <Navigate to="/sign-in?next=%2Fcheck-in" replace />}

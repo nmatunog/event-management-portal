@@ -95,16 +95,30 @@ export default function EventFeedbackHub({ eventId, eventTitle, onError }) {
           </div>
         </div>
         <div className="rounded-2xl border border-slate-100 bg-slate-50 px-5 py-4 shrink-0">
-          <p className="text-[10px] font-bold uppercase text-slate-400">Overall experience (avg)</p>
+          <p className="text-[10px] font-bold uppercase text-slate-400">{data.overallLabel || "Conference proper (avg)"}</p>
           <p className="text-3xl font-black text-slate-900 tabular-nums">{Number(data.overallAverage || 0).toFixed(2)}</p>
-          <p className="text-xs text-slate-500 mt-1">From the “overall experience” question only.</p>
+          <p className="text-xs text-slate-500 mt-1">Matches the official survey conference proper question.</p>
         </div>
       </div>
+
+      {(data.coffeeSessionBreakdown || []).length > 0 ? (
+        <div className="bg-white rounded-[28px] border shadow-sm p-6 sm:p-8">
+          <h4 className="text-lg font-semibold text-slate-900 mb-2">Coffee session attendance</h4>
+          <ul className="space-y-2">
+            {data.coffeeSessionBreakdown.map((row) => (
+              <li key={row.value} className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/80 px-4 py-2.5 text-sm">
+                <span className="text-slate-800 font-medium">{row.label}</span>
+                <span className="shrink-0 font-black text-red-700 tabular-nums">{row.count}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       <div>
         <div className="flex items-center gap-2 mb-4">
           <BarChart3 className="text-slate-500" size={20} aria-hidden />
-          <h4 className="text-lg font-semibold text-slate-900">Ratings by area</h4>
+          <h4 className="text-lg font-semibold text-slate-900">Experience ratings (1–5)</h4>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {(data.averages || []).map((row) => (
@@ -177,20 +191,37 @@ export default function EventFeedbackHub({ eventId, eventTitle, onError }) {
         </div>
       </div>
 
-      <div className="bg-white rounded-[28px] border shadow-sm p-6 sm:p-8">
-        <h4 className="text-lg font-semibold text-slate-900 mb-2">Recent written comments</h4>
-        <p className="text-xs text-slate-500 mb-4">Newest first; trimmed for display. Identities are not shown.</p>
-        {(data.recentSuggestions || []).length ? (
-          <ul className="space-y-3">
-            {data.recentSuggestions.map((t, i) => (
-              <li key={i} className="rounded-xl border border-slate-100 bg-slate-50/50 px-4 py-3 text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
-                {t}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-slate-500">No open-ended suggestions submitted yet.</p>
-        )}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white rounded-[28px] border shadow-sm p-6 sm:p-8">
+          <h4 className="text-lg font-semibold text-slate-900 mb-2">Improvement suggestions</h4>
+          <p className="text-xs text-slate-500 mb-4">Anonymized excerpts, newest first.</p>
+          {(data.recentSuggestions || []).length ? (
+            <ul className="space-y-3">
+              {data.recentSuggestions.map((t, i) => (
+                <li key={i} className="rounded-xl border border-slate-100 bg-slate-50/50 px-4 py-3 text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
+                  {t}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-slate-500">No suggestions submitted yet.</p>
+          )}
+        </div>
+        <div className="bg-white rounded-[28px] border shadow-sm p-6 sm:p-8">
+          <h4 className="text-lg font-semibold text-slate-900 mb-2">Testimonials</h4>
+          <p className="text-xs text-slate-500 mb-4">Short delegate testimonials from the survey.</p>
+          {(data.recentTestimonials || []).length ? (
+            <ul className="space-y-3">
+              {data.recentTestimonials.map((t, i) => (
+                <li key={i} className="rounded-xl border border-emerald-100 bg-emerald-50/40 px-4 py-3 text-sm text-slate-800 leading-relaxed whitespace-pre-wrap italic">
+                  {t}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-slate-500">No testimonials submitted yet.</p>
+          )}
+        </div>
       </div>
 
       <p className="text-[11px] text-slate-400">Generated {data.generatedAt ? new Date(data.generatedAt).toLocaleString() : "—"}</p>

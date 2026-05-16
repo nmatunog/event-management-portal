@@ -48,6 +48,8 @@ export default function SignInPage({
     return next;
   }, [location.search]);
 
+  const isEvaluationSignIn = postSignInPath === "/evaluation";
+
   useEffect(() => {
     if (session) navigate(postSignInPath, { replace: true });
   }, [session, navigate, postSignInPath]);
@@ -178,6 +180,14 @@ export default function SignInPage({
         <ArrowLeft size={16} aria-hidden />
         Back to home
       </Link>
+      {isEvaluationSignIn ? (
+        <section className="w-full max-w-lg mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
+          <p className="text-[11px] font-black uppercase tracking-wide text-red-800">Conference evaluation</p>
+          <p className="mt-1 text-sm text-red-950 leading-relaxed">
+            Sign in with your delegate email and password to open the evaluation survey. One response per account.
+          </p>
+        </section>
+      ) : null}
       {!claimCompleted && showClaimCard && (
         <>
           <section id="claim-seeded" className="w-full max-w-lg mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">

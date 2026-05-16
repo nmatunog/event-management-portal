@@ -269,6 +269,19 @@ export default function PublicLanding() {
               Open sign-in
             </Link>
           </article>
+          <article className="rounded-2xl bg-white border border-zinc-200/90 p-5 shadow-md shadow-zinc-900/5 hover:shadow-lg transition-shadow">
+            <div className="w-11 h-11 rounded-xl bg-amber-500/15 text-amber-800 flex items-center justify-center mb-3">
+              <Sparkles size={20} strokeWidth={2.2} />
+            </div>
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Post-event</p>
+            <h2 className="mt-1 font-extrabold text-zinc-900 text-sm uppercase tracking-wide">Evaluation survey</h2>
+            <p className="mt-2 text-zinc-600 text-sm font-medium leading-relaxed">
+              Share feedback on sessions, meals, and the hotel. Sign in when you open the link.
+            </p>
+            <Link to="/evaluation" className="mt-2 inline-flex items-center text-xs font-bold text-amber-800 hover:text-amber-900 hover:underline">
+              Open evaluation survey
+            </Link>
+          </article>
         </section>
 
         {/* E-magazine highlight — in-page section with same-tab open action */}
