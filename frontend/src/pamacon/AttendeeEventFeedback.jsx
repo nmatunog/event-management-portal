@@ -23,6 +23,7 @@ import {
   defaultResponses,
   formatDisplayName,
   formatGreetingName,
+  PAMACON_2027_JOIN_OPTIONS,
   ratingsForStep,
 } from "./eventFeedbackSchema";
 
@@ -187,6 +188,7 @@ export default function AttendeeEventFeedback({
       speakerImpact: r.speakerImpact || "",
       biggestTakeaway: r.biggestTakeaway || "",
       testimonial: r.testimonial || "",
+      joiningPamacon2027: r.joiningPamacon2027 || "",
     }));
     setTextExtras({
       likedMost: data.item.likedMost || data.item.highlights || "",
@@ -289,7 +291,8 @@ export default function AttendeeEventFeedback({
       String(responses.biggestTakeaway || "").trim() &&
       String(textExtras.likedMost || "").trim() &&
       String(textExtras.suggestions || "").trim() &&
-      String(responses.testimonial || "").trim(),
+      String(responses.testimonial || "").trim() &&
+      PAMACON_2027_JOIN_OPTIONS.some((o) => o.value === responses.joiningPamacon2027),
     [responses, textExtras]
   );
 
@@ -548,6 +551,35 @@ export default function AttendeeEventFeedback({
             value={responses.testimonial}
             onChange={(v) => setResponses((p) => ({ ...p, testimonial: v }))}
           />
+          <div className="rounded-2xl border border-red-100 bg-gradient-to-br from-red-50/80 to-white p-5 shadow-sm">
+            <p className="text-sm font-semibold text-slate-900">
+              Will you be joining PAMACON2027? <span className="text-red-600">*</span>
+            </p>
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap" role="radiogroup" aria-label="Will you be joining PAMACON2027?">
+              {PAMACON_2027_JOIN_OPTIONS.map((opt) => {
+                const active = responses.joiningPamacon2027 === opt.value;
+                return (
+                  <label
+                    key={opt.value}
+                    className={`flex min-h-[48px] flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl border-2 px-4 py-3 text-sm font-semibold transition-colors ${
+                      active ? "border-red-600 bg-red-600 text-white shadow-md" : "border-slate-200 bg-white text-slate-700 hover:border-red-200 hover:bg-red-50/50"
+                    } ${saving ? "opacity-60 pointer-events-none" : ""}`}
+                  >
+                    <input
+                      type="radio"
+                      name="joiningPamacon2027"
+                      value={opt.value}
+                      checked={active}
+                      disabled={saving}
+                      onChange={() => setResponses((p) => ({ ...p, joiningPamacon2027: opt.value }))}
+                      className="sr-only"
+                    />
+                    {opt.label}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
         </div>
       ) : null}
 

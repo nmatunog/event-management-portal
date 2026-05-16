@@ -81,7 +81,7 @@ export const FEEDBACK_RATING_SECTIONS = [
         icon: "Users2",
       },
       { key: "keynote_ledesma", label: "Ms. Anagel Ledesma", subtitle: "Keynote 2", icon: "Trophy" },
-      { key: "talk_nilo", label: "Nilo Matunog", subtitle: "Optimizing AI for AIA", icon: "Tv" },
+      { key: "talk_nilo", label: "Nilo Matunog", subtitle: "The AIA Wave is Here- Are U Ready?", icon: "Tv" },
     ],
   },
   {
@@ -117,6 +117,12 @@ export function defaultRatingScores() {
   return o;
 }
 
+export const PAMACON_2027_JOIN_OPTIONS = [
+  { value: "yes", label: "Yes" },
+  { value: "no", label: "No" },
+  { value: "not_sure", label: "Not sure yet" },
+];
+
 export function defaultResponses() {
   return {
     firstName: "",
@@ -125,6 +131,7 @@ export function defaultResponses() {
     speakerImpact: "",
     biggestTakeaway: "",
     testimonial: "",
+    joiningPamacon2027: "",
   };
 }
 

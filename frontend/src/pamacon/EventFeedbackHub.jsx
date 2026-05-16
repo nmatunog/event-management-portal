@@ -141,6 +141,22 @@ function OverviewTab({ data }) {
         </div>
       </div>
 
+      {(data.pamacon2027JoinBreakdown || []).length ? (
+        <section className="rounded-[28px] border border-red-100 bg-white p-6 sm:p-8 shadow-sm">
+          <h4 className="text-lg font-semibold text-slate-900">PAMACON2027 interest</h4>
+          <p className="text-xs text-slate-500 mt-1 mb-4">“Will you be joining PAMACON2027?”</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {data.pamacon2027JoinBreakdown.map((row) => (
+              <div key={row.value} className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-4 text-center">
+                <p className="text-2xl font-black text-red-700 tabular-nums">{row.count}</p>
+                <p className="text-sm font-semibold text-slate-900 mt-1">{row.label}</p>
+                <p className="text-xs text-slate-500 mt-0.5">{row.percent}% of responses</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       {speakerRows.length ? (
         <section>
           <h4 className="text-lg font-black uppercase border-l-4 border-red-600 pl-3 text-red-800 mb-4">Day 2 — Speaker performance</h4>

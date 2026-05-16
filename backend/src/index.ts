@@ -294,7 +294,7 @@ const EVENT_FEEDBACK_RATING_SCHEMA = [
   { key: "talk_velasquez", label: "James Velasquez", subtitle: "Product Bundling — The MDRT Way!", step: 3, group: "speakers" },
   { key: "panel", label: "Panel — Christine Dimaliuat & Abbie Villarosa", subtitle: "Facilitator: Emman Paras", step: 3, group: "speakers" },
   { key: "keynote_ledesma", label: "Ms. Anagel Ledesma", subtitle: "Keynote 2", step: 3, group: "speakers" },
-  { key: "talk_nilo", label: "Nilo Matunog", subtitle: "Optimizing AI for AIA", step: 3, group: "speakers" },
+  { key: "talk_nilo", label: "Nilo Matunog", subtitle: "The AIA Wave is Here- Are U Ready?", step: 3, group: "speakers" },
   { key: "fellowship_night", label: "Fellowship Night", step: 4, group: "logistics" },
   { key: "hotel_venue", label: "Hotel & venue", step: 4, group: "logistics" },
   { key: "conference_proper", label: "Conference proper (overall)", step: 4, group: "logistics" },
@@ -330,6 +330,13 @@ const FEEDBACK_TEXT_FIELD_DEFS = [
   },
   { key: "testimonial", label: "Short testimonial of your experience at the conference", step: 5, required: true, maxLength: 4000 },
 ] as const;
+
+const PAMACON_2027_JOIN_OPTIONS = [
+  { value: "yes", label: "Yes" },
+  { value: "no", label: "No" },
+  { value: "not_sure", label: "Not sure yet" },
+] as const;
+const PAMACON_2027_JOIN_VALUES = new Set<string>(PAMACON_2027_JOIN_OPTIONS.map((o) => o.value));
 
 const FEEDBACK_STOPWORDS = new Set(
   `a an the and or but if to of in on for with as at by from up out about into over after before under again further then once here there when where why how all any both each few more most other some such no nor not only own same so than too very can will just don should now ve re ll d m t s isn wasn weren doesn didn wasn had has have having be been being is am are was were do does did doing get got getting go went going make made making take took taking come came coming use used using would could should may might must shall per our your their they them we us you it its this that these those wasnt werent dont doesnt didnt im`.split(
@@ -370,6 +377,15 @@ function feedbackSchemaPayload(venue?: string | null) {
       required,
       maxLength,
     })),
+    choiceFields: [
+      {
+        key: "joiningPamacon2027",
+        label: "Will you be joining PAMACON2027?",
+        step: 5,
+        required: true,
+        options: [...PAMACON_2027_JOIN_OPTIONS],
+      },
+    ],
   };
 }
 
@@ -420,6 +436,11 @@ function parseFeedbackResponses(body: Record<string, unknown>) {
   if (!suggestions) throw new HTTPException(400, { message: "Suggestions for improvement are required." });
   if (!testimonial) throw new HTTPException(400, { message: "Testimonial is required." });
 
+  const joiningPamacon2027 = String(src.joiningPamacon2027 ?? body.joiningPamacon2027 ?? "").trim();
+  if (!joiningPamacon2027 || !PAMACON_2027_JOIN_VALUES.has(joiningPamacon2027)) {
+    throw new HTTPException(400, { message: "Please answer whether you will be joining PAMACON2027." });
+  }
+
   return {
     firstName,
     lastName,
@@ -430,6 +451,7 @@ function parseFeedbackResponses(body: Record<string, unknown>) {
     testimonial,
     likedMost,
     suggestions,
+    joiningPamacon2027,
   };
 }
 
@@ -446,6 +468,7 @@ function parseStoredFeedbackResponses(row: Record<string, unknown>) {
     speakerImpact: String(fromJson.speakerImpact ?? ""),
     biggestTakeaway: String(fromJson.biggestTakeaway ?? ""),
     testimonial: String(fromJson.testimonial ?? ""),
+    joiningPamacon2027: String(fromJson.joiningPamacon2027 ?? ""),
   };
 }
 
@@ -2536,6 +2559,7 @@ async function upsertEventFeedbackForDelegate(
     speakerImpact: parsed.speakerImpact,
     biggestTakeaway: parsed.biggestTakeaway,
     testimonial: parsed.testimonial,
+    joiningPamacon2027: parsed.joiningPamacon2027,
     registrationMatched: Boolean(registration),
   });
   const highlights = parsed.likedMost;
@@ -2748,6 +2772,21 @@ app.get("/api/events/:eventId/feedback/analytics", requireRole(["admin", "staff"
   const filteredAverages = averages.filter((a) => a.count > 0).sort((a, b) => (a.legacy === b.legacy ? 0 : a.legacy ? 1 : -1));
   const executiveSummary = buildFeedbackExecutiveSummary(filteredAverages, responseCount, overallAverage);
 
+  const pamacon2027JoinCounts = new Map<string, number>();
+  for (const r of rows) {
+    const choice = parseStoredFeedbackResponses(r).joiningPamacon2027;
+    if (!choice) continue;
+    pamacon2027JoinCounts.set(choice, (pamacon2027JoinCounts.get(choice) || 0) + 1);
+  }
+  const pamacon2027JoinBreakdown = [...pamacon2027JoinCounts.entries()]
+    .map(([value, count]) => ({
+      value,
+      label: PAMACON_2027_JOIN_OPTIONS.find((o) => o.value === value)?.label ?? value,
+      count,
+      percent: responseCount ? Math.round((count / responseCount) * 1000) / 10 : 0,
+    }))
+    .sort((a, b) => b.count - a.count);
+
   return c.json({
     event: { id: event.id, title: event.title, startDate: event.start_date, endDate: event.end_date, venue: event.venue },
     schema: feedbackSchemaPayload(event.venue as string | undefined),
@@ -2760,6 +2799,7 @@ app.get("/api/events/:eventId/feedback/analytics", requireRole(["admin", "staff"
     recentTestimonials,
     suggestionInsights,
     executiveSummary,
+    pamacon2027JoinBreakdown,
     evaluationSurveyUrl: "/evaluation",
     generatedAt: new Date().toISOString(),
   });
