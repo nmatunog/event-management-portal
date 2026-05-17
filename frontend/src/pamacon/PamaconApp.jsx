@@ -507,6 +507,23 @@ export default function PamaconApp({
   const [lastSyncAt, setLastSyncAt] = useState("");
   const isAdmin = authRole === "admin";
 
+  const navGroups = useMemo(
+    () =>
+      isAdmin
+        ? NAV_GROUPS
+        : NAV_GROUPS.map((group) => ({
+            ...group,
+            items: group.items.filter((item) => item.id !== "payment-vouchers"),
+          })).filter((group) => group.items.length > 0),
+    [isAdmin]
+  );
+
+  useEffect(() => {
+    if (!isAdmin && activeTab === "payment-vouchers") {
+      setActiveTab("dashboard");
+    }
+  }, [isAdmin, activeTab]);
+
   const reloadAll = useCallback(async () => {
     if (!eventId) return;
     try {
@@ -1307,7 +1324,7 @@ export default function PamaconApp({
           </button>
         </div>
         <div className="flex-1 px-3 py-4 space-y-6 overflow-y-auto custom-scrollbar">
-          {NAV_GROUPS.map((group) => (
+          {navGroups.map((group) => (
             <div key={group.label}>
               <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{group.label}</p>
               <div className="space-y-0.5">
@@ -1475,18 +1492,20 @@ export default function PamaconApp({
                   onError={onApiError}
                   onSeedExpenses={seedExpenseRecords}
                 />
-                <SupplierVouchersPanel
-                  eventId={eventId}
-                  suppliers={suppliers}
-                  canEdit={canEdit}
-                  isAdmin={isAdmin}
-                  onError={onApiError}
-                  onInfo={onApiInfo}
-                />
+                {isAdmin ? (
+                  <SupplierVouchersPanel
+                    eventId={eventId}
+                    suppliers={suppliers}
+                    canEdit={canEdit}
+                    isAdmin={isAdmin}
+                    onError={onApiError}
+                    onInfo={onApiInfo}
+                  />
+                ) : null}
               </div>
             )}
             {activeTab === "payments" && <PaymentsHub config={config} realized={totalRealizedRevenueValue} projection={totalRevenueProjection} />}
-            {activeTab === "payment-vouchers" && (
+            {activeTab === "payment-vouchers" && isAdmin ? (
               <PaymentVouchersHub
                 eventId={eventId}
                 suppliers={suppliers}
@@ -1496,19 +1515,21 @@ export default function PamaconApp({
                 onError={onApiError}
                 onInfo={onApiInfo}
               />
-            )}
+            ) : null}
             {activeTab === "expenses" && (
               <div className="space-y-8">
                 <ExpenseDashboard config={config} suppliers={suppliers} />
-                <EventExpenseReport eventId={eventId} onError={onApiError} />
-                <SupplierVouchersPanel
-                  eventId={eventId}
-                  suppliers={suppliers}
-                  canEdit={canEdit}
-                  isAdmin={isAdmin}
-                  onError={onApiError}
-                  onInfo={onApiInfo}
-                />
+                <EventExpenseReport eventId={eventId} showVouchers={isAdmin} onError={onApiError} />
+                {isAdmin ? (
+                  <SupplierVouchersPanel
+                    eventId={eventId}
+                    suppliers={suppliers}
+                    canEdit={canEdit}
+                    isAdmin={isAdmin}
+                    onError={onApiError}
+                    onInfo={onApiInfo}
+                  />
+                ) : null}
               </div>
             )}
             {activeTab === "setup" && (

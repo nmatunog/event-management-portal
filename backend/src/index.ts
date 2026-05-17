@@ -1986,9 +1986,22 @@ function supplierReceiptHasImages(stored: string | null | undefined): boolean {
   return parseSupplierReceiptImages(stored).length > 0;
 }
 
-async function nextVoucherNumber(db: D1Database, eventId: string) {
-  const d = new Date();
-  const ymd = `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`;
+/** YYYYMMDD for EPV series — uses payment_date when set, otherwise created_at / today. */
+function paymentDateToYmd(paymentDate: string | null | undefined, fallbackIso?: string) {
+  const raw = String(paymentDate ?? "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return raw.replace(/-/g, "");
+  }
+  const d = fallbackIso ? new Date(fallbackIso) : new Date();
+  if (Number.isNaN(d.getTime())) {
+    const now = new Date();
+    return `${now.getUTCFullYear()}${String(now.getUTCMonth() + 1).padStart(2, "0")}${String(now.getUTCDate()).padStart(2, "0")}`;
+  }
+  return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
+async function nextVoucherNumber(db: D1Database, eventId: string, paymentDate?: string | null) {
+  const ymd = paymentDateToYmd(paymentDate);
   const prefix = `EPV-${ymd}-`;
   const res = await db
     .prepare("SELECT voucher_number FROM supplier_payment_vouchers WHERE event_id = ? AND voucher_number LIKE ?")
@@ -2005,20 +2018,29 @@ async function nextVoucherNumber(db: D1Database, eventId: string) {
   return `${prefix}${String(maxSeq + 1).padStart(4, "0")}`;
 }
 
-/** After inserts/deletes, compact EPV-YYYYMMDD-#### per day prefix for this event; sync payment_reference when it matched the old voucher number. */
+/**
+ * Compact EPV-YYYYMMDD-#### per payment date after create/delete/payment-date change.
+ * Only updates voucher_number, payment_reference (when empty or matched old voucher_number), and updated_at.
+ * Status, amounts, supplier/payee fields, signatures, receipts, and confirmation timestamps are never modified.
+ */
 async function resequenceSupplierVoucherNumbersForEvent(db: D1Database, eventId: string) {
   const res = await db
     .prepare(
-      `SELECT id, voucher_number, payment_reference, created_at FROM supplier_payment_vouchers WHERE event_id = ? ORDER BY created_at ASC`
+      `SELECT id, voucher_number, payment_reference, payment_date, created_at
+       FROM supplier_payment_vouchers WHERE event_id = ? ORDER BY payment_date ASC, created_at ASC`
     )
     .bind(eventId)
-    .all<{ id: string; voucher_number: string; payment_reference: string | null; created_at: string }>();
-  const rows = (res.results || []) as { id: string; voucher_number: string; payment_reference: string | null; created_at: string }[];
+    .all<{ id: string; voucher_number: string; payment_reference: string | null; payment_date: string | null; created_at: string }>();
+  const rows = (res.results || []) as {
+    id: string;
+    voucher_number: string;
+    payment_reference: string | null;
+    payment_date: string | null;
+    created_at: string;
+  }[];
   const groups = new Map<string, typeof rows>();
   for (const r of rows) {
-    const m = String(r.voucher_number || "").match(/^EPV-(\d{8})-(\d{4})$/);
-    if (!m) continue;
-    const ymd = m[1];
+    const ymd = paymentDateToYmd(r.payment_date, r.created_at);
     if (!groups.has(ymd)) groups.set(ymd, []);
     groups.get(ymd)!.push(r);
   }
@@ -2087,7 +2109,7 @@ function publicVoucherPayload(row: Record<string, unknown>) {
   };
 }
 
-app.get("/api/events/:eventId/payment-vouchers", requireRole(["admin", "staff"]), async (c) => {
+app.get("/api/events/:eventId/payment-vouchers", requireRole(["admin"]), async (c) => {
   const eventId = c.req.param("eventId");
   const res = await c.env.DB.prepare(
     `SELECT v.id, v.event_id, v.expense_id, v.token, v.voucher_number, v.status, v.supplier_name, v.payee_email,
@@ -2107,7 +2129,7 @@ app.get("/api/events/:eventId/payment-vouchers", requireRole(["admin", "staff"])
   return c.json({ items: res.results });
 });
 
-app.post("/api/events/:eventId/payment-vouchers", requireRole(["admin", "staff"]), async (c) => {
+app.post("/api/events/:eventId/payment-vouchers", requireRole(["admin"]), async (c) => {
   const eventId = c.req.param("eventId") ?? "";
   if (!eventId) throw new HTTPException(400, { message: "eventId is required." });
   const body = await c.req.json();
@@ -2123,9 +2145,15 @@ app.post("/api/events/:eventId/payment-vouchers", requireRole(["admin", "staff"]
     if (!expense) throw new HTTPException(400, { message: "Linked expense not found for this event." });
   }
 
+  const paymentDateRaw = String(body.paymentDate ?? "").trim();
+  if (paymentDateRaw && !/^\d{4}-\d{2}-\d{2}$/.test(paymentDateRaw)) {
+    throw new HTTPException(400, { message: "Payment date must be YYYY-MM-DD." });
+  }
+  const paymentDateVal = paymentDateRaw || null;
+
   const id = crypto.randomUUID();
   const token = crypto.randomUUID();
-  const voucherNumber = await nextVoucherNumber(c.env.DB, eventId);
+  const voucherNumber = await nextVoucherNumber(c.env.DB, eventId, paymentDateVal);
   const paymentReference = String(body.paymentReference ?? "").trim() || voucherNumber;
   await c.env.DB.prepare(
     `INSERT INTO supplier_payment_vouchers (
@@ -2147,7 +2175,7 @@ app.post("/api/events/:eventId/payment-vouchers", requireRole(["admin", "staff"]
       String(body.currency ?? "PHP").trim() || "PHP",
       String(body.paymentMethod ?? "").trim() || null,
       paymentReference,
-      String(body.paymentDate ?? "").trim() || null,
+      paymentDateVal,
       String(body.description ?? "").trim() || null,
       String(body.notes ?? "").trim() || null,
       actor?.email ?? null
@@ -2158,7 +2186,7 @@ app.post("/api/events/:eventId/payment-vouchers", requireRole(["admin", "staff"]
   return c.json({ item, confirmUrl: `/supplier-voucher/${token}` }, 201);
 });
 
-app.get("/api/payment-vouchers/:id", requireRole(["admin", "staff"]), async (c) => {
+app.get("/api/payment-vouchers/:id", requireRole(["admin"]), async (c) => {
   const id = c.req.param("id");
   const row = await c.env.DB.prepare(
     `SELECT v.*,
@@ -2177,7 +2205,7 @@ app.get("/api/payment-vouchers/:id", requireRole(["admin", "staff"]), async (c) 
   });
 });
 
-app.patch("/api/payment-vouchers/:id", requireRole(["admin", "staff"]), async (c) => {
+app.patch("/api/payment-vouchers/:id", requireRole(["admin"]), async (c) => {
   const id = c.req.param("id");
   const body = await c.req.json();
   const existing = await c.env.DB.prepare("SELECT * FROM supplier_payment_vouchers WHERE id = ?").bind(id).first<Record<string, unknown>>();
@@ -2186,6 +2214,7 @@ app.patch("/api/payment-vouchers/:id", requireRole(["admin", "staff"]), async (c
   if (body.status === "void") {
     if (existing.status === "confirmed") throw new HTTPException(400, { message: "Cannot void a confirmed voucher." });
     await c.env.DB.prepare("UPDATE supplier_payment_vouchers SET status = 'void', updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(id).run();
+    await resequenceSupplierVoucherNumbersForEvent(c.env.DB, String(existing.event_id || ""));
     const item = await c.env.DB.prepare("SELECT * FROM supplier_payment_vouchers WHERE id = ?").bind(id).first();
     return c.json({ item });
   }
@@ -2248,6 +2277,14 @@ app.patch("/api/payment-vouchers/:id", requireRole(["admin", "staff"]), async (c
         ? new Date().toISOString()
         : (existing.receipt_uploaded_at as string | null);
 
+    const nextPaymentDate =
+      body.paymentDate !== undefined ? String(body.paymentDate ?? "").trim() || null : (existing.payment_date as string | null);
+    if (body.paymentDate !== undefined && nextPaymentDate && !/^\d{4}-\d{2}-\d{2}$/.test(nextPaymentDate)) {
+      throw new HTTPException(400, { message: "Payment date must be YYYY-MM-DD." });
+    }
+    const paymentDateChanged =
+      body.paymentDate !== undefined && String(nextPaymentDate || "") !== String(existing.payment_date || "");
+
     await c.env.DB.prepare(
       `UPDATE supplier_payment_vouchers SET
         expense_id = ?,
@@ -2275,7 +2312,7 @@ app.patch("/api/payment-vouchers/:id", requireRole(["admin", "staff"]), async (c
         amount,
         body.paymentMethod !== undefined ? String(body.paymentMethod ?? "").trim() || null : existing.payment_method,
         body.paymentReference !== undefined ? String(body.paymentReference ?? "").trim() || null : existing.payment_reference,
-        body.paymentDate !== undefined ? String(body.paymentDate ?? "").trim() || null : existing.payment_date,
+        nextPaymentDate,
         body.description !== undefined ? String(body.description ?? "").trim() || null : existing.description,
         body.notes !== undefined ? String(body.notes ?? "").trim() || null : existing.notes,
         dateReceived,
@@ -2286,14 +2323,26 @@ app.patch("/api/payment-vouchers/:id", requireRole(["admin", "staff"]), async (c
       )
       .run();
 
+    if (paymentDateChanged) {
+      await resequenceSupplierVoucherNumbersForEvent(c.env.DB, String(existing.event_id || ""));
+    }
+
     const item = await c.env.DB.prepare("SELECT * FROM supplier_payment_vouchers WHERE id = ?").bind(id).first();
-    return c.json({ item, editedBy: actor?.email ?? null });
+    return c.json({ item, editedBy: actor?.email ?? null, renumbered: paymentDateChanged });
   }
 
   throw new HTTPException(400, { message: "Unsupported update." });
 });
 
-app.delete("/api/payment-vouchers/:id", requireRole(["admin", "staff"]), async (c) => {
+app.post("/api/events/:eventId/payment-vouchers/resequence", requireRole(["admin"]), async (c) => {
+  const eventId = c.req.param("eventId");
+  const event = await c.env.DB.prepare("SELECT id FROM events WHERE id = ?").bind(eventId).first();
+  if (!event) throw new HTTPException(404, { message: "Event not found." });
+  await resequenceSupplierVoucherNumbersForEvent(c.env.DB, eventId);
+  return c.json({ ok: true });
+});
+
+app.delete("/api/payment-vouchers/:id", requireRole(["admin"]), async (c) => {
   assertSuperuser(c);
   const id = c.req.param("id");
   const existing = await c.env.DB.prepare("SELECT id, event_id FROM supplier_payment_vouchers WHERE id = ?").bind(id).first<{ id: string; event_id: string }>();
@@ -2433,7 +2482,8 @@ app.get("/api/events/:eventId/expense-report", requireRole(["admin", "staff"]), 
     .all();
 
   const expenseRows = expenses.results ?? [];
-  const voucherRows = vouchers.results ?? [];
+  const includeVouchers = getRole(c) === "admin";
+  const voucherRows = includeVouchers ? vouchers.results ?? [] : [];
   const expenseTotal = expenseRows.reduce((s, r) => s + (Number((r as Record<string, unknown>).amount) || 0), 0);
   const confirmedVouchers = voucherRows.filter((r) => (r as Record<string, unknown>).status === "confirmed");
   const voucherPaidTotal = confirmedVouchers.reduce((s, r) => s + (Number((r as Record<string, unknown>).amount) || 0), 0);
@@ -2473,7 +2523,7 @@ app.get("/api/events/:eventId/expense-report", requireRole(["admin", "staff"]), 
   });
 });
 
-app.get("/api/payment-vouchers/:id/receipt", requireRole(["admin", "staff"]), async (c) => {
+app.get("/api/payment-vouchers/:id/receipt", requireRole(["admin"]), async (c) => {
   const id = c.req.param("id");
   const row = await c.env.DB.prepare(
     "SELECT supplier_receipt_data_url, supplier_receipt_number, receipt_uploaded_at, voucher_number FROM supplier_payment_vouchers WHERE id = ?"
@@ -2491,7 +2541,7 @@ app.get("/api/payment-vouchers/:id/receipt", requireRole(["admin", "staff"]), as
   });
 });
 
-app.get("/api/payment-vouchers/:id/signature", requireRole(["admin", "staff"]), async (c) => {
+app.get("/api/payment-vouchers/:id/signature", requireRole(["admin"]), async (c) => {
   const id = c.req.param("id");
   const row = await c.env.DB.prepare(
     `SELECT signature_data_url, signature_method, signer_name, signer_title, status,

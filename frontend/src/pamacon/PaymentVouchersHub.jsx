@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import { Check, Copy, Edit3, Eye, FileSignature, Link2, Plus, Trash2, XCircle } from "lucide-react";
+import { Check, Copy, Download, Edit3, Eye, FileSignature, Link2, Plus, Trash2, XCircle } from "lucide-react";
 import {
   createPaymentVoucher,
   deletePaymentVoucher,
   getPaymentVoucherReceipt,
   getPaymentVoucherSignature,
   getPaymentVouchers,
+  resequencePaymentVouchers,
   supplierVoucherPublicUrl,
   voidPaymentVoucher,
 } from "../lib/api";
@@ -18,6 +19,25 @@ const STATUS_STYLES = {
   confirmed: "bg-emerald-50 text-emerald-800",
   void: "bg-rose-50 text-rose-700",
 };
+
+function csvEscapeCell(value) {
+  const s = value == null ? "" : String(value);
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function downloadCsv(filename, header, rows) {
+  const lines = [header.map(csvEscapeCell).join(","), ...rows.map((r) => r.map(csvEscapeCell).join(","))];
+  const blob = new Blob([`\uFEFF${lines.join("\n")}`], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
 
 function SetupInput({ label, ...props }) {
   return (
@@ -149,6 +169,70 @@ export default function PaymentVouchersHub({ eventId, suppliers, canEdit, isAdmi
     }
   };
 
+  const syncVoucherNumbers = async () => {
+    if (!eventId) return;
+    if (!window.confirm("Renumber all EPV series to match each voucher's payment date? Default payment references that matched the old voucher number will be updated too.")) return;
+    try {
+      await resequencePaymentVouchers(eventId);
+      await reload();
+      onInfo?.("Voucher numbers aligned to payment dates.");
+    } catch (e) {
+      onError?.(e, "Failed to sync voucher numbers.");
+    }
+  };
+
+  const downloadMasterList = () => {
+    if (!vouchers.length) {
+      onInfo?.("No vouchers to export.");
+      return;
+    }
+    const day = new Date().toISOString().slice(0, 10);
+    const header = [
+      "voucher_no",
+      "payment_ref",
+      "status",
+      "supplier",
+      "payee_email",
+      "payee_contact",
+      "amount_php",
+      "currency",
+      "payment_method",
+      "payment_date",
+      "date_received",
+      "description",
+      "notes",
+      "supplier_receipt_no",
+      "receipt_on_file",
+      "signed",
+      "confirmed_at",
+      "created_at",
+      "confirm_link",
+    ];
+    const rows = vouchers.map((v) => [
+      v.voucher_number,
+      v.payment_reference,
+      v.status,
+      v.supplier_name,
+      v.payee_email,
+      v.payee_contact,
+      Number(v.amount) || 0,
+      v.currency || "PHP",
+      v.payment_method,
+      v.payment_date,
+      v.date_received ? formatPaidStampDate(v.date_received) : "",
+      v.description,
+      v.notes,
+      v.supplier_receipt_number,
+      v.has_receipt ? "yes" : "no",
+      v.has_signature ? "yes" : "no",
+      v.confirmed_at || "",
+      v.created_at || "",
+      supplierVoucherPublicUrl(v.token),
+    ]);
+    downloadCsv(`pamacon-payment-vouchers-master-${day}.csv`, header, rows);
+    onInfo?.(`Exported ${rows.length} voucher(s).`);
+  };
+
   const openView = async (v) => {
     setViewVoucher(v);
     setViewSignature(null);
@@ -179,15 +263,38 @@ export default function PaymentVouchersHub({ eventId, suppliers, canEdit, isAdmi
             <p className="text-sm text-slate-500">Send suppliers a link to confirm receipt and sign electronically.</p>
           </div>
         </div>
-        <button
-          type="button"
-          disabled={!canEdit || !eventId}
-          onClick={() => setIsAdding(!isAdding)}
-          className="inline-flex items-center gap-2 bg-slate-900 text-white px-8 py-3 rounded-2xl font-black text-xs uppercase shadow-lg hover:bg-black disabled:opacity-40"
-        >
-          <Plus size={16} aria-hidden />
-          {isAdding ? "Cancel" : "New voucher"}
-        </button>
+        <div className="flex flex-wrap gap-3">
+          {isAdmin ? (
+            <>
+              <button
+                type="button"
+                disabled={!eventId || loading}
+                onClick={downloadMasterList}
+                className="inline-flex items-center gap-2 bg-white border-2 border-slate-200 text-slate-800 px-6 py-3 rounded-2xl font-black text-xs uppercase hover:bg-slate-50 disabled:opacity-40"
+              >
+                <Download size={16} aria-hidden />
+                Download master list
+              </button>
+              <button
+                type="button"
+                disabled={!eventId || loading}
+                onClick={() => void syncVoucherNumbers()}
+                className="inline-flex items-center gap-2 bg-white border-2 border-slate-200 text-slate-600 px-6 py-3 rounded-2xl font-black text-xs uppercase hover:bg-slate-50 disabled:opacity-40"
+              >
+                Sync EPV dates
+              </button>
+            </>
+          ) : null}
+          <button
+            type="button"
+            disabled={!canEdit || !eventId}
+            onClick={() => setIsAdding(!isAdding)}
+            className="inline-flex items-center gap-2 bg-slate-900 text-white px-8 py-3 rounded-2xl font-black text-xs uppercase shadow-lg hover:bg-black disabled:opacity-40"
+          >
+            <Plus size={16} aria-hidden />
+            {isAdding ? "Cancel" : "New voucher"}
+          </button>
+        </div>
       </div>
 
       {isAdding && (

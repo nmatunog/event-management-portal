@@ -307,6 +307,10 @@ export function createPaymentVoucher(eventId, payload) {
   });
 }
 
+export function resequencePaymentVouchers(eventId) {
+  return request(`/api/events/${eventId}/payment-vouchers/resequence`, { method: "POST" });
+}
+
 export function getEventExpenseReport(eventId) {
   return request(`/api/events/${eventId}/expense-report`);
 }

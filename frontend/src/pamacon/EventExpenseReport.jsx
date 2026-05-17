@@ -22,7 +22,7 @@ function downloadCsv(filename, header, rows) {
   URL.revokeObjectURL(url);
 }
 
-export default function EventExpenseReport({ eventId, onError }) {
+export default function EventExpenseReport({ eventId, showVouchers = false, onError }) {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -61,18 +61,20 @@ export default function EventExpenseReport({ eventId, onError }) {
       "",
       "",
     ]);
-    const voucherRows = (report.vouchers || []).map((v) => [
-      "payment_voucher",
-      v.voucher_number,
-      v.payment_reference,
-      v.supplier_name,
-      "",
-      Number(v.amount) || 0,
-      v.status,
-      v.date_received ? formatPaidStampDate(v.date_received) : "",
-      v.has_receipt ? "yes" : "no",
-      v.description || "",
-    ]);
+    const voucherRows = showVouchers
+      ? (report.vouchers || []).map((v) => [
+          "payment_voucher",
+          v.voucher_number,
+          v.payment_reference,
+          v.supplier_name,
+          "",
+          Number(v.amount) || 0,
+          v.status,
+          v.date_received ? formatPaidStampDate(v.date_received) : "",
+          v.has_receipt ? "yes" : "no",
+          v.description || "",
+        ])
+      : [];
 
     downloadCsv(`pamacon-full-expense-report-${eventTitle}-${day}.csv`, expenseHeader, [...expenseRows, ...voucherRows]);
   };
@@ -95,7 +97,9 @@ export default function EventExpenseReport({ eventId, onError }) {
           <div>
             <h3 className="text-lg font-black uppercase text-slate-800">Full event expense report</h3>
             <p className="text-sm text-slate-500">
-              Collates budget lines, payment vouchers (with reference numbers), and supplier receipts on file.
+              {showVouchers
+                ? "Collates budget lines, payment vouchers (with reference numbers), and supplier receipts on file."
+                : "Collates budget lines and expense totals for the event."}
             </p>
           </div>
         </div>
@@ -109,25 +113,31 @@ export default function EventExpenseReport({ eventId, onError }) {
         </button>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className={`grid gap-4 ${showVouchers ? "grid-cols-2 md:grid-cols-4" : "grid-cols-1 sm:grid-cols-2"}`}>
         <div className="rounded-2xl bg-slate-50 p-4 border">
           <p className="text-[10px] font-black uppercase text-slate-400">Expense lines</p>
           <p className="text-2xl font-black text-slate-800">{s.expenseLineCount ?? 0}</p>
           <p className="text-xs text-slate-500">₱{(Number(s.expenseLedgerTotal) || 0).toLocaleString()} total</p>
         </div>
-        <div className="rounded-2xl bg-slate-50 p-4 border">
-          <p className="text-[10px] font-black uppercase text-slate-400">Payment vouchers</p>
-          <p className="text-2xl font-black text-slate-800">{s.voucherCount ?? 0}</p>
-          <p className="text-xs text-slate-500">{s.confirmedVoucherCount ?? 0} confirmed</p>
-        </div>
-        <div className="rounded-2xl bg-emerald-50 p-4 border border-emerald-100">
-          <p className="text-[10px] font-black uppercase text-emerald-700">Confirmed paid</p>
-          <p className="text-2xl font-black text-emerald-900">₱{(Number(s.voucherPaidTotal) || 0).toLocaleString()}</p>
-        </div>
-        <div className="rounded-2xl bg-blue-50 p-4 border border-blue-100">
-          <p className="text-[10px] font-black uppercase text-blue-700">Receipts on file</p>
-          <p className="text-2xl font-black text-blue-900">{s.receiptsOnFile ?? 0}</p>
-        </div>
+        {showVouchers ? (
+          <div className="rounded-2xl bg-slate-50 p-4 border">
+            <p className="text-[10px] font-black uppercase text-slate-400">Payment vouchers</p>
+            <p className="text-2xl font-black text-slate-800">{s.voucherCount ?? 0}</p>
+            <p className="text-xs text-slate-500">{s.confirmedVoucherCount ?? 0} confirmed</p>
+          </div>
+        ) : null}
+        {showVouchers ? (
+          <>
+            <div className="rounded-2xl bg-emerald-50 p-4 border border-emerald-100">
+              <p className="text-[10px] font-black uppercase text-emerald-700">Confirmed paid</p>
+              <p className="text-2xl font-black text-emerald-900">₱{(Number(s.voucherPaidTotal) || 0).toLocaleString()}</p>
+            </div>
+            <div className="rounded-2xl bg-blue-50 p-4 border border-blue-100">
+              <p className="text-[10px] font-black uppercase text-blue-700">Receipts on file</p>
+              <p className="text-2xl font-black text-blue-900">{s.receiptsOnFile ?? 0}</p>
+            </div>
+          </>
+        ) : null}
       </div>
 
       {(s.byCategory || []).length > 0 ? (
@@ -138,7 +148,9 @@ export default function EventExpenseReport({ eventId, onError }) {
                 <th className="p-3 text-[10px] font-black uppercase text-slate-400">Category</th>
                 <th className="p-3 text-[10px] font-black uppercase text-slate-400">Budgeted lines</th>
                 <th className="p-3 text-[10px] font-black uppercase text-slate-400">Line total</th>
-                <th className="p-3 text-[10px] font-black uppercase text-slate-400">Voucher paid</th>
+                {showVouchers ? (
+                  <th className="p-3 text-[10px] font-black uppercase text-slate-400">Voucher paid</th>
+                ) : null}
               </tr>
             </thead>
             <tbody>
@@ -147,7 +159,9 @@ export default function EventExpenseReport({ eventId, onError }) {
                   <td className="p-3 font-semibold">{row.category}</td>
                   <td className="p-3">{row.count}</td>
                   <td className="p-3 font-black">₱{(Number(row.budgeted) || 0).toLocaleString()}</td>
-                  <td className="p-3 font-black text-emerald-800">₱{(Number(row.voucherPaid) || 0).toLocaleString()}</td>
+                  {showVouchers ? (
+                    <td className="p-3 font-black text-emerald-800">₱{(Number(row.voucherPaid) || 0).toLocaleString()}</td>
+                  ) : null}
                 </tr>
               ))}
             </tbody>
@@ -155,6 +169,7 @@ export default function EventExpenseReport({ eventId, onError }) {
         </div>
       ) : null}
 
+      {showVouchers ? (
       <div className="overflow-x-auto rounded-2xl border">
         <p className="px-4 py-2 text-[10px] font-black uppercase text-slate-400 bg-slate-50 border-b">Payment vouchers</p>
         <table className="w-full text-sm">
@@ -192,6 +207,7 @@ export default function EventExpenseReport({ eventId, onError }) {
           </tbody>
         </table>
       </div>
+      ) : null}
     </div>
   );
 }

@@ -330,7 +330,7 @@ export function VoucherEditDialog({ voucher, suppliers, onClose, onSaved, onErro
   );
 }
 
-/** Supplier payment vouchers — view for staff/admin; edit for admin only. */
+/** Supplier payment vouchers — admin only (view and edit). */
 export default function SupplierVouchersPanel({
   eventId,
   suppliers = [],
