@@ -2127,7 +2127,7 @@ app.get("/api/events/:eventId/payment-vouchers", requireRole(["admin"]), async (
             CASE WHEN v.supplier_receipt_data_url IS NOT NULL AND v.supplier_receipt_data_url != '' THEN 1 ELSE 0 END AS has_receipt
      FROM supplier_payment_vouchers v
      WHERE v.event_id = ?
-     ORDER BY v.created_at DESC`
+     ORDER BY v.payment_date ASC, v.created_at ASC`
   )
     .bind(eventId)
     .all();
@@ -2187,6 +2187,7 @@ app.post("/api/events/:eventId/payment-vouchers", requireRole(["admin"]), async 
     )
     .run();
 
+  await resequenceSupplierVoucherNumbersForEvent(c.env.DB, eventId);
   const item = await c.env.DB.prepare("SELECT * FROM supplier_payment_vouchers WHERE id = ?").bind(id).first();
   return c.json({ item, confirmUrl: `/supplier-voucher/${token}` }, 201);
 });

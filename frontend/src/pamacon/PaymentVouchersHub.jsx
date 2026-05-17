@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, Copy, Download, Edit3, Eye, FileSignature, Link2, Plus, Trash2, XCircle } from "lucide-react";
 import {
   createPaymentVoucher,
@@ -24,6 +24,31 @@ function csvEscapeCell(value) {
   const s = value == null ? "" : String(value);
   if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
+}
+
+/** Global disbursement order from EPV-YYYYMMDD-#### suffix. */
+function disbursementSeq(voucherNumber) {
+  const m = String(voucherNumber || "").match(/^EPV-\d{8}-(\d{4})$/);
+  if (!m) return null;
+  const n = parseInt(m[1], 10);
+  return Number.isFinite(n) ? n : null;
+}
+
+function compareByDisbursement(a, b) {
+  const sa = disbursementSeq(a.voucher_number);
+  const sb = disbursementSeq(b.voucher_number);
+  if (sa != null && sb != null && sa !== sb) return sa - sb;
+  const pa = String(a.payment_date || a.created_at || "");
+  const pb = String(b.payment_date || b.created_at || "");
+  const cmp = pa.localeCompare(pb);
+  if (cmp !== 0) return cmp;
+  return String(a.created_at || "").localeCompare(String(b.created_at || ""));
+}
+
+function formatPaymentDate(iso) {
+  const raw = String(iso ?? "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return "—";
+  return formatPaidStampDate(raw);
 }
 
 function downloadCsv(filename, header, rows) {
@@ -89,6 +114,8 @@ export default function PaymentVouchersHub({ eventId, suppliers, canEdit, isAdmi
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  const vouchersByDisbursement = useMemo(() => [...vouchers].sort(compareByDisbursement), [vouchers]);
 
   const copyLink = async (v) => {
     const url = supplierVoucherPublicUrl(v.token);
@@ -173,26 +200,27 @@ export default function PaymentVouchersHub({ eventId, suppliers, canEdit, isAdmi
     if (!eventId) return;
     if (
       !window.confirm(
-        "Renumber all EPV codes? Each keeps its payment date in the code; suffix numbers run from earliest to latest payment date. Default payment references that matched the old voucher number will be updated too."
+        "Renumber disbursement sequence? EPV codes keep each payment date; #0001 = earliest disbursement, then #0002, and so on. Default payment references that matched the old voucher number will be updated too."
       )
     )
       return;
     try {
       await resequencePaymentVouchers(eventId);
       await reload();
-      onInfo?.("Voucher numbers resequenced by payment date.");
+      onInfo?.("Disbursement sequence renumbered.");
     } catch (e) {
       onError?.(e, "Failed to sync voucher numbers.");
     }
   };
 
   const downloadMasterList = () => {
-    if (!vouchers.length) {
+    if (!vouchersByDisbursement.length) {
       onInfo?.("No vouchers to export.");
       return;
     }
     const day = new Date().toISOString().slice(0, 10);
     const header = [
+      "disbursement_no",
       "voucher_no",
       "payment_ref",
       "status",
@@ -213,7 +241,8 @@ export default function PaymentVouchersHub({ eventId, suppliers, canEdit, isAdmi
       "created_at",
       "confirm_link",
     ];
-    const rows = vouchers.map((v) => [
+    const rows = vouchersByDisbursement.map((v) => [
+      disbursementSeq(v.voucher_number) ?? "",
       v.voucher_number,
       v.payment_reference,
       v.status,
@@ -265,7 +294,11 @@ export default function PaymentVouchersHub({ eventId, suppliers, canEdit, isAdmi
           </div>
           <div>
             <h3 className="text-xl font-black uppercase text-slate-800">Payment vouchers</h3>
-            <p className="text-sm text-slate-500">Send suppliers a link to confirm receipt and sign electronically.</p>
+            <p className="text-sm text-slate-500 max-w-xl">
+              Track expense disbursements in payment-date order. Each EPV code uses the date paid (
+              <span className="font-mono text-slate-600">EPV-YYYYMMDD-####</span>
+              ); <span className="font-semibold text-slate-700">####</span> is the running disbursement sequence (#1 = earliest payment).
+            </p>
           </div>
         </div>
         <div className="flex flex-wrap gap-3">
@@ -286,7 +319,7 @@ export default function PaymentVouchersHub({ eventId, suppliers, canEdit, isAdmi
                 onClick={() => void syncVoucherNumbers()}
                 className="inline-flex items-center gap-2 bg-white border-2 border-slate-200 text-slate-600 px-6 py-3 rounded-2xl font-black text-xs uppercase hover:bg-slate-50 disabled:opacity-40"
               >
-                Sync EPV dates
+                Resequence disbursements
               </button>
             </>
           ) : null}
@@ -384,6 +417,7 @@ export default function PaymentVouchersHub({ eventId, suppliers, canEdit, isAdmi
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-slate-50 text-left">
+                <th className="p-4 text-[10px] font-black uppercase text-slate-400 w-14">#</th>
                 <th className="p-4 text-[10px] font-black uppercase text-slate-400">Voucher / ref</th>
                 <th className="p-4 text-[10px] font-black uppercase text-slate-400">Supplier</th>
                 <th className="p-4 text-[10px] font-black uppercase text-slate-400">Amount</th>
@@ -394,15 +428,20 @@ export default function PaymentVouchersHub({ eventId, suppliers, canEdit, isAdmi
               </tr>
             </thead>
             <tbody>
-              {vouchers.length === 0 ? (
+              {vouchersByDisbursement.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-slate-500">
+                  <td colSpan={8} className="p-8 text-center text-slate-500">
                     No payment vouchers yet. Create one to send a confirmation link to a supplier.
                   </td>
                 </tr>
               ) : (
-                vouchers.map((v) => (
+                vouchersByDisbursement.map((v) => {
+                  const seq = disbursementSeq(v.voucher_number);
+                  return (
                   <tr key={v.id} className="border-b last:border-0 hover:bg-slate-50/80">
+                    <td className="p-4 font-black text-violet-700 tabular-nums text-sm">
+                      {seq != null ? seq : "—"}
+                    </td>
                     <td className="p-4 font-mono text-xs font-bold text-slate-700">
                       <div>{v.voucher_number}</div>
                       <div className="text-[10px] text-slate-500 font-normal">{v.payment_reference}</div>
@@ -410,7 +449,7 @@ export default function PaymentVouchersHub({ eventId, suppliers, canEdit, isAdmi
                     <td className="p-4 font-semibold text-slate-800">{v.supplier_name}</td>
                     <td className="p-4 font-black">₱{(Number(v.amount) || 0).toLocaleString()}</td>
                     <td className="p-4 text-slate-600 font-semibold text-xs">
-                      {v.date_received ? formatPaidStampDate(v.date_received) : "—"}
+                      {formatPaymentDate(v.payment_date)}
                     </td>
                     <td className="p-4 text-xs">{v.has_receipt ? "Yes" : "—"}</td>
                     <td className="p-4">
@@ -471,7 +510,8 @@ export default function PaymentVouchersHub({ eventId, suppliers, canEdit, isAdmi
                       </div>
                     </td>
                   </tr>
-                ))
+                );
+                })
               )}
             </tbody>
           </table>
