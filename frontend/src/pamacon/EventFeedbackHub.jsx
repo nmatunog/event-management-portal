@@ -74,7 +74,7 @@ function SpeakerScoreBar({ label, average }) {
   );
 }
 
-function MetricTile({ label, value, accent = "text-slate-900" }) {
+function MetricTile({ label, value, accent = "text-white" }) {
   return (
     <div className="bg-white/5 p-6 sm:p-8 rounded-[32px] border border-white/10 min-w-[120px] text-center">
       <p className="text-[10px] font-black uppercase text-white/50 mb-2 tracking-wide">{label}</p>
@@ -114,6 +114,7 @@ function OverviewTab({ data }) {
             <MetricTile
               label="Conference"
               value={(exec.conferenceProperAverage ?? data.overallAverage ?? 0).toFixed(1)}
+              accent="text-emerald-400"
             />
           </div>
         </div>
