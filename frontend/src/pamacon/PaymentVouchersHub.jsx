@@ -156,7 +156,7 @@ export default function PaymentVouchersHub({ eventId, suppliers, canEdit, isAdmi
   const handleDelete = async (id) => {
     if (
       !window.confirm(
-        "Permanently delete this voucher from the database? This cannot be undone. Remaining EPV numbers for the same date prefix will be resequenced (and default payment references updated to match)."
+        "Permanently delete this voucher from the database? This cannot be undone. Remaining EPV suffix numbers will be resequenced in payment-date order (and default payment references updated to match)."
       )
     )
       return;
@@ -171,11 +171,16 @@ export default function PaymentVouchersHub({ eventId, suppliers, canEdit, isAdmi
 
   const syncVoucherNumbers = async () => {
     if (!eventId) return;
-    if (!window.confirm("Renumber all EPV series to match each voucher's payment date? Default payment references that matched the old voucher number will be updated too.")) return;
+    if (
+      !window.confirm(
+        "Renumber all EPV codes? Each keeps its payment date in the code; suffix numbers run from earliest to latest payment date. Default payment references that matched the old voucher number will be updated too."
+      )
+    )
+      return;
     try {
       await resequencePaymentVouchers(eventId);
       await reload();
-      onInfo?.("Voucher numbers aligned to payment dates.");
+      onInfo?.("Voucher numbers resequenced by payment date.");
     } catch (e) {
       onError?.(e, "Failed to sync voucher numbers.");
     }

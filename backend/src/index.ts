@@ -2000,34 +2000,42 @@ function paymentDateToYmd(paymentDate: string | null | undefined, fallbackIso?: 
   return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`;
 }
 
+/** Sort key for global EPV suffix order: earliest payment date to latest, then created_at. */
+function paymentDateSortKey(paymentDate: string | null | undefined, createdAt: string) {
+  const raw = String(paymentDate ?? "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const d = new Date(createdAt);
+  if (Number.isNaN(d.getTime())) return "9999-12-31";
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
 async function nextVoucherNumber(db: D1Database, eventId: string, paymentDate?: string | null) {
   const ymd = paymentDateToYmd(paymentDate);
-  const prefix = `EPV-${ymd}-`;
   const res = await db
     .prepare("SELECT voucher_number FROM supplier_payment_vouchers WHERE event_id = ? AND voucher_number LIKE ?")
-    .bind(eventId, `${prefix}%`)
+    .bind(eventId, "EPV-%")
     .all<{ voucher_number: string }>();
   let maxSeq = 0;
   for (const r of res.results || []) {
-    const m = String(r.voucher_number || "").match(/^EPV-(\d{8})-(\d{4})$/);
-    if (m && m[1] === ymd) {
-      const n = parseInt(m[2], 10);
+    const m = String(r.voucher_number || "").match(/^EPV-\d{8}-(\d{4})$/);
+    if (m) {
+      const n = parseInt(m[1], 10);
       if (Number.isFinite(n)) maxSeq = Math.max(maxSeq, n);
     }
   }
-  return `${prefix}${String(maxSeq + 1).padStart(4, "0")}`;
+  return `EPV-${ymd}-${String(maxSeq + 1).padStart(4, "0")}`;
 }
 
 /**
- * Compact EPV-YYYYMMDD-#### per payment date after create/delete/payment-date change.
+ * Renumber EPV-YYYYMMDD-#### for an event: YYYYMMDD from each voucher's payment_date;
+ * #### is one series from earliest payment date to latest (ties by created_at).
  * Only updates voucher_number, payment_reference (when empty or matched old voucher_number), and updated_at.
- * Status, amounts, supplier/payee fields, signatures, receipts, and confirmation timestamps are never modified.
  */
 async function resequenceSupplierVoucherNumbersForEvent(db: D1Database, eventId: string) {
   const res = await db
     .prepare(
       `SELECT id, voucher_number, payment_reference, payment_date, created_at
-       FROM supplier_payment_vouchers WHERE event_id = ? ORDER BY payment_date ASC, created_at ASC`
+       FROM supplier_payment_vouchers WHERE event_id = ?`
     )
     .bind(eventId)
     .all<{ id: string; voucher_number: string; payment_reference: string | null; payment_date: string | null; created_at: string }>();
@@ -2038,37 +2046,34 @@ async function resequenceSupplierVoucherNumbersForEvent(db: D1Database, eventId:
     payment_date: string | null;
     created_at: string;
   }[];
-  const groups = new Map<string, typeof rows>();
-  for (const r of rows) {
-    const ymd = paymentDateToYmd(r.payment_date, r.created_at);
-    if (!groups.has(ymd)) groups.set(ymd, []);
-    groups.get(ymd)!.push(r);
-  }
+  rows.sort((a, b) => {
+    const cmp = paymentDateSortKey(a.payment_date, a.created_at).localeCompare(paymentDateSortKey(b.payment_date, b.created_at));
+    if (cmp !== 0) return cmp;
+    return String(a.created_at).localeCompare(String(b.created_at));
+  });
+  const snapshots = rows.map((row) => {
+    const oldVn = String(row.voucher_number || "");
+    const oldRef = String(row.payment_reference ?? "").trim();
+    return {
+      id: row.id,
+      ymd: paymentDateToYmd(row.payment_date, row.created_at),
+      oldVn,
+      oldRef,
+      refSynced: !oldRef || oldRef === oldVn,
+    };
+  });
   const now = new Date().toISOString();
-  for (const [ymd, list] of groups) {
-    list.sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
-    const snapshots = list.map((row) => {
-      const oldVn = String(row.voucher_number || "");
-      const oldRef = String(row.payment_reference ?? "").trim();
-      return {
-        id: row.id,
-        oldVn,
-        oldRef,
-        refSynced: !oldRef || oldRef === oldVn,
-      };
-    });
-    for (const s of snapshots) {
-      await db.prepare("UPDATE supplier_payment_vouchers SET voucher_number = ?, updated_at = ? WHERE id = ?").bind(`EPV-RESEQ-${s.id}`, now, s.id).run();
-    }
-    for (let i = 0; i < snapshots.length; i++) {
-      const s = snapshots[i];
-      const newVn = `EPV-${ymd}-${String(i + 1).padStart(4, "0")}`;
-      const newRef = s.refSynced ? newVn : s.oldRef || null;
-      await db
-        .prepare("UPDATE supplier_payment_vouchers SET voucher_number = ?, payment_reference = ?, updated_at = ? WHERE id = ?")
-        .bind(newVn, newRef, now, s.id)
-        .run();
-    }
+  for (const s of snapshots) {
+    await db.prepare("UPDATE supplier_payment_vouchers SET voucher_number = ?, updated_at = ? WHERE id = ?").bind(`EPV-RESEQ-${s.id}`, now, s.id).run();
+  }
+  for (let i = 0; i < snapshots.length; i++) {
+    const s = snapshots[i];
+    const newVn = `EPV-${s.ymd}-${String(i + 1).padStart(4, "0")}`;
+    const newRef = s.refSynced ? newVn : s.oldRef || null;
+    await db
+      .prepare("UPDATE supplier_payment_vouchers SET voucher_number = ?, payment_reference = ?, updated_at = ? WHERE id = ?")
+      .bind(newVn, newRef, now, s.id)
+      .run();
   }
 }
 
