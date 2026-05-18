@@ -214,6 +214,19 @@ function normalizeSpeakerMaterialsFromConfig(configJson: unknown) {
     .slice(0, 24);
 }
 
+function isPinnedSpeakerMaterialTitle(title: string) {
+  const t = String(title || "").trim().toLowerCase();
+  return t.includes("rise with the current") && (t.includes("eric nicdao") || t.includes("nicdao"));
+}
+
+function sortSpeakerMaterialsPinnedFirst<T extends { title?: string }>(items: T[]) {
+  return [...items].sort((a, b) => {
+    const aPinned = isPinnedSpeakerMaterialTitle(String(a.title || "")) ? 0 : 1;
+    const bPinned = isPinnedSpeakerMaterialTitle(String(b.title || "")) ? 0 : 1;
+    return aPinned - bPinned;
+  });
+}
+
 const SPEAKER_MATERIALS_MAX = 24;
 const SPEAKER_PDF_MAX_BYTES = 5 * 1024 * 1024;
 
@@ -273,7 +286,7 @@ async function listSpeakerMaterialItems(c: Context<AppContext>, eventId: string)
       downloadUrl: `${origin}${filePath}?download=1`,
     };
   });
-  return [...linkItems, ...uploadItems].slice(0, SPEAKER_MATERIALS_MAX);
+  return sortSpeakerMaterialsPinnedFirst([...linkItems, ...uploadItems]).slice(0, SPEAKER_MATERIALS_MAX);
 }
 
 async function assertSpeakerMaterialsAccess(
