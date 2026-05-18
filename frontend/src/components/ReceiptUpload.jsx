@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Upload, X } from "lucide-react";
 import { reencodeImageDataUrlAsJpeg } from "../lib/imageCompress";
 import { normalizeReceiptImages } from "../lib/receiptImages";
+import ZoomableImage from "./ZoomableImage";
 
 const DEFAULT_MAX = 8;
 
@@ -53,12 +54,19 @@ export default function ReceiptUpload({
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {images.map((url, index) => (
             <div key={`${index}-${url.slice(0, 32)}`} className="relative rounded-2xl border bg-white p-2">
-              <img src={url} alt={`Receipt ${index + 1}`} className="max-h-36 w-full object-contain" />
+              <ZoomableImage
+                src={url}
+                alt={`Receipt ${index + 1}`}
+                thumbnailClassName="max-h-36 w-full object-contain"
+              />
               {!disabled ? (
                 <button
                   type="button"
-                  onClick={() => removeAt(index)}
-                  className="absolute top-1.5 right-1.5 rounded-full bg-slate-900/80 text-white p-1.5"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeAt(index);
+                  }}
+                  className="absolute top-1.5 right-1.5 z-10 rounded-full bg-slate-900/80 text-white p-1.5"
                   title="Remove image"
                   aria-label={`Remove receipt image ${index + 1}`}
                 >

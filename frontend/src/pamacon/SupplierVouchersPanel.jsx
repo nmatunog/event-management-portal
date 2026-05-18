@@ -3,6 +3,7 @@ import { Edit3, Eye, FileSignature, Link2 } from "lucide-react";
 import { formatPaidStampDate } from "../components/PaidStamp";
 import PaidStamp from "../components/PaidStamp";
 import ReceiptUpload from "../components/ReceiptUpload";
+import ZoomableImage from "../components/ZoomableImage";
 import {
   getPaymentVoucherReceipt,
   getPaymentVoucherSignature,
@@ -119,12 +120,7 @@ export function VoucherDetailDialog({ voucher, signature, receipt, onClose }) {
             ) : null}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {(receipt.receiptDataUrls?.length ? receipt.receiptDataUrls : [receipt.receiptDataUrl]).map((url, i) => (
-                <img
-                  key={i}
-                  src={url}
-                  alt={`Official receipt ${i + 1}`}
-                  className="max-h-56 w-full object-contain border rounded-xl p-2 bg-white"
-                />
+                <ZoomableImage key={i} src={url} alt={`Official receipt ${i + 1}`} />
               ))}
             </div>
           </div>
@@ -144,7 +140,11 @@ export function VoucherDetailDialog({ voucher, signature, receipt, onClose }) {
               </p>
             ) : null}
             {sig.signatureDataUrl ? (
-              <img src={sig.signatureDataUrl} alt="Supplier signature" className="max-h-40 mx-auto border rounded-xl p-3 bg-white" />
+              <ZoomableImage
+                src={sig.signatureDataUrl}
+                alt="Supplier signature"
+                thumbnailClassName="max-h-40 w-full mx-auto object-contain border rounded-xl p-3 bg-white"
+              />
             ) : (
               <p className="text-xs text-amber-800 bg-amber-50 rounded-xl p-3">Typed-name acknowledgment.</p>
             )}

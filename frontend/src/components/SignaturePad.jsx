@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Eraser, PenLine, Upload } from "lucide-react";
 import { reencodeImageDataUrlAsJpeg } from "../lib/imageCompress";
+import ZoomableImage from "./ZoomableImage";
 
 const SIGNATURE_MAX_SIDE = 520;
 
@@ -178,7 +179,11 @@ export default function SignaturePad({ value = "", onChange, disabled = false })
           </label>
           {value ? (
             <div className="rounded-2xl border bg-white p-4">
-              <img src={value} alt="Uploaded signature preview" className="max-h-32 mx-auto object-contain" />
+              <ZoomableImage
+                src={value}
+                alt="Uploaded signature preview"
+                thumbnailClassName="max-h-32 w-full mx-auto object-contain"
+              />
             </div>
           ) : null}
         </div>
