@@ -90,6 +90,7 @@ import {
   normalizeExpenseCategory,
 } from "./expenseCategories";
 import SpeakerMaterialsSetup from "./SpeakerMaterialsSetup";
+import SpeakerMaterialsUploadPanel from "./SpeakerMaterialsUploadPanel";
 import { inferSeedRole, modeToPaymentPlan, PAMACON_SEED_DELEGATES } from "./seedDelegates";
 import { parseSeedListOcrRows } from "./parseSeedListOcrRows";
 import ProfileModule from "../components/ProfileModule";
@@ -1511,7 +1512,15 @@ export default function PamaconApp({
               />
             )}
             {activeTab === "speakers" && (
-              <SpeakersHub speakers={speakers} totalHonorarium={totalSpeakerHonorarium} eventId={eventId} canEdit={canEdit} onReload={reloadAll} onError={onApiError} />
+              <SpeakersHub
+                speakers={speakers}
+                totalHonorarium={totalSpeakerHonorarium}
+                eventId={eventId}
+                canEdit={canEdit}
+                onReload={reloadAll}
+                onError={onApiError}
+                onInfo={onApiInfo}
+              />
             )}
             {activeTab === "suppliers" && (
               <div className="space-y-8">
@@ -4171,7 +4180,7 @@ function SuppliersHub({ suppliers, totalSpend, eventId, canEdit, onReload, onErr
   );
 }
 
-function SpeakersHub({ speakers, eventId, canEdit, onReload, onError, totalHonorarium }) {
+function SpeakersHub({ speakers, eventId, canEdit, onReload, onError, onInfo, totalHonorarium }) {
   const [editing, setEditing] = useState(null);
   const cats = ["Best Practice Sharer", "Panel", "Keynote Speaker", "Workshop", "Others"];
 
@@ -4227,6 +4236,8 @@ function SpeakersHub({ speakers, eventId, canEdit, onReload, onError, totalHonor
           Add talk Slot
         </button>
       </div>
+
+      <SpeakerMaterialsUploadPanel eventId={eventId} canEdit={canEdit} onInfo={onInfo} onError={onError} />
 
       {editing && (
         <div className="bg-white p-10 rounded-[40px] border-2 border-red-100 shadow-xl space-y-6">

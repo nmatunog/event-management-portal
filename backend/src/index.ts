@@ -196,7 +196,91 @@ function normalizeSpeakerMaterialsFromConfig(configJson: unknown) {
       };
     })
     .filter((r) => r.viewUrl)
+    .map((r) => ({ ...r, source: "link" as const }))
     .slice(0, 24);
+}
+
+const SPEAKER_MATERIALS_MAX = 24;
+const SPEAKER_PDF_MAX_BYTES = 5 * 1024 * 1024;
+
+function stripDataUrlBase64(raw: string) {
+  const trimmed = String(raw || "").trim();
+  const comma = trimmed.indexOf(",");
+  if (trimmed.startsWith("data:") && comma >= 0) return trimmed.slice(comma + 1);
+  return trimmed;
+}
+
+function decodeBase64ToBytes(b64: string) {
+  const clean = stripDataUrlBase64(b64).replace(/\s/g, "");
+  if (!clean) return new Uint8Array(0);
+  const binary = atob(clean);
+  const out = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) out[i] = binary.charCodeAt(i);
+  return out;
+}
+
+function encodeBytesToBase64(bytes: Uint8Array) {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]!);
+  return btoa(binary);
+}
+
+function isPdfBytes(bytes: Uint8Array) {
+  return bytes.length >= 4 && bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46;
+}
+
+function safeContentFileName(raw: unknown, fallback = "presentation.pdf") {
+  const name = String(raw || "")
+    .trim()
+    .replace(/[^\w.\- ()[\]]+/g, "_")
+    .slice(0, 120);
+  return name.toLowerCase().endsWith(".pdf") ? name : `${name || "presentation"}.pdf`;
+}
+
+async function listSpeakerMaterialItems(c: Context<AppContext>, eventId: string) {
+  const event = await c.env.DB.prepare("SELECT config_json FROM events WHERE id = ?").bind(eventId).first<{ config_json?: string }>();
+  if (!event) throw new HTTPException(404, { message: "Event not found." });
+  const linkItems = normalizeSpeakerMaterialsFromConfig(event.config_json);
+  const uploadsRes = await c.env.DB.prepare(
+    "SELECT id, title, file_name, created_at FROM speaker_material_uploads WHERE event_id = ? ORDER BY created_at ASC"
+  )
+    .bind(eventId)
+    .all<{ id: string; title?: string; file_name?: string }>();
+  const origin = new URL(c.req.url).origin;
+  const uploadItems = (uploadsRes.results || []).map((row) => {
+    const fileId = String(row.id);
+    const filePath = `/api/events/${eventId}/speaker-materials/files/${fileId}`;
+    return {
+      id: `upload-${fileId}`,
+      fileId,
+      title: String(row.title || row.file_name || "Presentation").trim() || "Presentation",
+      source: "upload" as const,
+      viewUrl: `${origin}${filePath}`,
+      downloadUrl: `${origin}${filePath}?download=1`,
+    };
+  });
+  return [...linkItems, ...uploadItems].slice(0, SPEAKER_MATERIALS_MAX);
+}
+
+async function assertSpeakerMaterialsAccess(
+  c: Context<AppContext>,
+  eventId: string,
+  role: Role,
+  email: string,
+  profile: { firstName?: string; lastName?: string; nickname?: string },
+  seededRegistrationId: string,
+  seededDelegateName: string
+) {
+  if (role === "admin" || role === "staff") {
+    return { hasAccess: true, registrationName: "" };
+  }
+  const rowsRes = await c.env.DB.prepare("SELECT * FROM registrations WHERE event_id = ? ORDER BY created_at ASC").bind(eventId).all();
+  const rows = (rowsRes.results || []) as Record<string, unknown>[];
+  const candidate = findSyncCandidate(rows, email, { seededRegistrationId, seededDelegateName, profile });
+  return {
+    hasAccess: Boolean(candidate?.id),
+    registrationName: candidate ? String(candidate.full_name || "").trim() : "",
+  };
 }
 
 function normalizeName(value: unknown) {
@@ -1254,27 +1338,25 @@ app.get("/api/events/:eventId/speaker-materials", requireRole(["admin", "staff",
   const role = getRole(c);
   const actor = c.get("authUser");
   const email = String(actor?.email || "").trim().toLowerCase();
-  const event = await c.env.DB.prepare("SELECT config_json FROM events WHERE id = ?").bind(eventId).first<{ config_json?: string }>();
-  if (!event) throw new HTTPException(404, { message: "Event not found." });
-  const items = normalizeSpeakerMaterialsFromConfig(event.config_json);
+  const qs = c.req.query();
+  const profile = {
+    firstName: String(qs.firstName ?? "").trim(),
+    lastName: String(qs.lastName ?? "").trim(),
+    nickname: String(qs.nickname ?? "").trim(),
+  };
+  const seededRegistrationId = String(qs.seededRegistrationId ?? "").trim();
+  const seededDelegateName = String(qs.seededDelegateName ?? "").trim();
+  const items = await listSpeakerMaterialItems(c, eventId);
   const hasMaterials = items.length > 0;
-  let hasAccess = role === "admin" || role === "staff";
-  let registrationName = "";
-  if (!hasAccess) {
-    const qs = c.req.query();
-    const profile = {
-      firstName: String(qs.firstName ?? "").trim(),
-      lastName: String(qs.lastName ?? "").trim(),
-      nickname: String(qs.nickname ?? "").trim(),
-    };
-    const seededRegistrationId = String(qs.seededRegistrationId ?? "").trim();
-    const seededDelegateName = String(qs.seededDelegateName ?? "").trim();
-    const rowsRes = await c.env.DB.prepare("SELECT * FROM registrations WHERE event_id = ? ORDER BY created_at ASC").bind(eventId).all();
-    const rows = (rowsRes.results || []) as Record<string, unknown>[];
-    const candidate = findSyncCandidate(rows, email, { seededRegistrationId, seededDelegateName, profile });
-    hasAccess = Boolean(candidate?.id);
-    registrationName = candidate ? String(candidate.full_name || "").trim() : "";
-  }
+  const { hasAccess, registrationName } = await assertSpeakerMaterialsAccess(
+    c,
+    eventId,
+    role,
+    email,
+    profile,
+    seededRegistrationId,
+    seededDelegateName
+  );
   return c.json({
     hasMaterials,
     hasAccess,
@@ -1283,6 +1365,93 @@ app.get("/api/events/:eventId/speaker-materials", requireRole(["admin", "staff",
     message: hasAccess
       ? ""
       : "Sign in with your delegate email and complete your profile so we can match you to a PAMACON registration before opening speaker materials.",
+  });
+});
+
+app.post("/api/events/:eventId/speaker-materials/uploads", requireRole(["admin", "staff"]), async (c) => {
+  const eventId = c.req.param("eventId");
+  const body = await c.req.json().catch(() => ({}));
+  const title = String(body?.title ?? "").trim() || "Presentation";
+  const fileName = safeContentFileName(body?.fileName, "presentation.pdf");
+  const bytes = decodeBase64ToBytes(String(body?.dataBase64 ?? ""));
+  if (!bytes.length) throw new HTTPException(400, { message: "PDF file data is required." });
+  if (bytes.length > SPEAKER_PDF_MAX_BYTES) {
+    throw new HTTPException(400, { message: `PDF must be ${SPEAKER_PDF_MAX_BYTES / (1024 * 1024)} MB or smaller.` });
+  }
+  if (!isPdfBytes(bytes)) throw new HTTPException(400, { message: "Only PDF files are accepted." });
+
+  const existing = await listSpeakerMaterialItems(c, eventId);
+  if (existing.length >= SPEAKER_MATERIALS_MAX) {
+    throw new HTTPException(400, { message: `Maximum of ${SPEAKER_MATERIALS_MAX} speaker materials per event.` });
+  }
+
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  await c.env.DB.prepare(
+    `INSERT INTO speaker_material_uploads (id, event_id, title, file_name, mime_type, file_data, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'application/pdf', ?, ?, ?)`
+  )
+    .bind(id, eventId, title, fileName, encodeBytesToBase64(bytes), now, now)
+    .run();
+
+  const items = await listSpeakerMaterialItems(c, eventId);
+  const item = items.find((row) => row.fileId === id);
+  return c.json({ item, items }, 201);
+});
+
+app.delete("/api/events/:eventId/speaker-materials/uploads/:fileId", requireRole(["admin", "staff"]), async (c) => {
+  const eventId = c.req.param("eventId");
+  const fileId = c.req.param("fileId");
+  const row = await c.env.DB.prepare("SELECT id FROM speaker_material_uploads WHERE id = ? AND event_id = ?")
+    .bind(fileId, eventId)
+    .first();
+  if (!row) throw new HTTPException(404, { message: "Upload not found." });
+  await c.env.DB.prepare("DELETE FROM speaker_material_uploads WHERE id = ?").bind(fileId).run();
+  const items = await listSpeakerMaterialItems(c, eventId);
+  return c.json({ ok: true, items });
+});
+
+app.get("/api/events/:eventId/speaker-materials/files/:fileId", requireRole(["admin", "staff", "attendee"]), async (c) => {
+  const eventId = c.req.param("eventId");
+  const fileId = c.req.param("fileId");
+  const role = getRole(c);
+  const email = String(c.get("authUser")?.email || "").trim().toLowerCase();
+  const qs = c.req.query();
+  const profile = {
+    firstName: String(qs.firstName ?? "").trim(),
+    lastName: String(qs.lastName ?? "").trim(),
+    nickname: String(qs.nickname ?? "").trim(),
+  };
+  const seededRegistrationId = String(qs.seededRegistrationId ?? "").trim();
+  const seededDelegateName = String(qs.seededDelegateName ?? "").trim();
+  const { hasAccess } = await assertSpeakerMaterialsAccess(
+    c,
+    eventId,
+    role,
+    email,
+    profile,
+    seededRegistrationId,
+    seededDelegateName
+  );
+  if (!hasAccess) throw new HTTPException(403, { message: "Registration required to open speaker materials." });
+
+  const row = await c.env.DB.prepare(
+    "SELECT event_id, title, file_name, mime_type, file_data FROM speaker_material_uploads WHERE id = ? AND event_id = ?"
+  )
+    .bind(fileId, eventId)
+    .first<{ event_id: string; title?: string; file_name?: string; mime_type?: string; file_data: string }>();
+  if (!row) throw new HTTPException(404, { message: "File not found." });
+
+  const bytes = decodeBase64ToBytes(row.file_data);
+  if (!bytes.length || !isPdfBytes(bytes)) throw new HTTPException(500, { message: "Stored file is invalid." });
+  const download = String(c.req.query("download") ?? "") === "1";
+  const fileName = safeContentFileName(row.file_name, "presentation.pdf");
+  return new Response(bytes, {
+    headers: {
+      "Content-Type": row.mime_type || "application/pdf",
+      "Content-Disposition": `${download ? "attachment" : "inline"}; filename="${fileName}"`,
+      "Cache-Control": "private, max-age=3600",
+    },
   });
 });
 

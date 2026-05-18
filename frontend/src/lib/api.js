@@ -162,6 +162,76 @@ export function getSpeakerMaterials(eventId, params = {}) {
   return request(`/api/events/${eventId}/speaker-materials${qs ? `?${qs}` : ""}`);
 }
 
+export function uploadSpeakerMaterialPdf(eventId, payload) {
+  return request(`/api/events/${eventId}/speaker-materials/uploads`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteSpeakerMaterialUpload(eventId, fileId) {
+  return request(`/api/events/${eventId}/speaker-materials/uploads/${encodeURIComponent(fileId)}`, {
+    method: "DELETE",
+  });
+}
+
+function speakerMaterialFileQuery(params = {}) {
+  const q = new URLSearchParams();
+  if (params.firstName) q.set("firstName", String(params.firstName));
+  if (params.lastName) q.set("lastName", String(params.lastName));
+  if (params.nickname) q.set("nickname", String(params.nickname));
+  if (params.seededRegistrationId) q.set("seededRegistrationId", String(params.seededRegistrationId));
+  if (params.seededDelegateName) q.set("seededDelegateName", String(params.seededDelegateName));
+  return q.toString();
+}
+
+/** Open or download an uploaded PDF (requires auth + delegate registration for attendees). */
+export async function openSpeakerMaterialFile(eventId, fileId, { download = false, ...matchParams } = {}) {
+  const qs = speakerMaterialFileQuery(matchParams);
+  const suffix = download ? `${qs ? `${qs}&` : ""}download=1` : qs;
+  const response = await fetchWithRetry(
+    `${API_BASE}/api/events/${eventId}/speaker-materials/files/${encodeURIComponent(fileId)}${suffix ? `?${suffix}` : ""}`,
+    {
+      headers: {
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      },
+    }
+  );
+  if (!response.ok) {
+    let message = `Request failed: ${response.status}`;
+    try {
+      const text = await response.text();
+      if (text) {
+        try {
+          const parsed = JSON.parse(text);
+          message = parsed?.message || parsed?.error || text;
+        } catch {
+          message = text;
+        }
+      }
+    } catch {
+      // no-op
+    }
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  if (download) {
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "presentation.pdf";
+    anchor.rel = "noopener";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+  } else {
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+  window.setTimeout(() => URL.revokeObjectURL(url), 120000);
+}
+
 export function getMyRegistrationRowSummary(eventId, params = {}) {
   const q = new URLSearchParams();
   if (params.seededRegistrationId) q.set("seededRegistrationId", String(params.seededRegistrationId));

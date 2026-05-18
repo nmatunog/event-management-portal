@@ -1,16 +1,39 @@
 import { Link } from "react-router-dom";
+import { useState } from "react";
 import { Download, ExternalLink, FileText, Lock } from "lucide-react";
+import { openSpeakerMaterialFile } from "../lib/api";
 import { normalizeSpeakerMaterials } from "./speakerMaterials";
 
 export default function SpeakerMaterialsSection({
+  eventId,
   materials = [],
   loading = false,
   hasAccess = false,
   hasMaterials = true,
   registrationName = "",
   lockMessage = "",
+  attendeeSyncHints = {},
+  profile = {},
+  onApiError,
 }) {
+  const [fileBusyId, setFileBusyId] = useState("");
   const items = normalizeSpeakerMaterials(materials);
+
+  const fileMatchParams = {
+    firstName: profile?.firstName,
+    lastName: profile?.lastName,
+    nickname: profile?.nickname,
+    seededRegistrationId: attendeeSyncHints?.seededRegistrationId,
+    seededDelegateName: attendeeSyncHints?.seededDelegateName,
+  };
+
+  const openUploadedFile = (item, download) => {
+    if (!eventId || !item.fileId) return;
+    setFileBusyId(item.id);
+    void openSpeakerMaterialFile(eventId, item.fileId, { download, ...fileMatchParams })
+      .catch((e) => onApiError?.(e, download ? "Could not download PDF." : "Could not open PDF."))
+      .finally(() => setFileBusyId(""));
+  };
   if (!hasMaterials && !loading) return null;
 
   return (
@@ -21,7 +44,7 @@ export default function SpeakerMaterialsSection({
           Speakers&apos; presentation copies
         </h2>
         <p className="text-sm text-slate-600 max-w-2xl">
-          View or download slide decks and notes shared by the program team (Google Drive). Available to registered delegates who are signed in.
+          View or download slide decks and notes from the program team. Available to registered delegates who are signed in.
         </p>
       </div>
 
@@ -77,25 +100,50 @@ export default function SpeakerMaterialsSection({
               >
                 <p className="text-sm font-bold text-slate-900 leading-snug">{item.title}</p>
                 <div className="flex flex-wrap gap-2 mt-auto">
-                  <a
-                    href={item.viewUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex flex-1 min-w-[120px] items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-xs font-black uppercase text-white hover:bg-violet-700"
-                  >
-                    <ExternalLink size={14} aria-hidden />
-                    View
-                  </a>
-                  <a
-                    href={item.downloadUrl || item.viewUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    download
-                    className="inline-flex flex-1 min-w-[120px] items-center justify-center gap-2 rounded-xl border-2 border-violet-200 bg-violet-50 px-4 py-2.5 text-xs font-black uppercase text-violet-800 hover:bg-violet-100"
-                  >
-                    <Download size={14} aria-hidden />
-                    Download
-                  </a>
+                  {item.source === "upload" ? (
+                    <>
+                      <button
+                        type="button"
+                        disabled={fileBusyId === item.id}
+                        onClick={() => openUploadedFile(item, false)}
+                        className="inline-flex flex-1 min-w-[120px] items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-xs font-black uppercase text-white hover:bg-violet-700 disabled:opacity-50"
+                      >
+                        <ExternalLink size={14} aria-hidden />
+                        {fileBusyId === item.id ? "Opening…" : "View"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={fileBusyId === item.id}
+                        onClick={() => openUploadedFile(item, true)}
+                        className="inline-flex flex-1 min-w-[120px] items-center justify-center gap-2 rounded-xl border-2 border-violet-200 bg-violet-50 px-4 py-2.5 text-xs font-black uppercase text-violet-800 hover:bg-violet-100 disabled:opacity-50"
+                      >
+                        <Download size={14} aria-hidden />
+                        Download
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <a
+                        href={item.viewUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex flex-1 min-w-[120px] items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-xs font-black uppercase text-white hover:bg-violet-700"
+                      >
+                        <ExternalLink size={14} aria-hidden />
+                        View
+                      </a>
+                      <a
+                        href={item.downloadUrl || item.viewUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        download
+                        className="inline-flex flex-1 min-w-[120px] items-center justify-center gap-2 rounded-xl border-2 border-violet-200 bg-violet-50 px-4 py-2.5 text-xs font-black uppercase text-violet-800 hover:bg-violet-100"
+                      >
+                        <Download size={14} aria-hidden />
+                        Download
+                      </a>
+                    </>
+                  )}
                 </div>
               </div>
             ))}

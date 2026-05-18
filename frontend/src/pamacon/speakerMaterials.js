@@ -8,11 +8,14 @@ export function normalizeSpeakerMaterials(value) {
       const viewUrl = String(row?.viewUrl ?? row?.url ?? "").trim();
       const downloadUrl = String(row?.downloadUrl ?? "").trim();
       const title = String(row?.title ?? "").trim() || `Speaker material ${i + 1}`;
+      const source = row?.source === "upload" ? "upload" : "link";
       return {
         id: String(row?.id || `speaker-material-${i}`),
+        fileId: String(row?.fileId || "").trim(),
         title,
         viewUrl,
         downloadUrl: downloadUrl || viewUrl,
+        source,
       };
     })
     .filter((r) => r.viewUrl)

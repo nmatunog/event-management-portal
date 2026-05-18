@@ -488,12 +488,16 @@ export default function ParticipantPortal({
         </section>
 
         <SpeakerMaterialsSection
+          eventId={eventId}
           materials={speakerMaterialsState.items}
           loading={speakerMaterialsState.loading}
           hasAccess={speakerMaterialsState.hasAccess}
           hasMaterials={speakerMaterialsState.hasMaterials}
           registrationName={speakerMaterialsState.registrationName}
           lockMessage={speakerMaterialsState.lockMessage}
+          attendeeSyncHints={attendeeSyncHints}
+          profile={profile}
+          onApiError={onApiError}
         />
 
         <section aria-labelledby="program-heading" className="space-y-4">
