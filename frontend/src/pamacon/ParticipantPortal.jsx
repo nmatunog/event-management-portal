@@ -3,6 +3,8 @@ import { Award, Calendar, Camera, ChevronDown, ClipboardCheck, ClipboardList, Cl
 import { useEffect, useMemo, useState } from "react";
 import { ATTENDEE_POSTER_MAX, DEFAULT_PAMACON_CONFIG, DEFAULT_ATTENDEE_PORTAL, PAMACON_TITLE } from "./defaultConfig";
 import AttendeeDetailsForm from "./AttendeeDetailsForm";
+import SpeakerMaterialsSection from "./SpeakerMaterialsSection";
+import { normalizeSpeakerMaterials } from "./speakerMaterials";
 
 function youtubeEmbedSrc(url) {
   if (!url || typeof url !== "string") return null;
@@ -51,6 +53,7 @@ export default function ParticipantPortal({
   const youtubeUrl =
     String(portal.youtubeUrl || "").trim() || String(import.meta.env.VITE_ATTENDEE_YOUTUBE_URL || "").trim();
   const embedSrc = youtubeEmbedSrc(youtubeUrl);
+  const speakerMaterials = useMemo(() => normalizeSpeakerMaterials(portal.speakerMaterials), [portal.speakerMaterials]);
   const firstName = typeof profile?.firstName === "string" ? profile.firstName.trim() : "";
   const dateRangeLabel = formatDateRange(start, end);
   const [showVenueModal, setShowVenueModal] = useState(false);
@@ -400,6 +403,8 @@ export default function ParticipantPortal({
             )}
           </div>
         </section>
+
+        <SpeakerMaterialsSection materials={portal.speakerMaterials} />
 
         <section aria-labelledby="program-heading" className="space-y-4">
           <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">

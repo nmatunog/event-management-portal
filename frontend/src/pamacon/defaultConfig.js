@@ -43,6 +43,8 @@ export const DEFAULT_ATTENDEE_PORTAL = {
   posterImageUrls: ["/landing/poster-sulog-cebu.png", "/landing/poster-pamacon-white.png", "", "", "", "", "", "", "", "", "", ""],
   /** Organizer inbox for quote requests (mailto). Falls back to VITE_QUOTE_REQUEST_EMAIL. */
   quoteRequestEmail: "",
+  /** Google Drive (or other) links — title + view/download URLs, managed in Setup. */
+  speakerMaterials: [],
 };
 
 export const DEFAULT_PAMACON_CONFIG = {
@@ -97,6 +99,9 @@ export function mergeConfigFromEvent(eventRow) {
         ...(parsed.attendeePortal || {}),
         posterDisplayCount,
         posterImageUrls: mergedPosters,
+        speakerMaterials: Array.isArray(parsed.attendeePortal?.speakerMaterials)
+          ? parsed.attendeePortal.speakerMaterials
+          : DEFAULT_ATTENDEE_PORTAL.speakerMaterials,
       },
     };
   } catch {

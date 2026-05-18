@@ -88,6 +88,7 @@ import {
   groupExpensesByCategory,
   normalizeExpenseCategory,
 } from "./expenseCategories";
+import SpeakerMaterialsSetup from "./SpeakerMaterialsSetup";
 import { inferSeedRole, modeToPaymentPlan, PAMACON_SEED_DELEGATES } from "./seedDelegates";
 import { parseSeedListOcrRows } from "./parseSeedListOcrRows";
 import ProfileModule from "../components/ProfileModule";
@@ -5108,8 +5109,10 @@ function SetupView({ config, setConfig, eventId, canEdit, isAdmin, isSuperuser, 
     quoteRequestEmail: "",
     posterDisplayCount: 3,
     posterImageUrls: ["", "", "", "", "", "", "", "", "", "", "", ""],
+    speakerMaterials: [],
     ...(local.attendeePortal || {}),
   };
+  const speakerMaterialRows = Array.isArray(portalConfig.speakerMaterials) ? portalConfig.speakerMaterials : [];
   const posterUrls = [...(portalConfig.posterImageUrls || []), "", "", "", "", "", "", "", "", "", "", "", ""].slice(0, ATTENDEE_POSTER_MAX);
   const updatePortalConfig = (patch) => {
     setLocal({
@@ -5303,6 +5306,11 @@ function SetupView({ config, setConfig, eventId, canEdit, isAdmin, isSuperuser, 
                 ))}
               </div>
             </div>
+            <SpeakerMaterialsSetup
+              rows={speakerMaterialRows}
+              canEdit={canEdit}
+              onChange={(speakerMaterials) => updatePortalConfig({ speakerMaterials })}
+            />
           </div>
         </div>
       )}
