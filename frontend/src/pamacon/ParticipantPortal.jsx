@@ -61,6 +61,8 @@ export default function ParticipantPortal({
     loading: true,
     hasMaterials: false,
     hasAccess: false,
+    evaluationComplete: false,
+    presentationUnlocked: false,
     items: [],
     registrationName: "",
     lockMessage: "",
@@ -72,6 +74,8 @@ export default function ParticipantPortal({
         loading: false,
         hasMaterials: false,
         hasAccess: false,
+        evaluationComplete: false,
+        presentationUnlocked: false,
         items: [],
         registrationName: "",
         lockMessage: "",
@@ -91,6 +95,8 @@ export default function ParticipantPortal({
         loading: false,
         hasMaterials: Boolean(data?.hasMaterials),
         hasAccess: Boolean(data?.hasAccess),
+        evaluationComplete: Boolean(data?.evaluationComplete),
+        presentationUnlocked: Boolean(data?.presentationUnlocked),
         items: Array.isArray(data?.items) ? data.items : [],
         registrationName: String(data?.registrationName || "").trim(),
         lockMessage: String(data?.message || "").trim(),
@@ -101,6 +107,8 @@ export default function ParticipantPortal({
         loading: false,
         hasMaterials: false,
         hasAccess: false,
+        evaluationComplete: false,
+        presentationUnlocked: false,
         items: [],
         registrationName: "",
         lockMessage: "",
@@ -110,6 +118,12 @@ export default function ParticipantPortal({
 
   useEffect(() => {
     void loadSpeakerMaterials();
+  }, [loadSpeakerMaterials]);
+
+  useEffect(() => {
+    const onFocus = () => void loadSpeakerMaterials();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
   }, [loadSpeakerMaterials]);
 
   const scrollToSpeakerMaterials = () => {
@@ -123,7 +137,8 @@ export default function ParticipantPortal({
   const mapsOpenUrl = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`;
   const mapsDirectionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${mapsQuery}`;
   const photosSearchUrl = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${venue} photos`)}`;
-  const presentationAccess = speakerMaterialsState.hasAccess;
+  const presentationAccess = speakerMaterialsState.presentationUnlocked;
+  const evaluationComplete = speakerMaterialsState.evaluationComplete;
   const programHasPresentations = useMemo(() => {
     const rows = Array.isArray(config?.programModules) ? config.programModules : [];
     return rows.some((row) => normalizeProgramModuleRow(row).hasPresentation);
@@ -205,7 +220,7 @@ export default function ParticipantPortal({
       style={{ paddingLeft: "max(0px, env(safe-area-inset-left))", paddingRight: "max(0px, env(safe-area-inset-right))" }}
     >
       <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/95 backdrop-blur-md shadow-sm">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 sm:py-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className={`mx-auto px-4 sm:px-6 py-4 sm:py-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between ${showPresentationHub ? "max-w-6xl" : "max-w-4xl"}`}>
           <div className="flex items-center gap-3 min-w-0">
             <div className="rounded-2xl bg-white border border-slate-200 flex items-center gap-2 px-3 py-2 shadow-sm shrink-0">
               <img src="/branding/pama-symbol.png" alt="PAMA" className="h-8 w-8 object-contain" />
@@ -229,13 +244,7 @@ export default function ParticipantPortal({
             {showPresentationHub ? (
               <button
                 type="button"
-                onClick={() => {
-                  if (programHasPresentations) {
-                    document.getElementById("program-heading")?.scrollIntoView({ behavior: "smooth", block: "start" });
-                  } else {
-                    scrollToSpeakerMaterials();
-                  }
-                }}
+                onClick={() => scrollToSpeakerMaterials()}
                 className="inline-flex items-center justify-center gap-1.5 min-h-[44px] rounded-xl border border-violet-200 bg-violet-50 px-3.5 py-2 text-sm font-semibold text-violet-900 hover:bg-violet-100 shadow-sm"
               >
                 <Presentation size={16} aria-hidden />
@@ -263,7 +272,7 @@ export default function ParticipantPortal({
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-8 sm:space-y-10">
+      <main className={`mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-8 sm:space-y-10 ${showPresentationHub ? "max-w-6xl" : "max-w-4xl"}`}>
         <section
           aria-labelledby="welcome-heading"
           className="relative overflow-hidden rounded-2xl sm:rounded-3xl border border-red-200/50 bg-gradient-to-br from-rose-50/95 via-white to-amber-50/70 p-5 sm:p-8 md:p-10 shadow-[0_20px_50px_-25px_rgba(185,28,28,0.25)]"
@@ -273,7 +282,8 @@ export default function ParticipantPortal({
           <div className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[120%] w-[120%] opacity-[0.07] bg-[radial-gradient(circle_at_center,_#dc2626_0%,_transparent_55%)]" aria-hidden />
 
           <div className="relative flex flex-col gap-6 sm:gap-8">
-            <div className="flex flex-col sm:flex-row sm:items-start gap-5">
+            <div className={`grid gap-6 ${showPresentationHub ? "lg:grid-cols-[minmax(0,1fr)_minmax(280px,380px)] lg:items-start" : ""}`}>
+            <div className="flex flex-col sm:flex-row sm:items-start gap-5 min-w-0">
               <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-red-600 to-rose-600 text-white shadow-lg shadow-red-600/30 ring-4 ring-white/80">
                 <Sparkles className="h-7 w-7" strokeWidth={2} aria-hidden />
               </div>
@@ -301,7 +311,7 @@ export default function ParticipantPortal({
                   )}
                 </h2>
                 <p className="text-sm sm:text-base text-slate-700 leading-relaxed max-w-2xl">
-                  Browse the posters and welcome video, share your conference evaluation, download speakers&apos; presentation copies, and update your travel profile whenever you need to.
+                  Browse the posters and welcome video, complete the conference evaluation, then unlock speakers&apos; presentation copies. Update your travel profile whenever you need to.
                 </p>
                 <div className="mt-4 flex flex-col sm:flex-row flex-wrap gap-3">
                   <Link
@@ -314,24 +324,40 @@ export default function ParticipantPortal({
                   {showPresentationHub ? (
                     <button
                       type="button"
-                      onClick={() => {
-                        if (programHasPresentations) {
-                          document.getElementById("program-heading")?.scrollIntoView({ behavior: "smooth", block: "start" });
-                        } else {
-                          scrollToSpeakerMaterials();
-                        }
-                      }}
-                      className="inline-flex w-full sm:w-auto flex-1 sm:flex-none items-center justify-center gap-2 min-h-[48px] rounded-2xl border-2 border-violet-300 bg-violet-50 px-6 py-3 text-sm font-bold text-violet-900 shadow-sm hover:bg-violet-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-600"
+                      onClick={() => scrollToSpeakerMaterials()}
+                      className={`inline-flex w-full sm:w-auto flex-1 sm:flex-none items-center justify-center gap-2 min-h-[48px] rounded-2xl border-2 px-6 py-3 text-sm font-bold shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
+                        presentationAccess
+                          ? "border-violet-300 bg-violet-50 text-violet-900 hover:bg-violet-100 focus-visible:outline-violet-600"
+                          : "border-slate-300 bg-slate-50 text-slate-700 hover:bg-slate-100 focus-visible:outline-slate-600"
+                      }`}
                     >
                       <Presentation size={18} aria-hidden />
-                      Presentation materials
+                      {presentationAccess ? "Presentation materials" : "Presentations (after evaluation)"}
                     </button>
                   ) : null}
                 </div>
                 <p className="mt-2 text-xs text-slate-500">
-                  Evaluation and presentation copies require sign-in. Speaker files are only released after we match you to a delegate registration.
+                  Sign in and complete the evaluation survey first. Presentation copies unlock after we match you to a delegate registration.
                 </p>
               </div>
+            </div>
+
+            {showPresentationHub ? (
+              <SpeakerMaterialsSection
+                embedded
+                eventId={eventId}
+                materials={speakerMaterialsState.items}
+                loading={speakerMaterialsState.loading}
+                hasAccess={speakerMaterialsState.hasAccess}
+                hasMaterials={showPresentationHub}
+                evaluationComplete={evaluationComplete}
+                registrationName={speakerMaterialsState.registrationName}
+                lockMessage={speakerMaterialsState.lockMessage}
+                attendeeSyncHints={attendeeSyncHints}
+                profile={profile}
+                onApiError={onApiError}
+              />
+            ) : null}
             </div>
 
             <div className={`relative grid grid-cols-1 sm:grid-cols-2 gap-3 ${SHOW_CEBU_TOUR_ACTIVITIES ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
@@ -512,19 +538,6 @@ export default function ParticipantPortal({
           </div>
         </section>
 
-        <SpeakerMaterialsSection
-          eventId={eventId}
-          materials={speakerMaterialsState.items}
-          loading={speakerMaterialsState.loading}
-          hasAccess={speakerMaterialsState.hasAccess}
-          hasMaterials={speakerMaterialsState.hasMaterials}
-          registrationName={speakerMaterialsState.registrationName}
-          lockMessage={speakerMaterialsState.lockMessage}
-          attendeeSyncHints={attendeeSyncHints}
-          profile={profile}
-          onApiError={onApiError}
-        />
-
         <section aria-labelledby="program-heading" className="space-y-4">
           <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
             <div className="relative border-b border-slate-100 bg-gradient-to-r from-red-50 via-white to-blue-50 px-4 sm:px-6 py-5">
@@ -607,9 +620,10 @@ export default function ParticipantPortal({
                             ) : null}
                             {item.hasPresentation ? (
                               <ProgramPresentationButtons
-                                viewUrl={presentationAccess ? item.presentationViewUrl : ""}
-                                downloadUrl={presentationAccess ? item.presentationDownloadUrl : ""}
-                                hasAccess={presentationAccess}
+                                viewUrl={item.presentationViewUrl}
+                                downloadUrl={item.presentationDownloadUrl}
+                                hasAccess={speakerMaterialsState.hasAccess}
+                                evaluationComplete={evaluationComplete}
                                 hasPresentation
                                 compact
                               />

@@ -1,6 +1,13 @@
 import { Download, ExternalLink, Lock } from "lucide-react";
 
-export default function ProgramPresentationButtons({ viewUrl, downloadUrl, hasAccess, hasPresentation = false, compact = false }) {
+export default function ProgramPresentationButtons({
+  viewUrl,
+  downloadUrl,
+  hasAccess,
+  hasPresentation = false,
+  evaluationComplete = false,
+  compact = false,
+}) {
   if (!hasPresentation && !viewUrl) return null;
 
   if (!hasAccess) {
@@ -8,6 +15,15 @@ export default function ProgramPresentationButtons({ viewUrl, downloadUrl, hasAc
       <p className={`flex items-center gap-1.5 text-amber-800 ${compact ? "text-[10px] mt-2" : "text-xs mt-3"}`}>
         <Lock size={compact ? 11 : 13} aria-hidden />
         Presentation materials — sign in and match your registration to open.
+      </p>
+    );
+  }
+
+  if (!evaluationComplete) {
+    return (
+      <p className={`flex items-center gap-1.5 text-red-800 ${compact ? "text-[10px] mt-2" : "text-xs mt-3"}`}>
+        <Lock size={compact ? 11 : 13} aria-hidden />
+        Complete the evaluation survey to unlock slides for this session.
       </p>
     );
   }

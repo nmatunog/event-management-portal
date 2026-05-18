@@ -283,6 +283,52 @@ async function assertSpeakerMaterialsAccess(
   };
 }
 
+async function findEventFeedbackRowForUser(
+  c: Context<AppContext>,
+  eventId: string,
+  email: string,
+  profile: { firstName?: string; lastName?: string; nickname?: string },
+  seededRegistrationId: string,
+  seededDelegateName: string
+) {
+  const firstName = String(profile.firstName ?? "").trim();
+  const lastName = String(profile.lastName ?? "").trim();
+  const rowsRes = await c.env.DB.prepare("SELECT * FROM registrations WHERE event_id = ? ORDER BY created_at ASC").bind(eventId).all();
+  const rows = (rowsRes.results || []) as Record<string, unknown>[];
+  const registration =
+    findSyncCandidate(rows, email, { seededRegistrationId, seededDelegateName, profile }) ||
+    (firstName && lastName ? findRegistrationByName(rows, firstName, lastName) : null);
+
+  let row = await c.env.DB.prepare("SELECT * FROM event_feedback WHERE event_id = ? AND respondent_email = ?")
+    .bind(eventId, email)
+    .first<Record<string, unknown>>();
+
+  if (!row?.id && registration) {
+    const resolvedFirst = firstName || String(registration.full_name || "").trim().split(/\s+/)[0] || "";
+    const resolvedLast =
+      lastName ||
+      String(registration.full_name || "")
+        .trim()
+        .split(/\s+/)
+        .slice(1)
+        .join(" ") ||
+      "";
+    const guestEmail = resolveFeedbackRespondentEmail(eventId, resolvedFirst, resolvedLast, registration);
+    if (guestEmail !== email) {
+      row = await c.env.DB.prepare("SELECT * FROM event_feedback WHERE event_id = ? AND respondent_email = ?")
+        .bind(eventId, guestEmail)
+        .first<Record<string, unknown>>();
+    }
+  }
+  return row;
+}
+
+function feedbackRowIsSubmitted(row: Record<string, unknown> | null | undefined) {
+  const mapped = mapFeedbackRow(row);
+  if (!mapped?.scores || typeof mapped.scores !== "object") return false;
+  return Object.values(mapped.scores as Record<string, unknown>).some((n) => Number(n) >= 1);
+}
+
 function normalizeName(value: unknown) {
   return String(value ?? "")
     .trim()
@@ -1357,14 +1403,27 @@ app.get("/api/events/:eventId/speaker-materials", requireRole(["admin", "staff",
     seededRegistrationId,
     seededDelegateName
   );
+  const staffBypass = role === "admin" || role === "staff";
+  const feedbackRow = staffBypass
+    ? null
+    : await findEventFeedbackRowForUser(c, eventId, email, profile, seededRegistrationId, seededDelegateName);
+  const evaluationComplete = staffBypass || feedbackRowIsSubmitted(feedbackRow);
+  const presentationUnlocked = hasAccess && evaluationComplete;
+  let message = "";
+  if (!hasAccess) {
+    message =
+      "Sign in with your delegate email and complete your profile so we can match you to a PAMACON registration before opening speaker materials.";
+  } else if (!evaluationComplete) {
+    message = "Complete the conference evaluation survey first to unlock presentation materials.";
+  }
   return c.json({
     hasMaterials,
     hasAccess,
+    evaluationComplete,
+    presentationUnlocked,
     registrationName,
-    items: hasAccess ? items : [],
-    message: hasAccess
-      ? ""
-      : "Sign in with your delegate email and complete your profile so we can match you to a PAMACON registration before opening speaker materials.",
+    items: presentationUnlocked ? items : [],
+    message,
   });
 });
 
@@ -1434,6 +1493,13 @@ app.get("/api/events/:eventId/speaker-materials/files/:fileId", requireRole(["ad
     seededDelegateName
   );
   if (!hasAccess) throw new HTTPException(403, { message: "Registration required to open speaker materials." });
+  const staffBypass = role === "admin" || role === "staff";
+  if (!staffBypass) {
+    const feedbackRow = await findEventFeedbackRowForUser(c, eventId, email, profile, seededRegistrationId, seededDelegateName);
+    if (!feedbackRowIsSubmitted(feedbackRow)) {
+      throw new HTTPException(403, { message: "Complete the conference evaluation survey before opening presentation files." });
+    }
+  }
 
   const row = await c.env.DB.prepare(
     "SELECT event_id, title, file_name, mime_type, file_data FROM speaker_material_uploads WHERE id = ? AND event_id = ?"
