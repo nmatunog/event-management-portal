@@ -45,6 +45,10 @@ export const DEFAULT_ATTENDEE_PORTAL = {
   quoteRequestEmail: "",
   /** Google Drive (or other) links — title + view/download URLs, managed in Setup. */
   speakerMaterials: [],
+  /** Shared Google Drive folder for post-event photos and videos. */
+  eventMediaDriveUrl: "",
+  /** Optional label for the attendee portal button. */
+  eventMediaDriveLabel: "",
 };
 
 export const DEFAULT_PAMACON_CONFIG = {
@@ -102,6 +106,8 @@ export function mergeConfigFromEvent(eventRow) {
         speakerMaterials: Array.isArray(parsed.attendeePortal?.speakerMaterials)
           ? parsed.attendeePortal.speakerMaterials
           : DEFAULT_ATTENDEE_PORTAL.speakerMaterials,
+        eventMediaDriveUrl: String(parsed.attendeePortal?.eventMediaDriveUrl ?? DEFAULT_ATTENDEE_PORTAL.eventMediaDriveUrl).trim(),
+        eventMediaDriveLabel: String(parsed.attendeePortal?.eventMediaDriveLabel ?? DEFAULT_ATTENDEE_PORTAL.eventMediaDriveLabel).trim(),
       },
     };
   } catch {

@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
 import { Award, Calendar, Camera, ChevronDown, ClipboardCheck, ClipboardList, Clock3, Film, ImageIcon, LogOut, MapPin, Music, Presentation, Sparkles, Star, User, Utensils } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { getSpeakerMaterials } from "../lib/api";
+import { getEventMedia, getSpeakerMaterials } from "../lib/api";
+import EventMediaAccessButton from "./EventMediaAccessButton";
 import { ATTENDEE_POSTER_MAX, DEFAULT_PAMACON_CONFIG, DEFAULT_ATTENDEE_PORTAL, PAMACON_TITLE } from "./defaultConfig";
 import AttendeeDetailsForm from "./AttendeeDetailsForm";
 import ProgramPresentationButtons from "./ProgramPresentationButtons";
@@ -67,6 +68,25 @@ export default function ParticipantPortal({
     registrationName: "",
     lockMessage: "",
   });
+  const [eventMediaState, setEventMediaState] = useState({
+    loading: true,
+    configured: false,
+    hasAccess: false,
+    url: "",
+    label: "",
+    lockMessage: "",
+  });
+
+  const mediaMatchParams = useMemo(
+    () => ({
+      firstName: profile?.firstName,
+      lastName: profile?.lastName,
+      nickname: profile?.nickname,
+      seededRegistrationId: attendeeSyncHints?.seededRegistrationId,
+      seededDelegateName: attendeeSyncHints?.seededDelegateName,
+    }),
+    [profile, attendeeSyncHints]
+  );
 
   const loadSpeakerMaterials = useCallback(async () => {
     if (!eventId || !authEmail) {
@@ -84,13 +104,7 @@ export default function ParticipantPortal({
     }
     setSpeakerMaterialsState((prev) => ({ ...prev, loading: true }));
     try {
-      const data = await getSpeakerMaterials(eventId, {
-        firstName: profile?.firstName,
-        lastName: profile?.lastName,
-        nickname: profile?.nickname,
-        seededRegistrationId: attendeeSyncHints?.seededRegistrationId,
-        seededDelegateName: attendeeSyncHints?.seededDelegateName,
-      });
+      const data = await getSpeakerMaterials(eventId, mediaMatchParams);
       setSpeakerMaterialsState({
         loading: false,
         hasMaterials: Boolean(data?.hasMaterials),
@@ -114,17 +128,59 @@ export default function ParticipantPortal({
         lockMessage: "",
       });
     }
-  }, [eventId, authEmail, profile, attendeeSyncHints, onApiError]);
+  }, [eventId, authEmail, mediaMatchParams, onApiError]);
+
+  const loadEventMedia = useCallback(async () => {
+    if (!eventId || !authEmail) {
+      setEventMediaState({
+        loading: false,
+        configured: false,
+        hasAccess: false,
+        url: "",
+        label: "",
+        lockMessage: "",
+      });
+      return;
+    }
+    setEventMediaState((prev) => ({ ...prev, loading: true }));
+    try {
+      const data = await getEventMedia(eventId, mediaMatchParams);
+      setEventMediaState({
+        loading: false,
+        configured: Boolean(data?.configured),
+        hasAccess: Boolean(data?.hasAccess),
+        url: String(data?.url || "").trim(),
+        label: String(data?.label || "").trim(),
+        lockMessage: String(data?.message || "").trim(),
+      });
+    } catch (e) {
+      onApiError?.(e, "Could not verify access to event photos and videos.");
+      setEventMediaState({
+        loading: false,
+        configured: false,
+        hasAccess: false,
+        url: "",
+        label: "",
+        lockMessage: "",
+      });
+    }
+  }, [eventId, authEmail, mediaMatchParams, onApiError]);
+
+  const reloadPortalAccess = useCallback(() => {
+    void loadSpeakerMaterials();
+    void loadEventMedia();
+  }, [loadSpeakerMaterials, loadEventMedia]);
 
   useEffect(() => {
     void loadSpeakerMaterials();
-  }, [loadSpeakerMaterials]);
+    void loadEventMedia();
+  }, [loadSpeakerMaterials, loadEventMedia]);
 
   useEffect(() => {
-    const onFocus = () => void loadSpeakerMaterials();
+    const onFocus = () => reloadPortalAccess();
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
-  }, [loadSpeakerMaterials]);
+  }, [reloadPortalAccess]);
 
   const scrollToSpeakerMaterials = () => {
     document.getElementById("speaker-materials")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -146,6 +202,7 @@ export default function ParticipantPortal({
   const showPresentationHub = POST_EVENT_ATTENDEE_PORTAL
     ? true
     : speakerMaterialsState.hasMaterials || programHasPresentations;
+  const showEventMediaHub = eventMediaState.configured || eventMediaState.loading;
   const programRows = useMemo(() => {
     const rows = Array.isArray(config?.programModules) ? config.programModules : [];
     const normalized = rows
@@ -242,6 +299,17 @@ export default function ParticipantPortal({
               <ClipboardList size={16} aria-hidden />
               Evaluation survey
             </Link>
+            {showEventMediaHub ? (
+              <EventMediaAccessButton
+                variant="header"
+                configured={eventMediaState.configured}
+                loading={eventMediaState.loading}
+                hasAccess={eventMediaState.hasAccess}
+                url={eventMediaState.url}
+                label={eventMediaState.label}
+                lockMessage={eventMediaState.lockMessage}
+              />
+            ) : null}
             {showPresentationHub ? (
               <button
                 type="button"
@@ -338,9 +406,13 @@ export default function ParticipantPortal({
                       We hope the sessions inspired you and strengthened our community.
                     </p>
                     <p className="text-sm sm:text-base text-slate-700 leading-relaxed max-w-2xl">
-                      Please take a few minutes to share your feedback, then explore selected speaker presentation materials made available for delegates.
+                      Please take a few minutes to share your feedback, browse event photos and videos, and explore speaker presentation materials made available for delegates.
                     </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div
+                      className={`grid grid-cols-1 gap-3 pt-1 ${
+                        showEventMediaHub ? "sm:grid-cols-2 lg:grid-cols-3" : "sm:grid-cols-2"
+                      }`}
+                    >
                       <div className="rounded-2xl border border-red-200 bg-white/90 p-4 shadow-sm space-y-2">
                         <p className="text-[11px] font-bold uppercase tracking-wide text-red-700">Now open</p>
                         <p className="text-sm font-bold text-slate-900">Conference evaluation survey</p>
@@ -348,6 +420,15 @@ export default function ParticipantPortal({
                           Your honest feedback helps us improve future PAMACON events. Required before presentation downloads unlock.
                         </p>
                       </div>
+                      <EventMediaAccessButton
+                        variant="card"
+                        configured={eventMediaState.configured || eventMediaState.loading}
+                        loading={eventMediaState.loading}
+                        hasAccess={eventMediaState.hasAccess}
+                        url={eventMediaState.url}
+                        label={eventMediaState.label}
+                        lockMessage={eventMediaState.lockMessage}
+                      />
                       <div className="rounded-2xl border border-violet-200 bg-white/90 p-4 shadow-sm space-y-2">
                         <p className="text-[11px] font-bold uppercase tracking-wide text-violet-700">Available now</p>
                         <p className="text-sm font-bold text-slate-900">Speaker presentation materials</p>
@@ -370,6 +451,16 @@ export default function ParticipantPortal({
                     <ClipboardList size={18} aria-hidden />
                     {POST_EVENT_ATTENDEE_PORTAL ? "Take the evaluation survey" : "Complete the conference evaluation survey"}
                   </Link>
+                  {showEventMediaHub ? (
+                    <EventMediaAccessButton
+                      configured={eventMediaState.configured || eventMediaState.loading}
+                      loading={eventMediaState.loading}
+                      hasAccess={eventMediaState.hasAccess}
+                      url={eventMediaState.url}
+                      label={eventMediaState.label}
+                      lockMessage={eventMediaState.lockMessage}
+                    />
+                  ) : null}
                   {showPresentationHub ? (
                     <button
                       type="button"

@@ -171,6 +171,20 @@ function registrationForListResponse(row: Record<string, unknown>) {
   };
 }
 
+function getEventMediaFromConfig(configJson: unknown) {
+  let config: Record<string, unknown> = {};
+  try {
+    if (typeof configJson === "string") config = JSON.parse(configJson) as Record<string, unknown>;
+    else if (configJson && typeof configJson === "object") config = configJson as Record<string, unknown>;
+  } catch {
+    config = {};
+  }
+  const portal = (config.attendeePortal || {}) as Record<string, unknown>;
+  const driveUrl = String(portal.eventMediaDriveUrl ?? "").trim();
+  const label = String(portal.eventMediaDriveLabel ?? "").trim() || "Event photos & videos";
+  return { driveUrl, label, configured: Boolean(driveUrl) };
+}
+
 function normalizeSpeakerMaterialsFromConfig(configJson: unknown) {
   let config: Record<string, unknown> = {};
   try {
@@ -1423,6 +1437,49 @@ app.get("/api/events/:eventId/speaker-materials", requireRole(["admin", "staff",
     presentationUnlocked,
     registrationName,
     items: presentationUnlocked ? items : [],
+    message,
+  });
+});
+
+app.get("/api/events/:eventId/event-media", requireRole(["admin", "staff", "attendee"]), async (c) => {
+  const eventId = c.req.param("eventId");
+  const role = getRole(c);
+  const email = String(c.get("authUser")?.email || "").trim().toLowerCase();
+  const qs = c.req.query();
+  const profile = {
+    firstName: String(qs.firstName ?? "").trim(),
+    lastName: String(qs.lastName ?? "").trim(),
+    nickname: String(qs.nickname ?? "").trim(),
+  };
+  const seededRegistrationId = String(qs.seededRegistrationId ?? "").trim();
+  const seededDelegateName = String(qs.seededDelegateName ?? "").trim();
+  const event = await c.env.DB.prepare("SELECT config_json FROM events WHERE id = ?").bind(eventId).first<{ config_json?: string }>();
+  if (!event) throw new HTTPException(404, { message: "Event not found." });
+  const { driveUrl, label, configured } = getEventMediaFromConfig(event.config_json);
+  const { hasAccess, registrationName } = await assertSpeakerMaterialsAccess(
+    c,
+    eventId,
+    role,
+    email,
+    profile,
+    seededRegistrationId,
+    seededDelegateName
+  );
+  const staffBypass = role === "admin" || role === "staff";
+  const canOpen = staffBypass || hasAccess;
+  let message = "";
+  if (!configured) {
+    message = "Event photos and videos are not published yet.";
+  } else if (!canOpen) {
+    message =
+      "Sign in with your delegate email and complete your profile so we can match you to a PAMACON registration before opening the album.";
+  }
+  return c.json({
+    configured,
+    hasAccess: canOpen,
+    registrationName,
+    label,
+    url: configured && canOpen ? driveUrl : "",
     message,
   });
 });

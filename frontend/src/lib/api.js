@@ -151,6 +151,17 @@ export function selfCheckInRegistration(eventId, payload) {
   });
 }
 
+export function getEventMedia(eventId, params = {}) {
+  const q = new URLSearchParams();
+  if (params.firstName) q.set("firstName", String(params.firstName));
+  if (params.lastName) q.set("lastName", String(params.lastName));
+  if (params.nickname) q.set("nickname", String(params.nickname));
+  if (params.seededRegistrationId) q.set("seededRegistrationId", String(params.seededRegistrationId));
+  if (params.seededDelegateName) q.set("seededDelegateName", String(params.seededDelegateName));
+  const qs = q.toString();
+  return request(`/api/events/${eventId}/event-media${qs ? `?${qs}` : ""}`);
+}
+
 export function getSpeakerMaterials(eventId, params = {}) {
   const q = new URLSearchParams();
   if (params.firstName) q.set("firstName", String(params.firstName));

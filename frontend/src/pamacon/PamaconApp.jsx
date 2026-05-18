@@ -90,6 +90,7 @@ import {
   normalizeExpenseCategory,
 } from "./expenseCategories";
 import SpeakerMaterialsSetup from "./SpeakerMaterialsSetup";
+import EventMediaSetup from "./EventMediaSetup";
 import SpeakerMaterialsUploadPanel from "./SpeakerMaterialsUploadPanel";
 import { emptyProgramModuleRow, normalizeProgramModuleRow } from "./programPresentation";
 import { inferSeedRole, modeToPaymentPlan, PAMACON_SEED_DELEGATES } from "./seedDelegates";
@@ -5203,6 +5204,8 @@ function SetupView({ config, setConfig, eventId, canEdit, isAdmin, isSuperuser, 
     posterDisplayCount: 3,
     posterImageUrls: ["", "", "", "", "", "", "", "", "", "", "", ""],
     speakerMaterials: [],
+    eventMediaDriveUrl: "",
+    eventMediaDriveLabel: "",
     ...(local.attendeePortal || {}),
   };
   const speakerMaterialRows = Array.isArray(portalConfig.speakerMaterials) ? portalConfig.speakerMaterials : [];
@@ -5403,6 +5406,12 @@ function SetupView({ config, setConfig, eventId, canEdit, isAdmin, isSuperuser, 
               rows={speakerMaterialRows}
               canEdit={canEdit}
               onChange={(speakerMaterials) => updatePortalConfig({ speakerMaterials })}
+            />
+            <EventMediaSetup
+              driveUrl={String(portalConfig.eventMediaDriveUrl || "")}
+              label={String(portalConfig.eventMediaDriveLabel || "")}
+              canEdit={canEdit}
+              onChange={(patch) => updatePortalConfig(patch)}
             />
           </div>
         </div>
