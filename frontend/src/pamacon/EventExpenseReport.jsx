@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Download, FileText } from "lucide-react";
 import { getEventExpenseReport } from "../lib/api";
 import { formatPaidStampDate } from "../components/PaidStamp";
+import { EXPENSE_CATEGORY_GROUPS, groupExpensesByCategory, normalizeExpenseCategory } from "./expenseCategories";
 
 function csvEscapeCell(value) {
   const s = value == null ? "" : String(value);
@@ -48,13 +49,14 @@ export default function EventExpenseReport({ eventId, showVouchers = false, onEr
     const day = new Date().toISOString().slice(0, 10);
     const eventTitle = String(report.event?.title || "event").replace(/[^\w.-]+/g, "_");
 
-    const expenseHeader = ["type", "voucher_no", "payment_ref", "supplier", "category", "amount_php", "status", "date_paid", "receipt_on_file", "particulars"];
+    const expenseHeader = ["type", "expense_group", "voucher_no", "payment_ref", "supplier", "category", "amount_php", "status", "date_paid", "receipt_on_file", "particulars"];
     const expenseRows = (report.expenses || []).map((e) => [
       "expense_line",
+      normalizeExpenseCategory(e.category, e.supplier),
       "",
       "",
       e.supplier,
-      e.category,
+      normalizeExpenseCategory(e.category, e.supplier),
       Number(e.amount) || 0,
       e.approved ? "approved" : "pending",
       "",
@@ -64,6 +66,7 @@ export default function EventExpenseReport({ eventId, showVouchers = false, onEr
     const voucherRows = showVouchers
       ? (report.vouchers || []).map((v) => [
           "payment_voucher",
+          "",
           v.voucher_number,
           v.payment_reference,
           v.supplier_name,
@@ -86,6 +89,35 @@ export default function EventExpenseReport({ eventId, showVouchers = false, onEr
   if (!report) return null;
 
   const s = report.summary || {};
+  const expenseRowsForGroup = (report.expenses || []).map((e) => ({
+    id: e.id,
+    company: e.supplier,
+    supplier: e.supplier,
+    category: e.category,
+    amount: e.amount,
+  }));
+  const expenseGroups = groupExpensesByCategory(expenseRowsForGroup);
+  const categorySummary = new Map((s.byCategory || []).map((row) => [normalizeExpenseCategory(row.category, ""), row]));
+  const groupedCategoryRows = EXPENSE_CATEGORY_GROUPS.map((heading) => {
+    const row = categorySummary.get(heading);
+    return {
+      heading,
+      count: row?.count ?? 0,
+      budgeted: row?.budgeted ?? 0,
+      voucherPaid: row?.voucherPaid ?? 0,
+    };
+  });
+  for (const row of s.byCategory || []) {
+    const h = normalizeExpenseCategory(row.category, "");
+    if (!EXPENSE_CATEGORY_GROUPS.includes(h)) {
+      groupedCategoryRows.push({
+        heading: h,
+        count: row.count,
+        budgeted: row.budgeted,
+        voucherPaid: row.voucherPaid,
+      });
+    }
+  }
 
   return (
     <div className="bg-white rounded-[40px] border shadow-sm p-8 space-y-6">
@@ -140,12 +172,12 @@ export default function EventExpenseReport({ eventId, showVouchers = false, onEr
         ) : null}
       </div>
 
-      {(s.byCategory || []).length > 0 ? (
+      <div className="space-y-6">
         <div className="overflow-x-auto rounded-2xl border">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b text-left">
-                <th className="p-3 text-[10px] font-black uppercase text-slate-400">Category</th>
+                <th className="p-3 text-[10px] font-black uppercase text-slate-400">Expense group</th>
                 <th className="p-3 text-[10px] font-black uppercase text-slate-400">Budgeted lines</th>
                 <th className="p-3 text-[10px] font-black uppercase text-slate-400">Line total</th>
                 {showVouchers ? (
@@ -154,9 +186,9 @@ export default function EventExpenseReport({ eventId, showVouchers = false, onEr
               </tr>
             </thead>
             <tbody>
-              {s.byCategory.map((row) => (
-                <tr key={row.category} className="border-b last:border-0">
-                  <td className="p-3 font-semibold">{row.category}</td>
+              {groupedCategoryRows.map((row) => (
+                <tr key={row.heading} className="border-b last:border-0">
+                  <td className="p-3 font-semibold">{row.heading}</td>
                   <td className="p-3">{row.count}</td>
                   <td className="p-3 font-black">₱{(Number(row.budgeted) || 0).toLocaleString()}</td>
                   {showVouchers ? (
@@ -167,7 +199,39 @@ export default function EventExpenseReport({ eventId, showVouchers = false, onEr
             </tbody>
           </table>
         </div>
-      ) : null}
+
+        {expenseGroups.some((g) => g.items.length > 0) ? (
+          <div className="space-y-6">
+            {expenseGroups.map((group) =>
+              group.items.length === 0 ? null : (
+                <div key={group.heading} className="overflow-x-auto rounded-2xl border">
+                  <p className="px-4 py-2 text-[10px] font-black uppercase text-slate-500 bg-slate-50 border-b">{group.heading}</p>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b text-left">
+                        <th className="p-3 text-[10px] font-black uppercase text-slate-400">Supplier</th>
+                        <th className="p-3 text-[10px] font-black uppercase text-slate-400">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {group.items.map((e) => (
+                        <tr key={e.id} className="border-b last:border-0">
+                          <td className="p-3 font-semibold">{e.supplier}</td>
+                          <td className="p-3 font-black">₱{(Number(e.amount) || 0).toLocaleString()}</td>
+                        </tr>
+                      ))}
+                      <tr className="bg-slate-50/80">
+                        <td className="p-3 text-xs font-black uppercase text-slate-500">Subtotal</td>
+                        <td className="p-3 font-black">₱{(Number(group.total) || 0).toLocaleString()}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )
+            )}
+          </div>
+        ) : null}
+      </div>
 
       {showVouchers ? (
       <div className="overflow-x-auto rounded-2xl border">

@@ -82,6 +82,12 @@ import {
 import { buildRoomAssignments, isExcludedFromRoomAssignments } from "./rooming";
 import { formatPositionShort, positionBadgeClass, POSITION_CODES } from "./positionCodes";
 import { PAMACON_SEED_EXPENSES } from "./seedExpenses";
+import {
+  DEFAULT_EXPENSE_CATEGORY,
+  EXPENSE_CATEGORY_GROUPS,
+  groupExpensesByCategory,
+  normalizeExpenseCategory,
+} from "./expenseCategories";
 import { inferSeedRole, modeToPaymentPlan, PAMACON_SEED_DELEGATES } from "./seedDelegates";
 import { parseSeedListOcrRows } from "./parseSeedListOcrRows";
 import ProfileModule from "../components/ProfileModule";
@@ -104,19 +110,6 @@ import {
 
 /** Survives React Strict Mode remount (useRef resets); blocks a second full seed while the DB is still empty. */
 const delegateSeedStartedForEventId = new Set();
-
-const SUPPLIER_EXPENSE_CATEGORIES = [
-  "Accommodation & Banquets",
-  "Speakers & Talent",
-  "Lights and Sounds",
-  "Decor",
-  "Program Materials",
-  "Supplies",
-  "Miscellaneous",
-  "Band/Entertainment",
-  "LED Wall",
-  "Others",
-];
 
 /** Re-encode raster image data URLs as JPEG so Setup posters / reference shots stay under D1 `config_json` limits. */
 function reencodeImageDataUrlAsJpeg(dataUrl, maxSide, quality) {
@@ -851,7 +844,7 @@ export default function PamaconApp({
   const totalSupplierSpend = useMemo(() => suppliers.reduce((s, x) => s + (Number(x.amount) || 0), 0), [suppliers]);
   const totalSpeakerHonorarium = useMemo(() => speakers.reduce((s, x) => s + (Number(x.honorarium) || 0), 0), [speakers]);
   const hasSpeakerExpenseRows = useMemo(
-    () => suppliers.some((x) => String(x.category || "").trim().toLowerCase() === "speakers & talent"),
+    () => suppliers.some((x) => normalizeExpenseCategory(x.category, x.company) === "Speakers and Guests"),
     [suppliers]
   );
   const totalExpenditure = useMemo(() => {
@@ -3845,17 +3838,104 @@ function SponsorshipHub({ sponsors, totalRevenue, eventId, canEdit, onReload, on
   );
 }
 
+function SupplierExpenseCard({ s, canEdit, editingId, editDraft, setEditDraft, categorySelectOptions, onStartEdit, onCancelEdit, onSaveEdit, onRemove }) {
+  return (
+    <div className="bg-white p-8 rounded-[40px] border shadow-sm group relative hover:border-blue-200 transition-all">
+      <div className="absolute top-8 right-8 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+        <button
+          type="button"
+          disabled={!canEdit}
+          title="Edit supplier"
+          className="rounded-xl p-2 text-slate-300 hover:bg-blue-50 hover:text-blue-600 transition-colors disabled:opacity-0"
+          onClick={() => (editingId === s.id ? onCancelEdit() : onStartEdit(s))}
+        >
+          <Edit3 size={18} />
+        </button>
+        <button
+          type="button"
+          disabled={!canEdit}
+          title="Remove supplier"
+          className="rounded-xl p-2 text-slate-300 hover:bg-rose-50 hover:text-rose-600 transition-colors disabled:opacity-0"
+          onClick={() => onRemove(s.id)}
+        >
+          <Trash2 size={18} />
+        </button>
+      </div>
+      {editingId === s.id ? (
+        <div className="space-y-4 pr-10">
+          <SetupInput
+            label="Supplier / vendor name"
+            value={editDraft.company}
+            onChange={(e) => setEditDraft({ ...editDraft, company: e.target.value })}
+            disabled={!canEdit}
+          />
+          <div className="space-y-2">
+            <label className="block text-[10px] font-black text-slate-400 uppercase">Expense group</label>
+            <select
+              className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-3.5 text-sm font-black appearance-none disabled:opacity-50"
+              value={editDraft.category}
+              disabled={!canEdit}
+              onChange={(e) => setEditDraft({ ...editDraft, category: e.target.value })}
+            >
+              {categorySelectOptions.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+          <SetupInput
+            label="Amount (₱)"
+            type="number"
+            value={editDraft.amount}
+            disabled={!canEdit}
+            onChange={(e) => setEditDraft({ ...editDraft, amount: Number(e.target.value) })}
+          />
+          <div className="flex flex-wrap gap-2 pt-2">
+            <button
+              type="button"
+              disabled={!canEdit || !String(editDraft.company || "").trim()}
+              onClick={() => void onSaveEdit()}
+              className="inline-flex flex-1 min-w-[120px] items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-2.5 text-xs font-black uppercase text-white hover:bg-blue-700 disabled:opacity-40"
+            >
+              <Save size={16} aria-hidden />
+              Save
+            </button>
+            <button
+              type="button"
+              onClick={onCancelEdit}
+              className="rounded-2xl border border-slate-200 px-4 py-2.5 text-xs font-black uppercase text-slate-600 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <h4 className="text-xl font-black uppercase text-slate-800 tracking-tighter leading-tight min-h-[3rem] pr-10">{s.company}</h4>
+          <span className="text-[9px] font-black uppercase px-2 py-1 bg-slate-50 border border-slate-100 rounded-md text-slate-500 mt-2 inline-block">{s.category}</span>
+          <div className="pt-6 mt-6 border-t border-slate-50 flex justify-between items-center">
+            <span className="text-2xl font-black text-slate-800">₱{(Number(s.amount) || 0).toLocaleString()}</span>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function SuppliersHub({ suppliers, totalSpend, eventId, canEdit, onReload, onError, onSeedExpenses }) {
-  const [newV, setNewV] = useState({ company: "", category: "Decor", amount: 0 });
+  const [newV, setNewV] = useState({ company: "", category: DEFAULT_EXPENSE_CATEGORY, amount: 0 });
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [editDraft, setEditDraft] = useState({ company: "", category: "Decor", amount: 0 });
+  const [editDraft, setEditDraft] = useState({ company: "", category: DEFAULT_EXPENSE_CATEGORY, amount: 0 });
+
+  const expenseGroups = useMemo(() => groupExpensesByCategory(suppliers), [suppliers]);
 
   const categorySelectOptions = useMemo(() => {
-    const seen = new Set(SUPPLIER_EXPENSE_CATEGORIES);
-    const out = [...SUPPLIER_EXPENSE_CATEGORIES];
+    const seen = new Set(EXPENSE_CATEGORY_GROUPS);
+    const out = [...EXPENSE_CATEGORY_GROUPS];
     for (const row of suppliers) {
-      const c = String(row?.category || "").trim();
+      const c = normalizeExpenseCategory(row?.category, row?.company);
       if (c && !seen.has(c)) {
         seen.add(c);
         out.push(c);
@@ -3874,7 +3954,7 @@ function SuppliersHub({ suppliers, totalSpend, eventId, canEdit, onReload, onErr
         expenseType: "fixed",
         approved: true,
       });
-      setNewV({ company: "", category: "Decor", amount: 0 });
+      setNewV({ company: "", category: DEFAULT_EXPENSE_CATEGORY, amount: 0 });
       setIsAdding(false);
       await onReload();
     } catch (e) {
@@ -3893,10 +3973,15 @@ function SuppliersHub({ suppliers, totalSpend, eventId, canEdit, onReload, onErr
 
   const downloadSuppliersCsv = () => {
     const day = new Date().toISOString().slice(0, 10);
-    const header = ["id", "vendor_name", "category", "amount_php"];
-    const rows = suppliers.map((s) => [s.id, s.company, s.category, Number(s.amount) || 0]);
+    const header = ["expense_group", "id", "vendor_name", "category", "amount_php"];
+    const rows = [];
+    for (const group of expenseGroups) {
+      for (const s of group.items) {
+        rows.push([group.heading, s.id, s.company, s.category, Number(s.amount) || 0]);
+      }
+    }
     const total = suppliers.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
-    rows.push(["", "TOTAL", "", total]);
+    rows.push(["", "", "TOTAL", "", total]);
     downloadCsv(`pamacon-contractors-suppliers-${day}.csv`, header, rows);
   };
 
@@ -3904,7 +3989,7 @@ function SuppliersHub({ suppliers, totalSpend, eventId, canEdit, onReload, onErr
     setEditingId(s.id);
     setEditDraft({
       company: String(s.company || "").trim(),
-      category: String(s.category || "Others"),
+      category: normalizeExpenseCategory(s.category, s.company),
       amount: Number(s.amount) || 0,
     });
   };
@@ -3977,14 +4062,16 @@ function SuppliersHub({ suppliers, totalSpend, eventId, canEdit, onReload, onErr
         <div className="bg-white p-8 rounded-[40px] border-2 border-blue-100 shadow-xl grid grid-cols-1 md:grid-cols-3 gap-6">
           <SetupInput label="Vendor Name" value={newV.company} onChange={(e) => setNewV({ ...newV, company: e.target.value })} />
           <div className="space-y-2">
-            <label className="block text-[10px] font-black text-slate-400 uppercase">Category</label>
+            <label className="block text-[10px] font-black text-slate-400 uppercase">Expense group</label>
             <select
               className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-3.5 text-sm font-black appearance-none"
               value={newV.category}
               onChange={(e) => setNewV({ ...newV, category: e.target.value })}
             >
-              {SUPPLIER_EXPENSE_CATEGORIES.map((c) => (
-                <option key={c}>{c}</option>
+              {EXPENSE_CATEGORY_GROUPS.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
               ))}
             </select>
           </div>
@@ -3996,88 +4083,40 @@ function SuppliersHub({ suppliers, totalSpend, eventId, canEdit, onReload, onErr
           </div>
         </div>
       )}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-20">
-        {suppliers.map((s) => (
-          <div key={s.id} className="bg-white p-8 rounded-[40px] border shadow-sm group relative hover:border-blue-200 transition-all">
-            <div className="absolute top-8 right-8 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
-              <button
-                type="button"
-                disabled={!canEdit}
-                title="Edit supplier"
-                className="rounded-xl p-2 text-slate-300 hover:bg-blue-50 hover:text-blue-600 transition-colors disabled:opacity-0"
-                onClick={() => (editingId === s.id ? cancelEdit() : startEdit(s))}
-              >
-                <Edit3 size={18} />
-              </button>
-              <button
-                type="button"
-                disabled={!canEdit}
-                title="Remove supplier"
-                className="rounded-xl p-2 text-slate-300 hover:bg-rose-50 hover:text-rose-600 transition-colors disabled:opacity-0"
-                onClick={() => remove(s.id)}
-              >
-                <Trash2 size={18} />
-              </button>
+      <div className="space-y-10 pb-20">
+        {expenseGroups.map((group) => (
+          <section key={group.heading} className="space-y-4">
+            <div className="flex flex-wrap items-end justify-between gap-3 border-b-2 border-slate-200 pb-3">
+              <h4 className="text-sm font-black uppercase tracking-wide text-slate-800">{group.heading}</h4>
+              <p className="text-lg font-black text-blue-600 tabular-nums">
+                ₱{(Number(group.total) || 0).toLocaleString()}
+                <span className="ml-2 text-[10px] font-bold uppercase text-slate-400">
+                  {group.items.length} {group.items.length === 1 ? "line" : "lines"}
+                </span>
+              </p>
             </div>
-            {editingId === s.id ? (
-              <div className="space-y-4 pr-10">
-                <SetupInput
-                  label="Supplier / vendor name"
-                  value={editDraft.company}
-                  onChange={(e) => setEditDraft({ ...editDraft, company: e.target.value })}
-                  disabled={!canEdit}
-                />
-                <div className="space-y-2">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase">Category</label>
-                  <select
-                    className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-3.5 text-sm font-black appearance-none disabled:opacity-50"
-                    value={editDraft.category}
-                    disabled={!canEdit}
-                    onChange={(e) => setEditDraft({ ...editDraft, category: e.target.value })}
-                  >
-                    {categorySelectOptions.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <SetupInput
-                  label="Amount (₱)"
-                  type="number"
-                  value={editDraft.amount}
-                  disabled={!canEdit}
-                  onChange={(e) => setEditDraft({ ...editDraft, amount: Number(e.target.value) })}
-                />
-                <div className="flex flex-wrap gap-2 pt-2">
-                  <button
-                    type="button"
-                    disabled={!canEdit || !String(editDraft.company || "").trim()}
-                    onClick={() => void saveEdit()}
-                    className="inline-flex flex-1 min-w-[120px] items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-2.5 text-xs font-black uppercase text-white hover:bg-blue-700 disabled:opacity-40"
-                  >
-                    <Save size={16} aria-hidden />
-                    Save
-                  </button>
-                  <button
-                    type="button"
-                    onClick={cancelEdit}
-                    className="rounded-2xl border border-slate-200 px-4 py-2.5 text-xs font-black uppercase text-slate-600 hover:bg-slate-50"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
+            {group.items.length === 0 ? (
+              <p className="text-sm text-slate-400 italic px-2">No expenses in this group yet.</p>
             ) : (
-              <>
-                <h4 className="text-xl font-black uppercase text-slate-800 tracking-tighter leading-tight min-h-[3rem] pr-10">{s.company}</h4>
-                <span className="text-[9px] font-black uppercase px-2 py-1 bg-slate-50 border border-slate-100 rounded-md text-slate-500 mt-2 inline-block">{s.category}</span>
-                <div className="pt-6 mt-6 border-t border-slate-50 flex justify-between items-center">
-                  <span className="text-2xl font-black text-slate-800">₱{(Number(s.amount) || 0).toLocaleString()}</span>
-                </div>
-              </>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {group.items.map((s) => (
+                  <SupplierExpenseCard
+                    key={s.id}
+                    s={s}
+                    canEdit={canEdit}
+                    editingId={editingId}
+                    editDraft={editDraft}
+                    setEditDraft={setEditDraft}
+                    categorySelectOptions={categorySelectOptions}
+                    onStartEdit={startEdit}
+                    onCancelEdit={cancelEdit}
+                    onSaveEdit={saveEdit}
+                    onRemove={remove}
+                  />
+                ))}
+              </div>
             )}
-          </div>
+          </section>
         ))}
       </div>
     </div>
@@ -4594,22 +4633,10 @@ function OtherActivitiesHub({ registrants, canEdit, isAdmin, authEmail, onUpdate
 
 function ExpenseDashboard({ config, suppliers }) {
   const modules = Array.isArray(config.expenseBudgetModules) && config.expenseBudgetModules.length > 0 ? config.expenseBudgetModules : DEFAULT_EXPENSE_BUDGET_MODULES;
-  const normalizeCategory = (row) => {
-    const raw = String(row?.category || "").trim();
-    if (raw !== "Others") return raw;
-    const name = String(row?.company || "").toLowerCase();
-    if (name.includes("waterfront hotel") || name === "drinks" || name === "rooms") return "Accommodation & Banquets";
-    if (name.includes("speaker honorarium") || name.includes("tokens to speakers")) return "Speakers & Talent";
-    if (name.includes("certificate")) return "Program Materials";
-    if (name.includes("graphic artist")) return "Decor";
-    if (name.includes("supplies")) return "Supplies";
-    if (name === "tip") return "Miscellaneous";
-    return raw;
-  };
   const sumByCategories = (cats) => {
-    const set = new Set((cats || []).map((x) => String(x || "").trim()));
+    const set = new Set((cats || []).map((x) => normalizeExpenseCategory(x)));
     return suppliers
-      .filter((s) => set.has(normalizeCategory(s)))
+      .filter((s) => set.has(normalizeExpenseCategory(s.category, s.company)))
       .reduce((sum, x) => sum + (Number(x.amount) || 0), 0);
   };
   const iconForLabel = (label) => {
@@ -5030,7 +5057,7 @@ function SetupView({ config, setConfig, eventId, canEdit, isAdmin, isSuperuser, 
       ...local,
       expenseBudgetModules: [
         ...expenseModules,
-        { label: "New Module", budget: 0, categories: ["Others"] },
+        { label: "New Module", budget: 0, categories: [DEFAULT_EXPENSE_CATEGORY] },
       ],
     });
   };

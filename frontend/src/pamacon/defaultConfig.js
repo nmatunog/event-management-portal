@@ -22,11 +22,15 @@ export const DEFAULT_PROGRAM_MODULES = [
 ];
 
 export const DEFAULT_EXPENSE_BUDGET_MODULES = [
-  { label: "Accommodation & Banquets", budget: 680000, categories: ["Accommodation & Banquets"] },
-  { label: "Speakers & Talent", budget: 70000, categories: ["Speakers & Talent"] },
-  { label: "Lights & Sound", budget: 100000, categories: ["Lights and Sounds"] },
-  { label: "Decor & Creative", budget: 200000, categories: ["Decor", "Program Materials"] },
-  { label: "Operations & Supplies", budget: 100000, categories: ["Supplies", "Miscellaneous", "Others"] },
+  { label: "Hotel and Banquet", budget: 680000, categories: ["Hotel and Banquet"] },
+  { label: "Conference Kits and Shirts", budget: 50000, categories: ["Conference Kits and Shirts"] },
+  { label: "Speakers and Guests", budget: 70000, categories: ["Speakers and Guests"] },
+  { label: "Events Planning, Program and Tech", budget: 80000, categories: ["Events Planning, Program and Tech"] },
+  { label: "Lights, Sounds, LED Wall", budget: 100000, categories: ["Lights, Sounds, LED Wall"] },
+  { label: "Styling, Deco and venue set up", budget: 200000, categories: ["Styling, Deco and venue set up"] },
+  { label: "Band and Entretainment", budget: 80000, categories: ["Band and Entretainment"] },
+  { label: "Photo & Video Coverage", budget: 50000, categories: ["Photo & Video Coverage"] },
+  { label: "Coordination & misc.", budget: 100000, categories: ["Coordination Meetings", "Misc. Expenses", "Other Expenses"] },
 ];
 
 /** Defaults for the signed-in attendee portal (posters, promo video, quote email). */
