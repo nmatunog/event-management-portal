@@ -14,7 +14,7 @@ export default function EventMediaSetup({ driveUrl = "", label = "", canEdit, on
         <input
           disabled={!canEdit}
           value={String(label || "")}
-          onChange={(e) => onChange?.({ label: e.target.value })}
+          onChange={(e) => onChange?.({ eventMediaDriveLabel: e.target.value })}
           placeholder="Event photos & videos"
           className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 disabled:opacity-50"
         />
@@ -25,7 +25,13 @@ export default function EventMediaSetup({ driveUrl = "", label = "", canEdit, on
           type="url"
           disabled={!canEdit}
           value={String(driveUrl || "")}
-          onChange={(e) => onChange?.({ driveUrl: e.target.value.trim() })}
+          onChange={(e) => onChange?.({ eventMediaDriveUrl: e.target.value })}
+          onPaste={(e) => {
+            const pasted = e.clipboardData?.getData("text") ?? "";
+            if (!pasted.trim()) return;
+            e.preventDefault();
+            onChange?.({ eventMediaDriveUrl: pasted.trim() });
+          }}
           placeholder="https://drive.google.com/drive/folders/..."
           className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 disabled:opacity-50"
         />
