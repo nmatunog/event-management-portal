@@ -11,6 +11,7 @@ import {
   voidPaymentVoucher,
 } from "../lib/api";
 import { formatPaidStampDate } from "../components/PaidStamp";
+import { expenseGroupForLinkedExpense } from "./expenseCategories";
 import { VoucherDetailDialog, VoucherEditDialog } from "./SupplierVouchersPanel";
 
 const STATUS_STYLES = {
@@ -134,9 +135,7 @@ export default function PaymentVouchersHub({ eventId, suppliers, canEdit, isAdmi
     setDraft((d) => ({
       ...d,
       expenseId,
-      supplierName: row?.company || d.supplierName,
       amount: row ? Number(row.amount) || 0 : d.amount,
-      description: row ? `${row.category} — ${row.company}` : d.description,
     }));
   };
 
@@ -224,7 +223,8 @@ export default function PaymentVouchersHub({ eventId, suppliers, canEdit, isAdmi
       "voucher_no",
       "payment_ref",
       "status",
-      "supplier",
+      "expense_group",
+      "payee",
       "payee_email",
       "payee_contact",
       "amount_php",
@@ -246,6 +246,7 @@ export default function PaymentVouchersHub({ eventId, suppliers, canEdit, isAdmi
       v.voucher_number,
       v.payment_reference,
       v.status,
+      expenseGroupForLinkedExpense(v.expense_id, suppliers) || "—",
       v.supplier_name,
       v.payee_email,
       v.payee_contact,
@@ -340,7 +341,7 @@ export default function PaymentVouchersHub({ eventId, suppliers, canEdit, isAdmi
           <h4 className="text-sm font-black uppercase text-slate-700">Create electronic payment voucher</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2 md:col-span-2">
-              <span className="block text-[10px] font-black text-slate-400 uppercase">Link to supplier expense (optional)</span>
+              <span className="block text-[10px] font-black text-slate-400 uppercase">Link to budget line (optional)</span>
               <select
                 className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-3.5 text-sm font-semibold"
                 value={draft.expenseId}
@@ -349,13 +350,13 @@ export default function PaymentVouchersHub({ eventId, suppliers, canEdit, isAdmi
                 <option value="">— Manual entry —</option>
                 {suppliers.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.company} — ₱{(Number(s.amount) || 0).toLocaleString()}
+                    {s.category} · {s.company} — ₱{(Number(s.amount) || 0).toLocaleString()}
                   </option>
                 ))}
               </select>
             </div>
             <SetupInput
-              label="Supplier / payee name *"
+              label="Payee / vendor name *"
               value={draft.supplierName}
               onChange={(e) => setDraft({ ...draft, supplierName: e.target.value })}
             />
@@ -419,7 +420,8 @@ export default function PaymentVouchersHub({ eventId, suppliers, canEdit, isAdmi
               <tr className="border-b bg-slate-50 text-left">
                 <th className="p-4 text-[10px] font-black uppercase text-slate-400 w-14">#</th>
                 <th className="p-4 text-[10px] font-black uppercase text-slate-400">Voucher / ref</th>
-                <th className="p-4 text-[10px] font-black uppercase text-slate-400">Supplier</th>
+                <th className="p-4 text-[10px] font-black uppercase text-slate-400">Expense group</th>
+                <th className="p-4 text-[10px] font-black uppercase text-slate-400">Payee</th>
                 <th className="p-4 text-[10px] font-black uppercase text-slate-400">Amount</th>
                 <th className="p-4 text-[10px] font-black uppercase text-slate-400">Date paid</th>
                 <th className="p-4 text-[10px] font-black uppercase text-slate-400">Receipt</th>
@@ -430,7 +432,7 @@ export default function PaymentVouchersHub({ eventId, suppliers, canEdit, isAdmi
             <tbody>
               {vouchersByDisbursement.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-slate-500">
+                  <td colSpan={9} className="p-8 text-center text-slate-500">
                     No payment vouchers yet. Create one to send a confirmation link to a supplier.
                   </td>
                 </tr>
@@ -445,6 +447,9 @@ export default function PaymentVouchersHub({ eventId, suppliers, canEdit, isAdmi
                     <td className="p-4 font-mono text-xs font-bold text-slate-700">
                       <div>{v.voucher_number}</div>
                       <div className="text-[10px] text-slate-500 font-normal">{v.payment_reference}</div>
+                    </td>
+                    <td className="p-4 text-xs font-semibold text-slate-700">
+                      {expenseGroupForLinkedExpense(v.expense_id, suppliers) || "—"}
                     </td>
                     <td className="p-4 font-semibold text-slate-800">{v.supplier_name}</td>
                     <td className="p-4 font-black">₱{(Number(v.amount) || 0).toLocaleString()}</td>

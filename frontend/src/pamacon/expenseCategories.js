@@ -109,6 +109,14 @@ export function groupExpensesByCategory(rows) {
   return groups;
 }
 
+/** Expense group for a payment voucher linked to a budget line. */
+export function expenseGroupForLinkedExpense(expenseId, suppliers) {
+  if (!expenseId) return "";
+  const row = (suppliers || []).find((s) => s.id === expenseId);
+  if (!row) return "";
+  return normalizeExpenseCategory(row.category, row.company);
+}
+
 export function sortCategoryRows(rows) {
   const order = new Map(EXPENSE_CATEGORY_GROUPS.map((g, i) => [g, i]));
   return [...(rows || [])].sort((a, b) => {

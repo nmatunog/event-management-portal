@@ -12,6 +12,7 @@ import {
   supplierVoucherPublicUrl,
 } from "../lib/api";
 import { parseReceiptDataUrls } from "../lib/receiptImages";
+import { expenseGroupForLinkedExpense } from "./expenseCategories";
 
 const STATUS_STYLES = {
   sent: "bg-slate-100 text-slate-700",
@@ -261,7 +262,6 @@ export function VoucherEditDialog({ voucher, suppliers, onClose, onSaved, onErro
                 setDraft((d) => ({
                   ...d,
                   expenseId: id,
-                  supplierName: row?.company || d.supplierName,
                   amount: row ? Number(row.amount) || d.amount : d.amount,
                 }));
               }}
@@ -269,12 +269,12 @@ export function VoucherEditDialog({ voucher, suppliers, onClose, onSaved, onErro
               <option value="">— None —</option>
               {suppliers.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.company}
+                  {s.category} · {s.company}
                 </option>
               ))}
             </select>
           </Field>
-          <Field label="Supplier *">
+          <Field label="Payee / vendor *">
             <input className={inputClass(false)} value={draft.supplierName} onChange={(e) => setDraft({ ...draft, supplierName: e.target.value })} />
           </Field>
           <Field label="Amount (₱) *">
@@ -406,7 +406,8 @@ export default function SupplierVouchersPanel({
             <thead>
               <tr className="bg-slate-50 border-b text-left">
                 <th className="p-3 text-[10px] font-black uppercase text-slate-400">Voucher / ref</th>
-                <th className="p-3 text-[10px] font-black uppercase text-slate-400">Supplier</th>
+                <th className="p-3 text-[10px] font-black uppercase text-slate-400">Expense group</th>
+                <th className="p-3 text-[10px] font-black uppercase text-slate-400">Payee</th>
                 <th className="p-3 text-[10px] font-black uppercase text-slate-400">Amount</th>
                 <th className="p-3 text-[10px] font-black uppercase text-slate-400">Date paid</th>
                 <th className="p-3 text-[10px] font-black uppercase text-slate-400">Receipt</th>
@@ -420,6 +421,9 @@ export default function SupplierVouchersPanel({
                   <td className="p-3 font-mono text-xs font-bold">
                     <div>{v.voucher_number}</div>
                     <div className="text-[10px] text-slate-500 font-normal">{v.payment_reference}</div>
+                  </td>
+                  <td className="p-3 text-xs font-semibold text-slate-700">
+                    {expenseGroupForLinkedExpense(v.expense_id, suppliers) || "—"}
                   </td>
                   <td className="p-3 font-semibold">{v.supplier_name}</td>
                   <td className="p-3 font-black">₱{(Number(v.amount) || 0).toLocaleString()}</td>

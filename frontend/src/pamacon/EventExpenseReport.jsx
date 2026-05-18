@@ -4,6 +4,12 @@ import { getEventExpenseReport } from "../lib/api";
 import { formatPaidStampDate } from "../components/PaidStamp";
 import { EXPENSE_CATEGORY_GROUPS, groupExpensesByCategory, normalizeExpenseCategory } from "./expenseCategories";
 
+function expenseGroupFromReport(voucher, expenses) {
+  if (!voucher?.expense_id) return "—";
+  const row = (expenses || []).find((e) => e.id === voucher.expense_id);
+  return row ? normalizeExpenseCategory(row.category, row.supplier) : "—";
+}
+
 function csvEscapeCell(value) {
   const s = value == null ? "" : String(value);
   if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
@@ -209,7 +215,7 @@ export default function EventExpenseReport({ eventId, showVouchers = false, onEr
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b text-left">
-                        <th className="p-3 text-[10px] font-black uppercase text-slate-400">Supplier</th>
+                        <th className="p-3 text-[10px] font-black uppercase text-slate-400">Vendor</th>
                         <th className="p-3 text-[10px] font-black uppercase text-slate-400">Amount</th>
                       </tr>
                     </thead>
@@ -241,7 +247,8 @@ export default function EventExpenseReport({ eventId, showVouchers = false, onEr
             <tr className="border-b text-left">
               <th className="p-3 text-[10px] font-black uppercase text-slate-400">Voucher no.</th>
               <th className="p-3 text-[10px] font-black uppercase text-slate-400">Payment ref.</th>
-              <th className="p-3 text-[10px] font-black uppercase text-slate-400">Supplier</th>
+              <th className="p-3 text-[10px] font-black uppercase text-slate-400">Expense group</th>
+              <th className="p-3 text-[10px] font-black uppercase text-slate-400">Payee</th>
               <th className="p-3 text-[10px] font-black uppercase text-slate-400">Amount</th>
               <th className="p-3 text-[10px] font-black uppercase text-slate-400">Status</th>
               <th className="p-3 text-[10px] font-black uppercase text-slate-400">Date paid</th>
@@ -251,7 +258,7 @@ export default function EventExpenseReport({ eventId, showVouchers = false, onEr
           <tbody>
             {(report.vouchers || []).length === 0 ? (
               <tr>
-                <td colSpan={7} className="p-6 text-center text-slate-500">
+                <td colSpan={8} className="p-6 text-center text-slate-500">
                   No payment vouchers.
                 </td>
               </tr>
@@ -260,6 +267,7 @@ export default function EventExpenseReport({ eventId, showVouchers = false, onEr
                 <tr key={v.id} className="border-b last:border-0 hover:bg-slate-50/80">
                   <td className="p-3 font-mono text-xs font-bold">{v.voucher_number}</td>
                   <td className="p-3 font-mono text-xs">{v.payment_reference || "—"}</td>
+                  <td className="p-3 text-xs font-semibold text-slate-700">{expenseGroupFromReport(v, report.expenses)}</td>
                   <td className="p-3 font-semibold">{v.supplier_name}</td>
                   <td className="p-3 font-black">₱{(Number(v.amount) || 0).toLocaleString()}</td>
                   <td className="p-3 text-xs uppercase font-bold">{v.status}</td>

@@ -3864,7 +3864,7 @@ function SupplierExpenseCard({ s, canEdit, editingId, editDraft, setEditDraft, c
       {editingId === s.id ? (
         <div className="space-y-4 pr-10">
           <SetupInput
-            label="Supplier / vendor name"
+            label="Vendor / payee name"
             value={editDraft.company}
             onChange={(e) => setEditDraft({ ...editDraft, company: e.target.value })}
             disabled={!canEdit}
@@ -3913,7 +3913,6 @@ function SupplierExpenseCard({ s, canEdit, editingId, editDraft, setEditDraft, c
       ) : (
         <>
           <h4 className="text-xl font-black uppercase text-slate-800 tracking-tighter leading-tight min-h-[3rem] pr-10">{s.company}</h4>
-          <span className="text-[9px] font-black uppercase px-2 py-1 bg-slate-50 border border-slate-100 rounded-md text-slate-500 mt-2 inline-block">{s.category}</span>
           <div className="pt-6 mt-6 border-t border-slate-50 flex justify-between items-center">
             <span className="text-2xl font-black text-slate-800">₱{(Number(s.amount) || 0).toLocaleString()}</span>
           </div>
