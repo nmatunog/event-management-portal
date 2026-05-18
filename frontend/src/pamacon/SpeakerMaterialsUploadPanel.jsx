@@ -106,8 +106,8 @@ export default function SpeakerMaterialsUploadPanel({ eventId, canEdit, onInfo, 
           <div className="min-w-0">
             <h3 className="text-lg font-black uppercase text-slate-800 tracking-tight">Upload presentation copies</h3>
             <p className="text-sm text-slate-600 mt-1 max-w-2xl leading-relaxed">
-              Upload PDF slide decks for registered delegates. Files appear in the attendee portal under Speakers&apos; presentation copies
-              (sign-in and delegate match required). Max {MAX_PDF_MB} MB per file.
+              For large decks, prefer <strong>Program → Program Modules</strong> and paste a Google Drive view link on each session row. Use this upload
+              only for smaller PDFs (max {MAX_PDF_MB} MB). Registered delegates need sign-in and a matched registration.
             </p>
           </div>
         </div>

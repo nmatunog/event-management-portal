@@ -91,6 +91,7 @@ import {
 } from "./expenseCategories";
 import SpeakerMaterialsSetup from "./SpeakerMaterialsSetup";
 import SpeakerMaterialsUploadPanel from "./SpeakerMaterialsUploadPanel";
+import { emptyProgramModuleRow, normalizeProgramModuleRow } from "./programPresentation";
 import { inferSeedRole, modeToPaymentPlan, PAMACON_SEED_DELEGATES } from "./seedDelegates";
 import { parseSeedListOcrRows } from "./parseSeedListOcrRows";
 import ProfileModule from "../components/ProfileModule";
@@ -4800,10 +4801,6 @@ function ExpenseDashboard({ config, suppliers }) {
   );
 }
 
-function emptyProgramRow(day = "Day 2 - May 14") {
-  return { day, time: "", program: "", assigned: "" };
-}
-
 function ProgramModulesView({ config, setConfig, eventId, canEdit, isAdmin, onError }) {
   const [rows, setRows] = useState(() =>
     Array.isArray(config.programModules) && config.programModules.length > 0 ? config.programModules : DEFAULT_PROGRAM_MODULES
@@ -4829,19 +4826,15 @@ function ProgramModulesView({ config, setConfig, eventId, canEdit, isAdmin, onEr
 
   const addRow = (day) => {
     setDirty(true);
-    setRows((prev) => [...prev, emptyProgramRow(day)]);
+    setRows((prev) => [...prev, emptyProgramModuleRow(day)]);
   };
 
   const handleSave = async () => {
     if (!eventId || !canEdit) return;
     const cleaned = rows
-      .map((r) => ({
-        day: String(r.day || "").trim(),
-        time: String(r.time || "").trim(),
-        program: String(r.program || "").trim(),
-        assigned: String(r.assigned || "").trim(),
-      }))
-      .filter((r) => r.day || r.time || r.program || r.assigned);
+      .map((r, idx) => normalizeProgramModuleRow(r, idx))
+      .filter((r) => r.day || r.time || r.program || r.assigned)
+      .map(({ id: _id, hasPresentation: _hp, ...rest }) => rest);
     try {
       setSaving(true);
       const nextConfig = { ...config, programModules: cleaned };
@@ -4965,7 +4958,10 @@ function ProgramModulesView({ config, setConfig, eventId, canEdit, isAdmin, onEr
       <div className="bg-white p-8 rounded-[40px] border shadow-sm flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
           <h3 className="text-xl font-black uppercase text-slate-800">Program Modules</h3>
-          <p className="text-sm text-slate-500 mt-1">Editable agenda array for Day 1 and Day 2 blocks.</p>
+          <p className="text-sm text-slate-500 mt-1 max-w-2xl">
+            Edit the conference schedule and attach Google Drive links for presentation materials (view / download) on each row. Set sharing to
+            &quot;Anyone with the link&quot; on Drive.
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <button type="button" disabled={!canEdit} onClick={() => addRow("Day 1 - May 13")} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40">
@@ -4995,13 +4991,15 @@ function ProgramModulesView({ config, setConfig, eventId, canEdit, isAdmin, onEr
       </div>
 
       <div className="bg-white rounded-[32px] border shadow-sm overflow-x-auto">
-        <table className="w-full min-w-[900px]">
+        <table className="w-full min-w-[1280px]">
           <thead className="bg-slate-50 border-b border-slate-100 text-xs uppercase tracking-wide text-slate-500">
             <tr>
               <th className="px-4 py-3 text-left">Day</th>
               <th className="px-4 py-3 text-left">Time</th>
               <th className="px-4 py-3 text-left">Program</th>
               <th className="px-4 py-3 text-left">Assigned</th>
+              <th className="px-4 py-3 text-left min-w-[200px]">Presentation view (Google Drive)</th>
+              <th className="px-4 py-3 text-left min-w-[200px]">Download link (optional)</th>
               <th className="px-4 py-3 text-center w-24">Action</th>
             </tr>
           </thead>
@@ -5027,6 +5025,26 @@ function ProgramModulesView({ config, setConfig, eventId, canEdit, isAdmin, onEr
                 </td>
                 <td className="px-4 py-3">
                   <input value={r.assigned || ""} disabled={!canEdit} onChange={(e) => updateRow(idx, "assigned", e.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 disabled:opacity-50" />
+                </td>
+                <td className="px-4 py-3">
+                  <input
+                    type="url"
+                    value={r.presentationViewUrl || ""}
+                    disabled={!canEdit}
+                    onChange={(e) => updateRow(idx, "presentationViewUrl", e.target.value)}
+                    placeholder="https://drive.google.com/file/d/.../view"
+                    className="w-full rounded-xl border border-violet-200 bg-violet-50/40 px-3 py-2 text-sm text-slate-700 disabled:opacity-50"
+                  />
+                </td>
+                <td className="px-4 py-3">
+                  <input
+                    type="url"
+                    value={r.presentationDownloadUrl || ""}
+                    disabled={!canEdit}
+                    onChange={(e) => updateRow(idx, "presentationDownloadUrl", e.target.value)}
+                    placeholder="Optional direct download URL"
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 disabled:opacity-50"
+                  />
                 </td>
                 <td className="px-4 py-3 text-center">
                   <button type="button" disabled={!canEdit} onClick={() => removeRow(idx)} className="p-2 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 disabled:opacity-30">

@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSpeakerMaterials } from "../lib/api";
 import { ATTENDEE_POSTER_MAX, DEFAULT_PAMACON_CONFIG, DEFAULT_ATTENDEE_PORTAL, PAMACON_TITLE } from "./defaultConfig";
 import AttendeeDetailsForm from "./AttendeeDetailsForm";
+import ProgramPresentationButtons from "./ProgramPresentationButtons";
+import { normalizeProgramModuleRow } from "./programPresentation";
 import SpeakerMaterialsSection from "./SpeakerMaterialsSection";
 import { SHOW_CEBU_TOUR_ACTIVITIES } from "./attendeePortalFlags";
 
@@ -121,36 +123,47 @@ export default function ParticipantPortal({
   const mapsOpenUrl = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`;
   const mapsDirectionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${mapsQuery}`;
   const photosSearchUrl = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${venue} photos`)}`;
+  const presentationAccess = speakerMaterialsState.hasAccess;
+  const programHasPresentations = useMemo(() => {
+    const rows = Array.isArray(config?.programModules) ? config.programModules : [];
+    return rows.some((row) => normalizeProgramModuleRow(row).hasPresentation);
+  }, [config?.programModules]);
+  const showPresentationHub =
+    speakerMaterialsState.hasMaterials || programHasPresentations;
   const programRows = useMemo(() => {
     const rows = Array.isArray(config?.programModules) ? config.programModules : [];
     const normalized = rows
-      .map((row, idx) => ({
-        id: `${idx}-${String(row?.day || "")}-${String(row?.time || "")}`,
-        day: String(row?.day || "").trim() || "Program",
-        time: String(row?.time || "").trim(),
-        program: String(row?.program || "").trim(),
-        assigned: String(row?.assigned || "").trim(),
-      }))
+      .map((row, idx) => normalizeProgramModuleRow(row, idx))
       .filter((row) => row.day || row.time || row.program || row.assigned);
     const hasWelcomeDinner = normalized.some((row) => String(row.program || "").toLowerCase().includes("welcome dinner"));
     const hasRockFellowship = normalized.some((row) => isRockOfAgesFellowship(row));
     if (!hasWelcomeDinner) {
-      normalized.push({
-        id: "fallback-welcome-dinner",
-        day: "Day 1 - May 13",
-        time: "6:00 PM",
-        program: "Welcome Dinner",
-        assigned: "Arctic Hall",
-      });
+      normalized.push(
+        normalizeProgramModuleRow(
+          {
+            id: "fallback-welcome-dinner",
+            day: "Day 1 - May 13",
+            time: "6:00 PM",
+            program: "Welcome Dinner",
+            assigned: "Arctic Hall",
+          },
+          normalized.length
+        )
+      );
     }
     if (!hasRockFellowship) {
-      normalized.push({
-        id: "fallback-rock-of-ages",
-        day: "Day 2 - May 14",
-        time: "6:30 PM",
-        program: "Fellowship Dinner",
-        assigned: "Rock of Ages",
-      });
+      normalized.push(
+        normalizeProgramModuleRow(
+          {
+            id: "fallback-rock-of-ages",
+            day: "Day 2 - May 14",
+            time: "6:30 PM",
+            program: "Fellowship Dinner",
+            assigned: "Rock of Ages",
+          },
+          normalized.length
+        )
+      );
     }
     return normalized;
   }, [config?.programModules]);
@@ -213,10 +226,16 @@ export default function ParticipantPortal({
               <ClipboardList size={16} aria-hidden />
               Evaluation survey
             </Link>
-            {speakerMaterialsState.hasMaterials ? (
+            {showPresentationHub ? (
               <button
                 type="button"
-                onClick={scrollToSpeakerMaterials}
+                onClick={() => {
+                  if (programHasPresentations) {
+                    document.getElementById("program-heading")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  } else {
+                    scrollToSpeakerMaterials();
+                  }
+                }}
                 className="inline-flex items-center justify-center gap-1.5 min-h-[44px] rounded-xl border border-violet-200 bg-violet-50 px-3.5 py-2 text-sm font-semibold text-violet-900 hover:bg-violet-100 shadow-sm"
               >
                 <Presentation size={16} aria-hidden />
@@ -292,14 +311,20 @@ export default function ParticipantPortal({
                     <ClipboardList size={18} aria-hidden />
                     Complete the conference evaluation survey
                   </Link>
-                  {speakerMaterialsState.hasMaterials ? (
+                  {showPresentationHub ? (
                     <button
                       type="button"
-                      onClick={scrollToSpeakerMaterials}
+                      onClick={() => {
+                        if (programHasPresentations) {
+                          document.getElementById("program-heading")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                        } else {
+                          scrollToSpeakerMaterials();
+                        }
+                      }}
                       className="inline-flex w-full sm:w-auto flex-1 sm:flex-none items-center justify-center gap-2 min-h-[48px] rounded-2xl border-2 border-violet-300 bg-violet-50 px-6 py-3 text-sm font-bold text-violet-900 shadow-sm hover:bg-violet-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-600"
                     >
                       <Presentation size={18} aria-hidden />
-                      Speakers&apos; presentation copies
+                      Presentation materials
                     </button>
                   ) : null}
                 </div>
@@ -506,7 +531,7 @@ export default function ParticipantPortal({
               <div className="flex items-center justify-between gap-4 flex-wrap">
                 <h2 id="program-heading" className="text-lg sm:text-xl font-black tracking-tight text-slate-900 flex items-center gap-2">
                   <Clock3 className="text-red-600 shrink-0" size={22} aria-hidden />
-                  Conference Program Placeholder
+                  Conference Program
                 </h2>
                 <div className="flex gap-1 bg-white/95 p-1 rounded-full border border-slate-200 shadow-sm">
                   {groupedProgram.order.map((day) => (
@@ -524,7 +549,7 @@ export default function ParticipantPortal({
                 </div>
               </div>
               <p className="mt-2 text-sm text-slate-600">
-                Styled attendee-facing schedule based on admin-maintained <strong>Program Modules</strong>.
+                Tap <strong>View slides</strong> or <strong>Download</strong> on sessions with presentation materials (Google Drive). Requires sign-in and a matched delegate registration.
               </p>
             </div>
 
@@ -579,6 +604,15 @@ export default function ParticipantPortal({
                                   {item.assigned}
                                 </p>
                               </div>
+                            ) : null}
+                            {item.hasPresentation ? (
+                              <ProgramPresentationButtons
+                                viewUrl={presentationAccess ? item.presentationViewUrl : ""}
+                                downloadUrl={presentationAccess ? item.presentationDownloadUrl : ""}
+                                hasAccess={presentationAccess}
+                                hasPresentation
+                                compact
+                              />
                             ) : null}
                           </div>
                         </div>

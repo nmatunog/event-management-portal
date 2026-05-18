@@ -9,7 +9,7 @@ export default function SpeakerMaterialsSetup({ rows = [], canEdit, onChange }) 
     <div className="space-y-4 rounded-2xl border border-violet-200 p-4 bg-violet-50/40">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h5 className="text-[10px] font-black uppercase text-violet-800 tracking-[0.2em] leading-none">
-          Speaker notes &amp; slides (Google Drive links)
+          Extra materials (Google Drive — optional)
         </h5>
         <button
           type="button"
@@ -22,8 +22,8 @@ export default function SpeakerMaterialsSetup({ rows = [], canEdit, onChange }) 
         </button>
       </div>
       <p className="text-[11px] text-slate-600 leading-relaxed">
-        Upload PDFs or slides to Google Drive, set sharing to &quot;Anyone with the link&quot;, then paste the view link here.
-        Optional: paste a separate download link. Attendees see View and Download buttons in the portal.
+        For talks on the schedule, use <strong>Program → Program Modules</strong> and add a Drive link on each row. Use this section only for extra
+        materials not tied to a program slot. Set sharing to &quot;Anyone with the link&quot;.
       </p>
       {list.length === 0 ? (
         <p className="text-sm text-slate-500 italic">No speaker materials yet.</p>
