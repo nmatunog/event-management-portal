@@ -171,6 +171,34 @@ function registrationForListResponse(row: Record<string, unknown>) {
   };
 }
 
+function normalizeSpeakerMaterialsFromConfig(configJson: unknown) {
+  let config: Record<string, unknown> = {};
+  try {
+    if (typeof configJson === "string") config = JSON.parse(configJson) as Record<string, unknown>;
+    else if (configJson && typeof configJson === "object") config = configJson as Record<string, unknown>;
+  } catch {
+    config = {};
+  }
+  const portal = (config.attendeePortal || {}) as Record<string, unknown>;
+  const raw = portal.speakerMaterials;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((row, i) => {
+      const item = row as Record<string, unknown>;
+      const viewUrl = String(item.viewUrl ?? item.url ?? "").trim();
+      const downloadUrl = String(item.downloadUrl ?? "").trim();
+      const title = String(item.title ?? "").trim() || `Speaker material ${i + 1}`;
+      return {
+        id: String(item.id || `speaker-material-${i}`),
+        title,
+        viewUrl,
+        downloadUrl: downloadUrl || viewUrl,
+      };
+    })
+    .filter((r) => r.viewUrl)
+    .slice(0, 24);
+}
+
 function normalizeName(value: unknown) {
   return String(value ?? "")
     .trim()
@@ -1218,6 +1246,43 @@ app.get("/api/events/:eventId/registrations/my-row-summary", requireRole(["admin
     hasPaymentProof: Boolean(proof),
     /** Conference fee proof is optional; attendees can save profile and use tours without it. */
     requiresPaymentProofUpload: false,
+  });
+});
+
+app.get("/api/events/:eventId/speaker-materials", requireRole(["admin", "staff", "attendee"]), async (c) => {
+  const eventId = c.req.param("eventId");
+  const role = getRole(c);
+  const actor = c.get("authUser");
+  const email = String(actor?.email || "").trim().toLowerCase();
+  const event = await c.env.DB.prepare("SELECT config_json FROM events WHERE id = ?").bind(eventId).first<{ config_json?: string }>();
+  if (!event) throw new HTTPException(404, { message: "Event not found." });
+  const items = normalizeSpeakerMaterialsFromConfig(event.config_json);
+  const hasMaterials = items.length > 0;
+  let hasAccess = role === "admin" || role === "staff";
+  let registrationName = "";
+  if (!hasAccess) {
+    const qs = c.req.query();
+    const profile = {
+      firstName: String(qs.firstName ?? "").trim(),
+      lastName: String(qs.lastName ?? "").trim(),
+      nickname: String(qs.nickname ?? "").trim(),
+    };
+    const seededRegistrationId = String(qs.seededRegistrationId ?? "").trim();
+    const seededDelegateName = String(qs.seededDelegateName ?? "").trim();
+    const rowsRes = await c.env.DB.prepare("SELECT * FROM registrations WHERE event_id = ? ORDER BY created_at ASC").bind(eventId).all();
+    const rows = (rowsRes.results || []) as Record<string, unknown>[];
+    const candidate = findSyncCandidate(rows, email, { seededRegistrationId, seededDelegateName, profile });
+    hasAccess = Boolean(candidate?.id);
+    registrationName = candidate ? String(candidate.full_name || "").trim() : "";
+  }
+  return c.json({
+    hasMaterials,
+    hasAccess,
+    registrationName,
+    items: hasAccess ? items : [],
+    message: hasAccess
+      ? ""
+      : "Sign in with your delegate email and complete your profile so we can match you to a PAMACON registration before opening speaker materials.",
   });
 });
 

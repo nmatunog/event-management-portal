@@ -1,11 +1,11 @@
 import { Link } from "react-router-dom";
-import { Award, Calendar, Camera, ChevronDown, ClipboardCheck, ClipboardList, Clock3, Film, ImageIcon, LogOut, MapPin, Music, Sparkles, Star, User, Utensils } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Award, Calendar, Camera, ChevronDown, ClipboardCheck, ClipboardList, Clock3, Film, ImageIcon, LogOut, MapPin, Music, Presentation, Sparkles, Star, User, Utensils } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { getSpeakerMaterials } from "../lib/api";
 import { ATTENDEE_POSTER_MAX, DEFAULT_PAMACON_CONFIG, DEFAULT_ATTENDEE_PORTAL, PAMACON_TITLE } from "./defaultConfig";
 import AttendeeDetailsForm from "./AttendeeDetailsForm";
 import SpeakerMaterialsSection from "./SpeakerMaterialsSection";
 import { SHOW_CEBU_TOUR_ACTIVITIES } from "./attendeePortalFlags";
-import { normalizeSpeakerMaterials } from "./speakerMaterials";
 
 function youtubeEmbedSrc(url) {
   if (!url || typeof url !== "string") return null;
@@ -54,8 +54,65 @@ export default function ParticipantPortal({
   const youtubeUrl =
     String(portal.youtubeUrl || "").trim() || String(import.meta.env.VITE_ATTENDEE_YOUTUBE_URL || "").trim();
   const embedSrc = youtubeEmbedSrc(youtubeUrl);
-  const speakerMaterials = useMemo(() => normalizeSpeakerMaterials(portal.speakerMaterials), [portal.speakerMaterials]);
   const firstName = typeof profile?.firstName === "string" ? profile.firstName.trim() : "";
+  const [speakerMaterialsState, setSpeakerMaterialsState] = useState({
+    loading: true,
+    hasMaterials: false,
+    hasAccess: false,
+    items: [],
+    registrationName: "",
+    lockMessage: "",
+  });
+
+  const loadSpeakerMaterials = useCallback(async () => {
+    if (!eventId || !authEmail) {
+      setSpeakerMaterialsState({
+        loading: false,
+        hasMaterials: false,
+        hasAccess: false,
+        items: [],
+        registrationName: "",
+        lockMessage: "",
+      });
+      return;
+    }
+    setSpeakerMaterialsState((prev) => ({ ...prev, loading: true }));
+    try {
+      const data = await getSpeakerMaterials(eventId, {
+        firstName: profile?.firstName,
+        lastName: profile?.lastName,
+        nickname: profile?.nickname,
+        seededRegistrationId: attendeeSyncHints?.seededRegistrationId,
+        seededDelegateName: attendeeSyncHints?.seededDelegateName,
+      });
+      setSpeakerMaterialsState({
+        loading: false,
+        hasMaterials: Boolean(data?.hasMaterials),
+        hasAccess: Boolean(data?.hasAccess),
+        items: Array.isArray(data?.items) ? data.items : [],
+        registrationName: String(data?.registrationName || "").trim(),
+        lockMessage: String(data?.message || "").trim(),
+      });
+    } catch (e) {
+      onApiError?.(e, "Could not verify access to speaker presentation copies.");
+      setSpeakerMaterialsState({
+        loading: false,
+        hasMaterials: false,
+        hasAccess: false,
+        items: [],
+        registrationName: "",
+        lockMessage: "",
+      });
+    }
+  }, [eventId, authEmail, profile, attendeeSyncHints, onApiError]);
+
+  useEffect(() => {
+    void loadSpeakerMaterials();
+  }, [loadSpeakerMaterials]);
+
+  const scrollToSpeakerMaterials = () => {
+    document.getElementById("speaker-materials")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
   const dateRangeLabel = formatDateRange(start, end);
   const [showVenueModal, setShowVenueModal] = useState(false);
   const [zoomPoster, setZoomPoster] = useState(null);
@@ -156,6 +213,16 @@ export default function ParticipantPortal({
               <ClipboardList size={16} aria-hidden />
               Evaluation survey
             </Link>
+            {speakerMaterialsState.hasMaterials ? (
+              <button
+                type="button"
+                onClick={scrollToSpeakerMaterials}
+                className="inline-flex items-center justify-center gap-1.5 min-h-[44px] rounded-xl border border-violet-200 bg-violet-50 px-3.5 py-2 text-sm font-semibold text-violet-900 hover:bg-violet-100 shadow-sm"
+              >
+                <Presentation size={16} aria-hidden />
+                Presentations
+              </button>
+            ) : null}
             <a
               href="#attendee-details"
               className="inline-flex items-center justify-center min-h-[44px] rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 shadow-sm"
@@ -215,17 +282,29 @@ export default function ParticipantPortal({
                   )}
                 </h2>
                 <p className="text-sm sm:text-base text-slate-700 leading-relaxed max-w-2xl">
-                  Browse the posters and welcome video, share your conference evaluation, and update your travel profile — shirt size and Cebu stay dates — whenever you need to.
+                  Browse the posters and welcome video, share your conference evaluation, download speakers&apos; presentation copies, and update your travel profile whenever you need to.
                 </p>
-                <Link
-                  to="/evaluation"
-                  className="mt-4 inline-flex w-full sm:w-auto items-center justify-center gap-2 min-h-[48px] rounded-2xl bg-red-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-red-600/25 hover:bg-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
-                >
-                  <ClipboardList size={18} aria-hidden />
-                  Complete the conference evaluation survey
-                </Link>
+                <div className="mt-4 flex flex-col sm:flex-row flex-wrap gap-3">
+                  <Link
+                    to="/evaluation"
+                    className="inline-flex w-full sm:w-auto flex-1 sm:flex-none items-center justify-center gap-2 min-h-[48px] rounded-2xl bg-red-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-red-600/25 hover:bg-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
+                  >
+                    <ClipboardList size={18} aria-hidden />
+                    Complete the conference evaluation survey
+                  </Link>
+                  {speakerMaterialsState.hasMaterials ? (
+                    <button
+                      type="button"
+                      onClick={scrollToSpeakerMaterials}
+                      className="inline-flex w-full sm:w-auto flex-1 sm:flex-none items-center justify-center gap-2 min-h-[48px] rounded-2xl border-2 border-violet-300 bg-violet-50 px-6 py-3 text-sm font-bold text-violet-900 shadow-sm hover:bg-violet-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-600"
+                    >
+                      <Presentation size={18} aria-hidden />
+                      Speakers&apos; presentation copies
+                    </button>
+                  ) : null}
+                </div>
                 <p className="mt-2 text-xs text-slate-500">
-                  You can also open this survey anytime from a shared link — sign in with your delegate email when prompted.
+                  Evaluation and presentation copies require sign-in. Speaker files are only released after we match you to a delegate registration.
                 </p>
               </div>
             </div>
@@ -408,7 +487,14 @@ export default function ParticipantPortal({
           </div>
         </section>
 
-        <SpeakerMaterialsSection materials={portal.speakerMaterials} />
+        <SpeakerMaterialsSection
+          materials={speakerMaterialsState.items}
+          loading={speakerMaterialsState.loading}
+          hasAccess={speakerMaterialsState.hasAccess}
+          hasMaterials={speakerMaterialsState.hasMaterials}
+          registrationName={speakerMaterialsState.registrationName}
+          lockMessage={speakerMaterialsState.lockMessage}
+        />
 
         <section aria-labelledby="program-heading" className="space-y-4">
           <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
