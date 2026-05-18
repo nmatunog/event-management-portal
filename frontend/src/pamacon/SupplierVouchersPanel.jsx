@@ -252,17 +252,14 @@ export function VoucherEditDialog({ voucher, suppliers, onClose, onSaved, onErro
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Link expense" className="sm:col-span-2">
+          <Field label="Link budget line (expense group only)" className="sm:col-span-2">
             <select
               className={inputClass(false)}
               value={draft.expenseId}
               onChange={(e) => {
-                const id = e.target.value;
-                const row = suppliers.find((s) => s.id === id);
                 setDraft((d) => ({
                   ...d,
-                  expenseId: id,
-                  amount: row ? Number(row.amount) || d.amount : d.amount,
+                  expenseId: e.target.value,
                 }));
               }}
             >

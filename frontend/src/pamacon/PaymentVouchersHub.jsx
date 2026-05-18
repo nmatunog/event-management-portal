@@ -131,11 +131,9 @@ export default function PaymentVouchersHub({ eventId, suppliers, canEdit, isAdmi
   };
 
   const handleExpensePick = (expenseId) => {
-    const row = suppliers.find((s) => s.id === expenseId);
     setDraft((d) => ({
       ...d,
-      expenseId,
-      amount: row ? Number(row.amount) || 0 : d.amount,
+      expenseId: expenseId || "",
     }));
   };
 
@@ -341,7 +339,9 @@ export default function PaymentVouchersHub({ eventId, suppliers, canEdit, isAdmi
           <h4 className="text-sm font-black uppercase text-slate-700">Create electronic payment voucher</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2 md:col-span-2">
-              <span className="block text-[10px] font-black text-slate-400 uppercase">Link to budget line (optional)</span>
+              <span className="block text-[10px] font-black text-slate-400 uppercase">
+                Link to budget line (optional — for expense group only; does not change payee or amount)
+              </span>
               <select
                 className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-3.5 text-sm font-semibold"
                 value={draft.expenseId}
