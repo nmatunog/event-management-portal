@@ -46,7 +46,13 @@ export default function App() {
     }
     const raw = String(error?.message || "").trim();
     const genericStatusOnly = /^Request failed: \d{3}$/.test(raw);
-    const detail = raw && !genericStatusOnly ? raw : "";
+    const isNetworkFailure = /failed to fetch|network|load failed/i.test(raw);
+    const detail =
+      isNetworkFailure && fallbackMessage
+        ? "Connection to the server was interrupted. Please try again in a moment."
+        : raw && !genericStatusOnly
+        ? raw
+        : "";
     const message =
       detail && fallbackMessage ? `${fallbackMessage} ${detail}` : detail || fallbackMessage || "Something went wrong while contacting the server.";
     setApiBanner({ type: "error", message });

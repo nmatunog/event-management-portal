@@ -60,6 +60,7 @@ import {
   getEvents,
   getExpenses,
   getRegistrations,
+  getRegistration,
   deleteRegistration,
   getUserRoles,
   getSpeakers,
@@ -263,6 +264,7 @@ function delegateFromApi(row) {
     tshirtClaimed: Boolean(meta.tshirtClaimed),
     conferenceKitClaimed: Boolean(meta.conferenceKitClaimed),
     paymentProofScreenshotDataUrl: meta.paymentProofScreenshotDataUrl || "",
+    hasPaymentProof: Boolean(row.has_payment_proof ?? meta.paymentProofScreenshotDataUrl),
     paymentProofUploadedAt: meta.paymentProofUploadedAt || "",
     paymentValidationStatus: String(meta.paymentValidationStatus || "pending"),
     paymentValidatedAt: meta.paymentValidatedAt || "",
@@ -273,6 +275,7 @@ function delegateFromApi(row) {
     activityPaymentAmount: String(meta.activityPaymentAmount || ""),
     activityPaymentSenderNumber: String(meta.activityPaymentSenderNumber || ""),
     activityPaymentProofScreenshotDataUrl: String(meta.activityPaymentProofScreenshotDataUrl || ""),
+    hasActivityPaymentProof: Boolean(row.has_activity_payment_proof ?? meta.activityPaymentProofScreenshotDataUrl),
     activityPaymentProofUploadedAt: String(meta.activityPaymentProofUploadedAt || ""),
     activityPaymentConfirmedAt: String(meta.activityPaymentConfirmedAt || ""),
     activityPaymentStatus: String(meta.activityPaymentStatus || "pending"),
@@ -517,6 +520,32 @@ export default function PamaconApp({
       setActiveTab("dashboard");
     }
   }, [isAdmin, activeTab]);
+
+  const ensureRegistrationProof = useCallback(
+    async (registrationId) => {
+      let row = registrants.find((r) => r.id === registrationId);
+      if (!row) return null;
+      const needsFetch =
+        (row.hasPaymentProof && !row.paymentProofScreenshotDataUrl) ||
+        (row.hasActivityPaymentProof && !row.activityPaymentProofScreenshotDataUrl);
+      if (!needsFetch) return row;
+      const res = await getRegistration(registrationId);
+      row = delegateFromApi(res.item);
+      setRegistrants((prev) =>
+        prev.map((r) =>
+          r.id === registrationId
+            ? {
+                ...r,
+                ...row,
+                metaBase: { ...(r.metaBase || {}), ...(row.metaBase || {}) },
+              }
+            : r
+        )
+      );
+      return row;
+    },
+    [registrants]
+  );
 
   const reloadAll = useCallback(async () => {
     if (!eventId) return;
@@ -1443,10 +1472,19 @@ export default function PamaconApp({
                 onAddToSeededList={addRegistrantToSeededList}
                 onInfo={onApiInfo}
                 onApiError={onApiError}
+                onEnsureRegistrationProof={ensureRegistrationProof}
               />
             )}
             {activeTab === "other-activities" && (
-              <OtherActivitiesHub registrants={registrants} canEdit={canEdit} isAdmin={isAdmin} authEmail={authEmail} onUpdate={updateRegistrantRecord} />
+              <OtherActivitiesHub
+                registrants={registrants}
+                canEdit={canEdit}
+                isAdmin={isAdmin}
+                authEmail={authEmail}
+                onUpdate={updateRegistrantRecord}
+                onEnsureRegistrationProof={ensureRegistrationProof}
+                onApiError={onApiError}
+              />
             )}
             {activeTab === "accommodation" && (
               <AccommodationView config={config} registrants={registrants} onPair={pairManualDelegates} onToggleSolo={toggleSoloOccupancy} canEdit={canEdit} />
@@ -1604,6 +1642,7 @@ function RegistrantsLedger({
   onAddToSeededList,
   onInfo,
   onApiError,
+  onEnsureRegistrationProof,
 }) {
   const myEmail = String(authEmail || "").trim().toLowerCase();
   const superUserEmails = useMemo(
@@ -1816,7 +1855,7 @@ function RegistrantsLedger({
   const paymentsAwaitingConfirmationCount = useMemo(() => {
     return registrants.filter((r) => {
       if (isSeededDelegateRow(r)) return false;
-      if (!String(r.paymentProofScreenshotDataUrl || "").trim()) return false;
+      if (!String(r.paymentProofScreenshotDataUrl || "").trim() && !r.hasPaymentProof) return false;
       return String(r.paymentValidationStatus || "").toLowerCase() !== "validated";
     }).length;
   }, [registrants]);
@@ -1831,7 +1870,7 @@ function RegistrantsLedger({
       if (claimFilter === "seed-claimed-by-me" && (!seeded || !claimEmail || claimEmail !== myEmail)) return false;
       if (claimFilter === "seed-claimed-any" && (!seeded || !hasAnyClaim)) return false;
       if (paymentProofReviewFilter === "awaiting") {
-        const hasProof = Boolean(String(r.paymentProofScreenshotDataUrl || "").trim());
+        const hasProof = Boolean(String(r.paymentProofScreenshotDataUrl || "").trim() || r.hasPaymentProof);
         const validated = String(r.paymentValidationStatus || "").toLowerCase() === "validated";
         if (seeded || !hasProof || validated) return false;
       }
@@ -2878,7 +2917,7 @@ function RegistrantsLedger({
                 cumulative += Number(r.paid) || 0;
                 const awaitingPaymentReview =
                   !isSeededDelegateRow(r) &&
-                  Boolean(String(r.paymentProofScreenshotDataUrl || "").trim()) &&
+                  Boolean(String(r.paymentProofScreenshotDataUrl || "").trim() || r.hasPaymentProof) &&
                   String(r.paymentValidationStatus || "").toLowerCase() !== "validated";
                 return (
                   <tr
@@ -3040,15 +3079,24 @@ function RegistrantsLedger({
                     </td>
                     <td className="px-4 py-4 align-top min-w-[10rem]">
                       <div className="flex flex-col gap-1.5">
-                        {r.paymentProofScreenshotDataUrl ? (
+                        {r.paymentProofScreenshotDataUrl || r.hasPaymentProof ? (
                           <button
                             type="button"
-                            onClick={() =>
-                              setPaymentProofModal({
-                                src: r.paymentProofScreenshotDataUrl,
-                                delegateName: r.name,
-                              })
-                            }
+                            onClick={() => {
+                              void (async () => {
+                                try {
+                                  const loaded = (await onEnsureRegistrationProof?.(r.id)) || r;
+                                  const src = loaded.paymentProofScreenshotDataUrl;
+                                  if (!src) {
+                                    onApiError?.(new Error("Proof unavailable"), "Could not load payment proof.");
+                                    return;
+                                  }
+                                  setPaymentProofModal({ src, delegateName: r.name });
+                                } catch (e) {
+                                  onApiError?.(e, "Could not load payment proof.");
+                                }
+                              })();
+                            }}
                             className="text-left text-[11px] font-semibold text-amber-700 hover:underline"
                           >
                             View proof
@@ -3070,7 +3118,7 @@ function RegistrantsLedger({
                               {validated && r.paymentValidatedBy ? (
                                 <span className="text-[10px] text-slate-500 leading-snug">By {r.paymentValidatedBy}</span>
                               ) : null}
-                              {canEdit && r.paymentProofScreenshotDataUrl ? (
+                              {canEdit && (r.paymentProofScreenshotDataUrl || r.hasPaymentProof) ? (
                                 validated ? (
                                   <button
                                     type="button"
@@ -4265,7 +4313,7 @@ function PaymentsHub({ config, realized, projection }) {
   );
 }
 
-function OtherActivitiesHub({ registrants, canEdit, isAdmin, authEmail, onUpdate }) {
+function OtherActivitiesHub({ registrants, canEdit, isAdmin, authEmail, onUpdate, onEnsureRegistrationProof, onApiError }) {
   const defs = [
     { key: "extraIslandHopping", label: "Island hopping" },
     { key: "extraCityTour", label: "City tour / heritage tour" },
@@ -4291,7 +4339,8 @@ function OtherActivitiesHub({ registrants, canEdit, isAdmin, authEmail, onUpdate
         activityRegistrationConfirmed: Boolean(meta.activityRegistrationConfirmed),
         activityPaymentMethod: String(meta.activityPaymentMethod || "").trim(),
         activityPaymentReference: String(meta.activityPaymentReference || "").trim(),
-        activityPaymentProofScreenshotDataUrl: String(meta.activityPaymentProofScreenshotDataUrl || "").trim(),
+        activityPaymentProofScreenshotDataUrl: String(r.activityPaymentProofScreenshotDataUrl || meta.activityPaymentProofScreenshotDataUrl || "").trim(),
+        hasActivityPaymentProof: Boolean(r.hasActivityPaymentProof || meta.activityPaymentProofScreenshotDataUrl),
         activityPaymentProofUploadedAt: String(meta.activityPaymentProofUploadedAt || "").trim(),
         activityPaymentConfirmedBy: String(meta.activityPaymentConfirmedBy || "").trim(),
         activityPaymentConfirmedAt: String(meta.activityPaymentConfirmedAt || "").trim(),
@@ -4319,7 +4368,7 @@ function OtherActivitiesHub({ registrants, canEdit, isAdmin, authEmail, onUpdate
       }
       if (row.other) withOther += 1;
       if (row.activityRegistrationConfirmed) withConfirmedRegistration += 1;
-      if (row.activityPaymentProofScreenshotDataUrl) withPaymentProof += 1;
+      if (row.activityPaymentProofScreenshotDataUrl || row.hasActivityPaymentProof) withPaymentProof += 1;
     }
     return { counts, withOther, withConfirmedRegistration, withPaymentProof };
   }, [rows]);
@@ -4335,7 +4384,7 @@ function OtherActivitiesHub({ registrants, canEdit, isAdmin, authEmail, onUpdate
     }
     if (paymentFilter === "all") return base;
     return base.filter((r) => {
-      const hasProof = Boolean(r.activityPaymentProofScreenshotDataUrl);
+      const hasProof = Boolean(r.activityPaymentProofScreenshotDataUrl || r.hasActivityPaymentProof);
       const status = String(r.activityPaymentStatus || (hasProof ? "pending" : "unpaid")).toLowerCase();
       if (paymentFilter === "paid") return status === "confirmed";
       if (paymentFilter === "pending") return status === "pending";
@@ -4343,6 +4392,22 @@ function OtherActivitiesHub({ registrants, canEdit, isAdmin, authEmail, onUpdate
       return true;
     });
   }, [rows, selectedFilter, paymentFilter]);
+
+  const openActivityPaymentProof = (row) => {
+    void (async () => {
+      try {
+        const loaded = (await onEnsureRegistrationProof?.(row.id)) || registrants.find((r) => r.id === row.id);
+        const src = loaded?.activityPaymentProofScreenshotDataUrl;
+        if (!src) {
+          onApiError?.(new Error("Proof unavailable"), "Could not load activity payment proof.");
+          return;
+        }
+        window.open(src, "_blank", "noopener,noreferrer");
+      } catch (e) {
+        onApiError?.(e, "Could not load activity payment proof.");
+      }
+    })();
+  };
   const canConfirmActivityPayments = Boolean(canEdit && isAdmin && typeof onUpdate === "function");
 
   const setActivityPaymentStatus = async (row, status) => {
@@ -4559,22 +4624,21 @@ function OtherActivitiesHub({ registrants, canEdit, isAdmin, authEmail, onUpdate
                     <p className="text-[11px] text-slate-500">Sender: {row.activityPaymentSenderNumber || "—"}</p>
                   </td>
                   <td className="py-2.5 pr-3 text-slate-600">
-                    {row.activityPaymentProofScreenshotDataUrl ? (
-                      <a
-                        href={row.activityPaymentProofScreenshotDataUrl}
-                        target="_blank"
-                        rel="noreferrer"
+                    {row.activityPaymentProofScreenshotDataUrl || row.hasActivityPaymentProof ? (
+                      <button
+                        type="button"
+                        onClick={() => openActivityPaymentProof(row)}
                         className="text-amber-700 font-semibold hover:underline"
                       >
                         View proof
-                      </a>
+                      </button>
                     ) : (
                       "—"
                     )}
                   </td>
                   <td className="py-2.5 pr-3 text-slate-600">
                     {(() => {
-                      const hasProof = Boolean(row.activityPaymentProofScreenshotDataUrl);
+                      const hasProof = Boolean(row.activityPaymentProofScreenshotDataUrl || row.hasActivityPaymentProof);
                       const status = String(row.activityPaymentStatus || (hasProof ? "pending" : "unpaid")).toLowerCase();
                       if (status === "confirmed") {
                         return (
@@ -4597,7 +4661,7 @@ function OtherActivitiesHub({ registrants, canEdit, isAdmin, authEmail, onUpdate
                         <button
                           type="button"
                           className="rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-40"
-                          disabled={!row.activityPaymentProofScreenshotDataUrl}
+                          disabled={!row.activityPaymentProofScreenshotDataUrl && !row.hasActivityPaymentProof}
                           onClick={() => void setActivityPaymentStatus(row, "confirmed")}
                         >
                           Confirm payment

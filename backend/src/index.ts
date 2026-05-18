@@ -153,6 +153,24 @@ function parseMetadataJson(raw: unknown): Record<string, unknown> {
   }
 }
 
+/** Large base64 proof images are omitted from list responses to keep payloads small and reliable. */
+const REGISTRATION_LIST_STRIP_META_KEYS = ["paymentProofScreenshotDataUrl", "activityPaymentProofScreenshotDataUrl"] as const;
+
+function registrationForListResponse(row: Record<string, unknown>) {
+  const meta = parseMetadataJson(row.metadata_json);
+  const has_payment_proof = Boolean(String(meta.paymentProofScreenshotDataUrl || "").trim());
+  const has_activity_payment_proof = Boolean(String(meta.activityPaymentProofScreenshotDataUrl || "").trim());
+  for (const key of REGISTRATION_LIST_STRIP_META_KEYS) {
+    delete meta[key];
+  }
+  return {
+    ...row,
+    metadata_json: JSON.stringify(meta),
+    has_payment_proof,
+    has_activity_payment_proof,
+  };
+}
+
 function normalizeName(value: unknown) {
   return String(value ?? "")
     .trim()
@@ -1059,7 +1077,15 @@ app.delete("/api/events/:id", requireRole(["admin"]), async (c) => {
 app.get("/api/events/:eventId/registrations", async (c) => {
   const eventId = c.req.param("eventId");
   const res = await c.env.DB.prepare("SELECT * FROM registrations WHERE event_id = ? ORDER BY created_at DESC").bind(eventId).all();
-  return c.json({ items: res.results });
+  const items = (res.results || []).map((row) => registrationForListResponse(row as Record<string, unknown>));
+  return c.json({ items });
+});
+
+app.get("/api/registrations/:id", requireRole(["admin", "staff"]), async (c) => {
+  const id = c.req.param("id");
+  const item = await c.env.DB.prepare("SELECT * FROM registrations WHERE id = ?").bind(id).first();
+  if (!item) throw new HTTPException(404, { message: "Registration not found." });
+  return c.json({ item });
 });
 
 app.post("/api/registrations/:id/claim-seeded", async (c) => {

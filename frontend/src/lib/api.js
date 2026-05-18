@@ -8,8 +8,39 @@ export function setAccessToken(token) {
   accessToken = token;
 }
 
+const FETCH_MAX_ATTEMPTS = 3;
+const FETCH_RETRY_BASE_MS = 400;
+
+function isRetryableFetchError(error) {
+  if (!error || typeof error !== "object") return false;
+  if (error.name === "TypeError") {
+    const msg = String(error.message || "").toLowerCase();
+    return msg.includes("failed to fetch") || msg.includes("network") || msg.includes("load failed");
+  }
+  return false;
+}
+
+async function fetchWithRetry(url, options) {
+  let lastError;
+  for (let attempt = 0; attempt < FETCH_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      return await fetch(url, options);
+    } catch (error) {
+      lastError = error;
+      if (attempt < FETCH_MAX_ATTEMPTS - 1 && isRetryableFetchError(error)) {
+        await new Promise((resolve) => {
+          setTimeout(resolve, FETCH_RETRY_BASE_MS * (attempt + 1));
+        });
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastError;
+}
+
 export async function pingApi() {
-  const response = await fetch(`${API_BASE}/api/health`);
+  const response = await fetchWithRetry(`${API_BASE}/api/health`);
   if (!response.ok) {
     throw new Error("API health check failed");
   }
@@ -17,7 +48,7 @@ export async function pingApi() {
 }
 
 async function request(path, options = {}) {
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetchWithRetry(`${API_BASE}${path}`, {
     ...options,
     headers: {
       ...DEFAULT_HEADERS,
@@ -67,6 +98,10 @@ export function patchEvent(eventId, payload) {
 
 export function getRegistrations(eventId) {
   return request(`/api/events/${eventId}/registrations`);
+}
+
+export function getRegistration(registrationId) {
+  return request(`/api/registrations/${registrationId}`);
 }
 
 export function createRegistration(eventId, payload) {
@@ -267,7 +302,7 @@ export function deleteUserRole(email) {
 }
 
 async function publicRequest(path, options = {}) {
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetchWithRetry(`${API_BASE}${path}`, {
     ...options,
     headers: {
       ...DEFAULT_HEADERS,

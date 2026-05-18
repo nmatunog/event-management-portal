@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ATTENDEE_POSTER_MAX, DEFAULT_PAMACON_CONFIG, DEFAULT_ATTENDEE_PORTAL, PAMACON_TITLE } from "./defaultConfig";
 import AttendeeDetailsForm from "./AttendeeDetailsForm";
 import SpeakerMaterialsSection from "./SpeakerMaterialsSection";
+import { SHOW_CEBU_TOUR_ACTIVITIES } from "./attendeePortalFlags";
 import { normalizeSpeakerMaterials } from "./speakerMaterials";
 
 function youtubeEmbedSrc(url) {
@@ -214,8 +215,7 @@ export default function ParticipantPortal({
                   )}
                 </h2>
                 <p className="text-sm sm:text-base text-slate-700 leading-relaxed max-w-2xl">
-                  Dive into the posters, feel the buzz in the welcome video, then tell us how you&apos;re traveling — shirt size, Cebu dates, and any extra-day tours you&apos;re dreaming about.
-                  Every detail you share helps the team welcome you with open arms (and the right-sized tee).
+                  Browse the posters and welcome video, share your conference evaluation, and update your travel profile — shirt size and Cebu stay dates — whenever you need to.
                 </p>
                 <Link
                   to="/evaluation"
@@ -230,7 +230,7 @@ export default function ParticipantPortal({
               </div>
             </div>
 
-            <div className="relative grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className={`relative grid grid-cols-1 sm:grid-cols-2 gap-3 ${SHOW_CEBU_TOUR_ACTIVITIES ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
               <a
                 href="#posters-heading"
                 className="group flex gap-3 rounded-2xl border border-white/70 bg-white/75 backdrop-blur-sm p-4 shadow-sm ring-1 ring-slate-200/60 transition-all duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-md hover:ring-red-200/80 hover:border-red-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
@@ -257,19 +257,21 @@ export default function ParticipantPortal({
                   <span className="mt-1 block text-xs text-slate-600 leading-snug">Hit play on the welcome video — quick, lively, and worth it.</span>
                 </span>
               </a>
-              <a
-                href="#tours-cards"
-                className="group flex gap-3 rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50 via-white to-teal-50 p-4 shadow-sm ring-1 ring-emerald-200/60 transition-all duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-md hover:ring-emerald-300/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600"
-              >
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/25">
-                  <MapPin className="h-5 w-5" strokeWidth={2} aria-hidden />
-                </span>
-                <span className="min-w-0 text-left">
-                  <span className="block text-[11px] font-bold uppercase tracking-wide text-emerald-700">Step 3</span>
-                  <span className="mt-0.5 block text-sm font-bold text-emerald-950">Explore Cebu tours</span>
-                  <span className="mt-1 block text-xs text-emerald-900/75 leading-snug">View expandable tour cards and choose activities.</span>
-                </span>
-              </a>
+              {SHOW_CEBU_TOUR_ACTIVITIES ? (
+                <a
+                  href="#tours-cards"
+                  className="group flex gap-3 rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50 via-white to-teal-50 p-4 shadow-sm ring-1 ring-emerald-200/60 transition-all duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-md hover:ring-emerald-300/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600"
+                >
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/25">
+                    <MapPin className="h-5 w-5" strokeWidth={2} aria-hidden />
+                  </span>
+                  <span className="min-w-0 text-left">
+                    <span className="block text-[11px] font-bold uppercase tracking-wide text-emerald-700">Step 3</span>
+                    <span className="mt-0.5 block text-sm font-bold text-emerald-950">Explore Cebu tours</span>
+                    <span className="mt-1 block text-xs text-emerald-900/75 leading-snug">View expandable tour cards and choose activities.</span>
+                  </span>
+                </a>
+              ) : null}
               <a
                 href="#attendee-details"
                 className="group flex gap-3 rounded-2xl border border-red-300/70 bg-gradient-to-br from-red-50 via-white to-rose-50/90 p-4 shadow-md shadow-red-600/10 ring-2 ring-red-200/70 transition-all duration-200 hover:-translate-y-0.5 hover:ring-red-400/80 hover:shadow-lg hover:shadow-red-600/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
@@ -278,9 +280,11 @@ export default function ParticipantPortal({
                   <ClipboardCheck className="h-5 w-5" strokeWidth={2} aria-hidden />
                 </span>
                 <span className="min-w-0 text-left">
-                  <span className="block text-[11px] font-bold uppercase tracking-wide text-red-700">Step 4 · Main event</span>
+                  <span className="block text-[11px] font-bold uppercase tracking-wide text-red-700">
+                    {SHOW_CEBU_TOUR_ACTIVITIES ? "Step 4 · Main event" : "Step 3"}
+                  </span>
                   <span className="mt-0.5 block text-sm font-bold text-red-950">Complete your details</span>
-                  <span className="mt-1 block text-xs text-red-950/75 leading-snug">Travel, shirt, extras — lock it in so we can roll out the red carpet.</span>
+                  <span className="mt-1 block text-xs text-red-950/75 leading-snug">Travel and shirt size on file for your profile.</span>
                 </span>
               </a>
             </div>

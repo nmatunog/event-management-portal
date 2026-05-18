@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronRight, Download, Save, X } from "lucide-react";
 import { isParticipantShirtEditOpenNow, participantShirtDeadlineLabel } from "./shirtOrderingPolicy";
+import { SHOW_CEBU_TOUR_ACTIVITIES } from "./attendeePortalFlags";
 
 const POSITION_OPTIONS = [
   { value: "DD", label: "DD — District Director" },
@@ -284,7 +285,7 @@ export default function AttendeeDetailsForm({ profile, authEmail, onSaveProfile,
       <header className="space-y-1">
         <h2 className="text-xl sm:text-2xl font-semibold text-slate-900 tracking-tight">Your travel and event details</h2>
         <p className="text-sm text-slate-600 leading-relaxed">
-          Please complete the fields below so the committee can plan shirts, logistics, and optional tours. Your answers are saved on this device as you type; use{" "}
+          Please complete the fields below so the committee can keep your profile up to date. Your answers are saved on this device as you type; use{" "}
           <span className="font-medium text-slate-800">Save to my account</span> to sync them to your signed-in profile.
         </p>
       </header>
@@ -446,6 +447,8 @@ export default function AttendeeDetailsForm({ profile, authEmail, onSaveProfile,
         </Field>
       </div>
 
+      {SHOW_CEBU_TOUR_ACTIVITIES ? (
+      <>
       <section id="tours-cards" className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 space-y-4">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -701,6 +704,8 @@ export default function AttendeeDetailsForm({ profile, authEmail, onSaveProfile,
           </span>
         </p>
       </section>
+      </>
+      ) : null}
 
       <section className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 sm:p-6 space-y-3">
         <h3 className="text-base font-semibold text-slate-900">
@@ -709,9 +714,7 @@ export default function AttendeeDetailsForm({ profile, authEmail, onSaveProfile,
         </h3>
         <p className="text-sm text-slate-700 leading-relaxed">
           If you have paid your <strong>conference fee</strong>, you may screenshot your bank / GCash confirmation and upload it here so committee staff can validate it in
-          the Delegates list. <strong>You do not need this to save your profile or to register and pay for Cebu tours and activities</strong> (use the tours section above for
-          activity payments).
-          <span className="block mt-1 font-semibold text-slate-800">Conference fee only — not for tours/activities.</span>
+          the Delegates list.
           <span className="block mt-1 text-slate-600">Staff/Admin can open your proof from the Conference Delegates list (Payment column) when you upload one.</span>
         </p>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -777,6 +780,7 @@ export default function AttendeeDetailsForm({ profile, authEmail, onSaveProfile,
         {savedFlash && <p className="text-sm font-medium text-emerald-700">Saved.</p>}
       </div>
 
+      {SHOW_CEBU_TOUR_ACTIVITIES ? (
       <div className="border-t border-slate-200 pt-6 space-y-4">
         <h3 className="text-base font-semibold text-slate-900">Request a quote (tours / extensions)</h3>
         <p className="text-sm text-slate-600">
@@ -794,8 +798,9 @@ export default function AttendeeDetailsForm({ profile, authEmail, onSaveProfile,
           </p>
         )}
       </div>
+      ) : null}
 
-      {activityQrZoomOpen && !activityQrLoadFailed ? (
+      {SHOW_CEBU_TOUR_ACTIVITIES && activityQrZoomOpen && !activityQrLoadFailed ? (
         <div
           className="fixed inset-0 z-[130] bg-black/90 p-3 sm:p-6"
           role="dialog"
