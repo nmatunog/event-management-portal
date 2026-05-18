@@ -3,6 +3,8 @@ import { Award, Calendar, Camera, ChevronDown, ClipboardCheck, ClipboardList, Cl
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getEventMedia, getSpeakerMaterials } from "../lib/api";
 import EventMediaAccessButton from "./EventMediaAccessButton";
+import PostEventAttendeeLayout from "./PostEventAttendeeLayout";
+import { normalizeSpeakerMaterials } from "./speakerMaterials";
 import { ATTENDEE_POSTER_MAX, DEFAULT_PAMACON_CONFIG, DEFAULT_ATTENDEE_PORTAL, PAMACON_TITLE } from "./defaultConfig";
 import AttendeeDetailsForm from "./AttendeeDetailsForm";
 import ProgramPresentationButtons from "./ProgramPresentationButtons";
@@ -203,6 +205,10 @@ export default function ParticipantPortal({
     ? true
     : speakerMaterialsState.hasMaterials || programHasPresentations;
   const showEventMediaHub = eventMediaState.configured || eventMediaState.loading;
+  const presentationItemCount = useMemo(() => {
+    if (!presentationAccess) return 0;
+    return normalizeSpeakerMaterials(speakerMaterialsState.items).length;
+  }, [presentationAccess, speakerMaterialsState.items]);
   const programRows = useMemo(() => {
     const rows = Array.isArray(config?.programModules) ? config.programModules : [];
     const normalized = rows
@@ -286,18 +292,24 @@ export default function ParticipantPortal({
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-            <Link
-              to="/"
-              className="inline-flex items-center justify-center min-h-[44px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 shadow-sm"
-            >
-              Home
-            </Link>
+            {!POST_EVENT_ATTENDEE_PORTAL ? (
+              <Link
+                to="/"
+                className="inline-flex items-center justify-center min-h-[44px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 shadow-sm"
+              >
+                Home
+              </Link>
+            ) : null}
             <Link
               to="/evaluation"
-              className="inline-flex items-center justify-center gap-1.5 min-h-[44px] rounded-xl border border-red-200 bg-red-50 px-3.5 py-2 text-sm font-semibold text-red-800 hover:bg-red-100 shadow-sm"
+              className={`inline-flex items-center justify-center gap-1.5 min-h-[44px] rounded-xl px-3.5 py-2 text-sm font-semibold shadow-sm ${
+                evaluationComplete
+                  ? "border border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+                  : "border border-red-200 bg-red-50 text-red-800 hover:bg-red-100 ring-2 ring-red-300/50"
+              }`}
             >
               <ClipboardList size={16} aria-hidden />
-              Evaluation survey
+              {evaluationComplete ? "Evaluation ✓" : "Evaluation"}
             </Link>
             {showEventMediaHub ? (
               <EventMediaAccessButton
@@ -353,6 +365,31 @@ export default function ParticipantPortal({
           <div className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[120%] w-[120%] opacity-[0.07] bg-[radial-gradient(circle_at_center,_#dc2626_0%,_transparent_55%)]" aria-hidden />
 
           <div className="relative flex flex-col gap-6 sm:gap-8">
+            {POST_EVENT_ATTENDEE_PORTAL ? (
+              <PostEventAttendeeLayout
+                firstName={firstName}
+                evaluationComplete={evaluationComplete}
+                presentationAccess={presentationAccess}
+                presentationItemCount={presentationItemCount}
+                eventMediaState={eventMediaState}
+                onOpenPresentations={scrollToSpeakerMaterials}
+                showPresentationHub={showPresentationHub}
+                speakerMaterialsProps={{
+                  eventId,
+                  materials: speakerMaterialsState.items,
+                  loading: speakerMaterialsState.loading,
+                  hasAccess: speakerMaterialsState.hasAccess,
+                  hasMaterials: showPresentationHub,
+                  evaluationComplete,
+                  registrationName: speakerMaterialsState.registrationName,
+                  lockMessage: speakerMaterialsState.lockMessage,
+                  attendeeSyncHints,
+                  profile,
+                  onApiError,
+                }}
+              />
+            ) : (
+            <>
             <div className={`grid gap-6 ${showPresentationHub ? "lg:grid-cols-[minmax(0,1fr)_minmax(280px,380px)] lg:items-start" : ""}`}>
             <div className="flex flex-col sm:flex-row sm:items-start gap-5 min-w-0">
               <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-red-600 to-rose-600 text-white shadow-lg shadow-red-600/30 ring-4 ring-white/80">
@@ -501,6 +538,8 @@ export default function ParticipantPortal({
               />
             ) : null}
             </div>
+            </>
+            )}
 
             {!POST_EVENT_ATTENDEE_PORTAL ? (
             <div className={`relative grid grid-cols-1 sm:grid-cols-2 gap-3 ${SHOW_CEBU_TOUR_ACTIVITIES ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
