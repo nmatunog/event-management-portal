@@ -7,7 +7,7 @@ import AttendeeDetailsForm from "./AttendeeDetailsForm";
 import ProgramPresentationButtons from "./ProgramPresentationButtons";
 import { normalizeProgramModuleRow } from "./programPresentation";
 import SpeakerMaterialsSection from "./SpeakerMaterialsSection";
-import { SHOW_CEBU_TOUR_ACTIVITIES } from "./attendeePortalFlags";
+import { POST_EVENT_ATTENDEE_PORTAL, SHOW_CEBU_TOUR_ACTIVITIES } from "./attendeePortalFlags";
 
 function youtubeEmbedSrc(url) {
   if (!url || typeof url !== "string") return null;
@@ -143,8 +143,9 @@ export default function ParticipantPortal({
     const rows = Array.isArray(config?.programModules) ? config.programModules : [];
     return rows.some((row) => normalizeProgramModuleRow(row).hasPresentation);
   }, [config?.programModules]);
-  const showPresentationHub =
-    speakerMaterialsState.hasMaterials || programHasPresentations;
+  const showPresentationHub = POST_EVENT_ATTENDEE_PORTAL
+    ? true
+    : speakerMaterialsState.hasMaterials || programHasPresentations;
   const programRows = useMemo(() => {
     const rows = Array.isArray(config?.programModules) ? config.programModules : [];
     const normalized = rows
@@ -251,12 +252,14 @@ export default function ParticipantPortal({
                 Presentations
               </button>
             ) : null}
-            <a
-              href="#attendee-details"
-              className="inline-flex items-center justify-center min-h-[44px] rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 shadow-sm"
-            >
-              Enter your details
-            </a>
+            {!POST_EVENT_ATTENDEE_PORTAL ? (
+              <a
+                href="#attendee-details"
+                className="inline-flex items-center justify-center min-h-[44px] rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 shadow-sm"
+              >
+                Enter your details
+              </a>
+            ) : null}
             {typeof onLogout === "function" && (
               <button
                 type="button"
@@ -290,15 +293,33 @@ export default function ParticipantPortal({
               <div className="min-w-0 flex-1 space-y-3">
                 <p className="text-[11px] sm:text-xs font-bold uppercase tracking-[0.14em] text-red-700 flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-white/80 px-2.5 py-1 text-[10px] sm:text-[11px] font-semibold tracking-wide text-red-800 shadow-sm ring-1 ring-red-100">
-                    <span className="relative flex h-2 w-2" aria-hidden>
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
-                      <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
-                    </span>
-                    Live · Your attendee hub
+                    {POST_EVENT_ATTENDEE_PORTAL ? (
+                      "PAMACON 2026 · Post-conference"
+                    ) : (
+                      <>
+                        <span className="relative flex h-2 w-2" aria-hidden>
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
+                          <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
+                        </span>
+                        Live · Your attendee hub
+                      </>
+                    )}
                   </span>
                 </p>
                 <h2 id="welcome-heading" className="text-2xl sm:text-3xl md:text-[2rem] font-bold text-slate-900 leading-[1.15] tracking-tight">
-                  {firstName ? (
+                  {POST_EVENT_ATTENDEE_PORTAL ? (
+                    firstName ? (
+                      <>
+                        <span className="block text-red-700">Thank you, {firstName}!</span>
+                        <span className="mt-1 block text-slate-900 font-extrabold">Your participation made PAMACON 2026 unforgettable</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="block text-red-700">Thank you for joining us!</span>
+                        <span className="mt-1 block text-slate-900 font-extrabold">PAMACON 2026 — we appreciate you</span>
+                      </>
+                    )
+                  ) : firstName ? (
                     <>
                       <span className="block text-red-700">{firstName}, you made it!</span>
                       <span className="mt-1 block text-slate-900 font-extrabold">Welcome to the heart of {title}</span>
@@ -310,16 +331,44 @@ export default function ParticipantPortal({
                     </>
                   )}
                 </h2>
-                <p className="text-sm sm:text-base text-slate-700 leading-relaxed max-w-2xl">
-                  Browse the posters and welcome video, complete the conference evaluation, then unlock speakers&apos; presentation copies. Update your travel profile whenever you need to.
-                </p>
+                {POST_EVENT_ATTENDEE_PORTAL ? (
+                  <>
+                    <p className="text-sm sm:text-base text-slate-700 leading-relaxed max-w-2xl">
+                      On behalf of the PAMA organizing committee, thank you for your energy, presence, and commitment throughout the conference.
+                      We hope the sessions inspired you and strengthened our community.
+                    </p>
+                    <p className="text-sm sm:text-base text-slate-700 leading-relaxed max-w-2xl">
+                      Please take a few minutes to share your feedback, then explore selected speaker presentation materials made available for delegates.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      <div className="rounded-2xl border border-red-200 bg-white/90 p-4 shadow-sm space-y-2">
+                        <p className="text-[11px] font-bold uppercase tracking-wide text-red-700">Now open</p>
+                        <p className="text-sm font-bold text-slate-900">Conference evaluation survey</p>
+                        <p className="text-xs text-slate-600 leading-relaxed">
+                          Your honest feedback helps us improve future PAMACON events. Required before presentation downloads unlock.
+                        </p>
+                      </div>
+                      <div className="rounded-2xl border border-violet-200 bg-white/90 p-4 shadow-sm space-y-2">
+                        <p className="text-[11px] font-bold uppercase tracking-wide text-violet-700">Available now</p>
+                        <p className="text-sm font-bold text-slate-900">Speaker presentation materials</p>
+                        <p className="text-xs text-slate-600 leading-relaxed">
+                          Selected slide decks and notes from the program are being released for registered delegates after evaluation.
+                        </p>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-sm sm:text-base text-slate-700 leading-relaxed max-w-2xl">
+                    Browse the posters and welcome video, complete the conference evaluation, then unlock speakers&apos; presentation copies. Update your travel profile whenever you need to.
+                  </p>
+                )}
                 <div className="mt-4 flex flex-col sm:flex-row flex-wrap gap-3">
                   <Link
                     to="/evaluation"
                     className="inline-flex w-full sm:w-auto flex-1 sm:flex-none items-center justify-center gap-2 min-h-[48px] rounded-2xl bg-red-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-red-600/25 hover:bg-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
                   >
                     <ClipboardList size={18} aria-hidden />
-                    Complete the conference evaluation survey
+                    {POST_EVENT_ATTENDEE_PORTAL ? "Take the evaluation survey" : "Complete the conference evaluation survey"}
                   </Link>
                   {showPresentationHub ? (
                     <button
@@ -332,12 +381,14 @@ export default function ParticipantPortal({
                       }`}
                     >
                       <Presentation size={18} aria-hidden />
-                      {presentationAccess ? "Presentation materials" : "Presentations (after evaluation)"}
+                      {presentationAccess ? "View presentation materials" : "Presentation materials (after evaluation)"}
                     </button>
                   ) : null}
                 </div>
                 <p className="mt-2 text-xs text-slate-500">
-                  Sign in and complete the evaluation survey first. Presentation copies unlock after we match you to a delegate registration.
+                  {POST_EVENT_ATTENDEE_PORTAL
+                    ? "Sign in with your delegate account. Complete the evaluation first; presentation copies unlock once we match your registration."
+                    : "Sign in and complete the evaluation survey first. Presentation copies unlock after we match you to a delegate registration."}
                 </p>
               </div>
             </div>
@@ -360,6 +411,7 @@ export default function ParticipantPortal({
             ) : null}
             </div>
 
+            {!POST_EVENT_ATTENDEE_PORTAL ? (
             <div className={`relative grid grid-cols-1 sm:grid-cols-2 gap-3 ${SHOW_CEBU_TOUR_ACTIVITIES ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
               <a
                 href="#posters-heading"
@@ -418,9 +470,12 @@ export default function ParticipantPortal({
                 </span>
               </a>
             </div>
+            ) : null}
           </div>
         </section>
 
+        {!POST_EVENT_ATTENDEE_PORTAL ? (
+        <>
         <section className="grid gap-4 sm:grid-cols-3">
           <InfoCard
             icon={Sparkles}
@@ -664,7 +719,10 @@ export default function ParticipantPortal({
             </div>
           </div>
         </section>
+        </>
+        ) : null}
 
+        {!POST_EVENT_ATTENDEE_PORTAL ? (
         <AttendeeDetailsForm
           profile={profile}
           authEmail={authEmail}
@@ -672,8 +730,9 @@ export default function ParticipantPortal({
           profileSaving={profileSaving}
           quoteEmail={portal.quoteRequestEmail}
         />
+        ) : null}
       </main>
-      {showVenueModal && (
+      {!POST_EVENT_ATTENDEE_PORTAL && showVenueModal && (
         <div className="fixed inset-0 z-[120] bg-slate-900/60 backdrop-blur-sm p-4 sm:p-6" role="dialog" aria-modal="true" aria-label="Venue details">
           <div className="mx-auto max-w-3xl rounded-3xl border border-slate-200 bg-white shadow-2xl overflow-hidden">
             <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-slate-100">
@@ -729,7 +788,7 @@ export default function ParticipantPortal({
           </div>
         </div>
       )}
-      {zoomPoster && (
+      {!POST_EVENT_ATTENDEE_PORTAL && zoomPoster && (
         <div
           className="fixed inset-0 z-[130] bg-black/90 p-3 sm:p-6"
           role="dialog"

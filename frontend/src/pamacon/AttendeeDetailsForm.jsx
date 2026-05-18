@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronRight, Download, Save, X } from "lucide-react";
 import { isParticipantShirtEditOpenNow, participantShirtDeadlineLabel } from "./shirtOrderingPolicy";
-import { SHOW_CEBU_TOUR_ACTIVITIES } from "./attendeePortalFlags";
+import { POST_EVENT_ATTENDEE_PORTAL, SHOW_CEBU_TOUR_ACTIVITIES } from "./attendeePortalFlags";
 
 const POSITION_OPTIONS = [
   { value: "DD", label: "DD — District Director" },
@@ -427,24 +427,28 @@ export default function AttendeeDetailsForm({ profile, authEmail, onSaveProfile,
             />
           )}
         </div>
-        <Field label="Date of arrival in Cebu" htmlFor="ad-arr">
-          <input
-            id="ad-arr"
-            type="date"
-            className={inputClass}
-            value={draft.arrivalCebu}
-            onChange={(e) => setDraft((s) => ({ ...s, arrivalCebu: e.target.value }))}
-          />
-        </Field>
-        <Field label="Date of departure from Cebu" htmlFor="ad-dep">
-          <input
-            id="ad-dep"
-            type="date"
-            className={inputClass}
-            value={draft.departureCebu}
-            onChange={(e) => setDraft((s) => ({ ...s, departureCebu: e.target.value }))}
-          />
-        </Field>
+        {!POST_EVENT_ATTENDEE_PORTAL ? (
+          <>
+            <Field label="Date of arrival in Cebu" htmlFor="ad-arr">
+              <input
+                id="ad-arr"
+                type="date"
+                className={inputClass}
+                value={draft.arrivalCebu}
+                onChange={(e) => setDraft((s) => ({ ...s, arrivalCebu: e.target.value }))}
+              />
+            </Field>
+            <Field label="Date of departure from Cebu" htmlFor="ad-dep">
+              <input
+                id="ad-dep"
+                type="date"
+                className={inputClass}
+                value={draft.departureCebu}
+                onChange={(e) => setDraft((s) => ({ ...s, departureCebu: e.target.value }))}
+              />
+            </Field>
+          </>
+        ) : null}
       </div>
 
       {SHOW_CEBU_TOUR_ACTIVITIES ? (
